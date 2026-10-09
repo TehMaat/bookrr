@@ -1,17 +1,17 @@
-# syntax=docker/dockerfile:1
 
 # Frontend and Go binary are built on the build machine's native platform and
 # cross-compiled for the target, so multi-arch builds need no emulation for
 # the heavy steps and work for 386 / armv6 / armv7 / arm64 / amd64.
+# Base images come from Google's Docker Hub mirror to avoid Hub rate limits.
 
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/node:22-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
+FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/golang:1.24-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
  && mkdir -p /out/data
 
 # No RUN steps here: the runtime image needs no emulation to build for any arch.
-FROM alpine:3.22
+FROM mirror.gcr.io/library/alpine:3.22
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/bookrr /usr/local/bin/bookrr
 COPY --from=build /out/data /data
