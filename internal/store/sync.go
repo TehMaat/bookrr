@@ -151,9 +151,10 @@ WHERE resolved_at IS NULL AND hash IN (SELECT hash FROM locations)`, now()); err
 
 	if _, err := tx.ExecContext(ctx, `
 DELETE FROM torrents
-WHERE manual = 0 AND personal_release = 0 AND adopted_by = '' AND notes = ''
+WHERE manual = 0 AND personal_release = 0 AND notes = ''
 	AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.hash = torrents.hash)
 	AND NOT EXISTS (SELECT 1 FROM archives a WHERE a.hash = torrents.hash)
+	AND NOT EXISTS (SELECT 1 FROM adoptions ad WHERE ad.hash = torrents.hash)
 	AND NOT EXISTS (SELECT 1 FROM alerts al WHERE al.hash = torrents.hash)`); err != nil {
 		return 0, err
 	}
@@ -166,7 +167,9 @@ type txLike interface {
 }
 
 // flagRemoval opens an alert for a personal release that is no longer on any
-// client. It reports whether an alert was created.
+// client. It reports whether an alert was created. If a move to a disk or an
+// adoption was already recorded, the removal is expected: it is logged as an
+// alert that is resolved right away and not reported as new.
 func flagRemoval(ctx context.Context, tx txLike, r Removal, releaseTag, source string) (bool, error) {
 	var remaining int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM locations WHERE hash = ?`, r.Hash).Scan(&remaining); err != nil {
@@ -197,9 +200,39 @@ func flagRemoval(ctx context.Context, tx txLike, r Removal, releaseTag, source s
 	if r.ClientName != "" {
 		msg = "Rimosso da " + r.ClientName
 	}
+	moved, err := knownDestination(ctx, tx, r.Hash)
+	if err != nil {
+		return false, err
+	}
+	if moved != "" {
+		ts := now()
+		_, err = tx.ExecContext(ctx, `INSERT INTO alerts (hash, source, client_name, message, created_at, resolved_at, resolution) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			r.Hash, source, r.ClientName, msg, ts, ts, moved)
+		return false, err
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO alerts (hash, source, client_name, message, created_at) VALUES (?, ?, ?, ?, ?)`,
 		r.Hash, source, r.ClientName, msg, now())
 	return err == nil, err
+}
+
+// knownDestination describes the most recent move or adoption recorded for
+// the torrent, or returns "" if there is none.
+func knownDestination(ctx context.Context, tx txLike, hash string) (string, error) {
+	var desc string
+	err := tx.QueryRowContext(ctx, `
+SELECT d FROM (
+	SELECT 'Già spostato su ' || COALESCE(NULLIF(dk.label, ''), 'archivio') ||
+		CASE WHEN COALESCE(dk.serial, '') != '' THEN ' (SN ' || dk.serial || ')' ELSE '' END ||
+		CASE WHEN a.path != '' THEN ' · ' || a.path ELSE '' END AS d, a.created_at AS ts
+	FROM archives a LEFT JOIN disks dk ON dk.id = a.disk_id WHERE a.hash = ?
+	UNION ALL
+	SELECT 'Già adottato da ' || ad.name, ao.created_at
+	FROM adoptions ao JOIN adopters ad ON ad.id = ao.adopter_id WHERE ao.hash = ?
+) ORDER BY ts DESC LIMIT 1`, hash, hash).Scan(&desc)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return desc, err
 }
 
 // WebhookRemoval is the payload of a "torrent removed" notification.

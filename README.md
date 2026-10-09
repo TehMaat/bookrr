@@ -4,9 +4,9 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 
 - 📋 **Elenco unico** di tutti i torrent letti da uno o più client qBittorrent, con ricerca e filtri.
 - 🖥️ **Su quale client** si trova ogni torrent (percorso, stato, ratio).
-- 🧬 **Duplicati**: segnala lo stesso torrent (stesso hash) caricato su più client.
-- 💽 **Archivi offline**: dischi con nome, tipo, **numero di serie**, modello, capacità e posizione fisica; per ogni torrent puoi registrare su quale disco/cartella si trova.
-- 🤝 **Adozioni**: chi ha adottato una tua release.
+- 🧬 **Duplicati**: segnala lo stesso torrent (stesso hash) caricato su più client e su quali è ancora **in download**.
+- 💽 **Archivi offline**: dischi con nome, tipo, **numero di serie**, modello, capacità e posizione fisica; per ogni torrent registri lo **spostamento** su un disco/cartella.
+- 🤝 **Adottatori**: elenco delle persone che hanno adottato le tue release; ogni torrent può avere uno o più adottatori, scelti da un menu.
 - 🔔 **Rimozioni delle Personal Release**: quando un torrent con tag `Personal Release` sparisce da tutti i client (rilevato dalla sincronizzazione o ricevuto via webhook) viene evidenziato e bookrr ti chiede **dove è stato spostato** (disco, adottato, eliminato, altro).
 - ✍️ **Dati manuali**: aggiungi torrent che non sono su nessun client, note, adozioni e archivi.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
@@ -57,7 +57,14 @@ A ogni intervallo bookrr legge `/api/v2/torrents/info` da ogni client attivo e c
 - i torrent presenti su più client vengono marcati come **duplicati**;
 - se un torrent con il tag delle release sparisce da **tutti** i client, viene aperta una **segnalazione** ("Da localizzare") e la riga viene evidenziata;
 - se poi ricompare su un client, la segnalazione si chiude da sola;
-- i torrent senza tag e senza dati tuoi (archivi, adozione, note) vengono semplicemente dimenticati quando spariscono.
+- i torrent senza tag e senza dati tuoi (spostamenti, adozioni, note) vengono semplicemente dimenticati quando spariscono.
+
+### Spostamenti e adozioni
+
+Registrare che un torrent è stato **spostato su un disco** o **adottato** da qualcuno risponde alla domanda "dove è finito?":
+
+- se c'è una segnalazione aperta, viene chiusa con la destinazione indicata;
+- se lo registri mentre il torrent è ancora sul client, quando lo togli dal client bookrr non apre una segnalazione (resta nello storico come già gestita).
 
 Un client irraggiungibile **non** genera segnalazioni: i suoi torrent restano com'erano fino alla prossima lettura riuscita.
 
@@ -96,7 +103,7 @@ Viene aperta una segnalazione solo se il torrent ha il tag delle release (nel pa
 
 ## API
 
-Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/clients`, `/api/alerts`, `/api/sync`, …). Vedi `internal/api/server.go`.
+Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/sync`, …). Vedi `internal/api/server.go`.
 
 ## Sviluppo
 

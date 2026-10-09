@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
-import { BellRing, BookCheck, HardDrive, ListTree, Server } from "lucide-react"
+import { BellRing, BookCheck, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
 
+import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
 import { AlertsPage } from "@/components/alerts-page"
 import { ClientsPage } from "@/components/clients-page"
@@ -13,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
 
-const tabs = ["torrents", "alerts", "disks", "clients"] as const
+const tabs = ["torrents", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
 
 function tabFromHash(): Tab {
@@ -59,6 +60,9 @@ export default function App() {
             <TabsTrigger value="disks">
               <HardDrive /> Dischi
             </TabsTrigger>
+            <TabsTrigger value="adopters">
+              <HandHeart /> Adottatori
+            </TabsTrigger>
             <TabsTrigger value="clients">
               <Server /> Client
             </TabsTrigger>
@@ -71,6 +75,9 @@ export default function App() {
           </TabsContent>
           <TabsContent value="disks">
             <DisksPage />
+          </TabsContent>
+          <TabsContent value="adopters">
+            <AdoptersPage onResolve={setResolving} />
           </TabsContent>
           <TabsContent value="clients">
             <ClientsPage />

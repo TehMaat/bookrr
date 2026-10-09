@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CircleHelp,
   Copy,
+  Download,
   HandHeart,
   HardDrive,
   Layers,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react"
 
 import { DuplicateBadge, PersonalBadge, StatusBadge, WhereBadges } from "@/components/torrent-badges"
+import { Badge } from "@/components/ui/badge"
 import { TorrentFormDialog } from "@/components/torrent-form-dialog"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { Button } from "@/components/ui/button"
@@ -26,9 +28,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Alert, Torrent } from "@/lib/api"
-import { formatBytes } from "@/lib/format"
-import { useClients, useDisks, useInfo, useTorrents } from "@/lib/queries"
+import { formatBytes, formatState, formatUnix, isDownloading } from "@/lib/format"
+import { useAdopters, useClients, useDisks, useInfo, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 type Filter = "all" | "client" | "duplicate" | "missing" | "archived" | "adopted" | "unknown"
@@ -45,7 +48,7 @@ function matches(t: Torrent, f: Filter) {
     case "duplicate":
       return t.duplicate
     case "adopted":
-      return t.adoptedBy !== ""
+      return t.adoptions.length > 0
     case "archived":
       return t.archives.length > 0
     default:
@@ -53,15 +56,39 @@ function matches(t: Torrent, f: Filter) {
   }
 }
 
+/** Per-client download state, used in the duplicates view to pick which copy to keep. */
+function DownloadCell({ t }: { t: Torrent }) {
+  const downloading = t.locations.filter(isDownloading)
+  if (downloading.length === 0) return <span className="text-muted-foreground text-xs">Completato ovunque</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {downloading.map((l) => (
+        <Tooltip key={l.clientId}>
+          <TooltipTrigger asChild>
+            <Badge variant="warning">
+              <Download /> {l.clientName} {Math.floor(l.progress * 100)}%
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            {formatState(l.state)} · aggiunto il {formatUnix(l.addedOn)}
+          </TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  )
+}
+
 export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const torrents = useTorrents()
   const clients = useClients()
   const disks = useDisks()
+  const adopters = useAdopters()
   const info = useInfo()
   const [filter, setFilter] = useState<Filter>("all")
   const [query, setQuery] = useState("")
   const [client, setClient] = useState("all")
   const [disk, setDisk] = useState("all")
+  const [adopter, setAdopter] = useState("all")
   const [onlyPersonal, setOnlyPersonal] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "name", desc: false })
   const [page, setPage] = useState(0)
@@ -83,11 +110,12 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       if (!matches(t, filter)) return false
       if (client !== "all" && !t.locations.some((l) => String(l.clientId) === client)) return false
       if (disk !== "all" && !t.archives.some((a) => String(a.diskId) === disk)) return false
+      if (adopter !== "all" && !t.adoptions.some((a) => String(a.adopterId) === adopter)) return false
       if (!q) return true
       return (
         t.name.toLowerCase().includes(q) ||
         t.hash.includes(q) ||
-        t.adoptedBy.toLowerCase().includes(q) ||
+        t.adoptions.some((a) => a.adopterName.toLowerCase().includes(q)) ||
         t.notes.toLowerCase().includes(q) ||
         t.category.toLowerCase().includes(q) ||
         t.tags.some((tag) => tag.toLowerCase().includes(q)) ||
@@ -109,12 +137,14 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       return c * dir
     })
     return out
-  }, [scoped, filter, client, disk, query, sort])
+  }, [scoped, filter, client, disk, adopter, query, sort])
 
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
   const visible = rows.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
   const totalSize = rows.reduce((s, t) => s + t.size, 0)
+  const showDownload = filter === "duplicate"
+  const cols = showDownload ? 5 : 4
   const selectedTorrent = selected ? (all.find((t) => t.hash === selected) ?? null) : null
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -202,6 +232,19 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             ))}
           </SelectContent>
         </Select>
+        <Select value={adopter} onValueChange={reset(setAdopter)}>
+          <SelectTrigger className="w-[190px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tutti gli adottatori</SelectItem>
+            {adopters.data?.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-2 px-1">
           <Switch id="only-personal" checked={onlyPersonal} onCheckedChange={reset(setOnlyPersonal)} />
           <Label htmlFor="only-personal" className="whitespace-nowrap">
@@ -228,6 +271,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                 </button>
               </TableHead>
               <TableHead>Dove si trova</TableHead>
+              {showDownload && <TableHead>In download</TableHead>}
               <TableHead>
                 <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
                   Stato <SortIcon k="status" />
@@ -239,21 +283,21 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             {torrents.isLoading &&
               Array.from({ length: 6 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={4}>
+                  <TableCell colSpan={cols}>
                     <Skeleton className="h-6 w-full" />
                   </TableCell>
                 </TableRow>
               ))}
             {torrents.isError && (
               <TableRow>
-                <TableCell colSpan={4} className="text-destructive py-10 text-center">
+                <TableCell colSpan={cols} className="text-destructive py-10 text-center">
                   Errore nel caricamento: {torrents.error.message}
                 </TableCell>
               </TableRow>
             )}
             {!torrents.isLoading && visible.length === 0 && !torrents.isError && (
               <TableRow>
-                <TableCell colSpan={4} className="text-muted-foreground py-10 text-center">
+                <TableCell colSpan={cols} className="text-muted-foreground py-10 text-center">
                   {all.length === 0
                     ? "Nessun torrent. Aggiungi un client qBittorrent nella scheda Client oppure inserisci un torrent a mano."
                     : "Nessun torrent corrisponde ai filtri."}
@@ -288,6 +332,11 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                 <TableCell className="whitespace-normal">
                   <WhereBadges t={t} />
                 </TableCell>
+                {showDownload && (
+                  <TableCell className="whitespace-normal">
+                    <DownloadCell t={t} />
+                  </TableCell>
+                )}
                 <TableCell>
                   {t.openAlert ? (
                     <Button

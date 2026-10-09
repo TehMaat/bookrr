@@ -67,6 +67,28 @@ export function formatState(s: string): string {
   return states[s] ?? s
 }
 
+const downloadStates = new Set([
+  "downloading",
+  "stalledDL",
+  "forcedDL",
+  "queuedDL",
+  "pausedDL",
+  "stoppedDL",
+  "checkingDL",
+  "metaDL",
+  "forcedMetaDL",
+])
+
+/** True when the client hasn't finished downloading the torrent yet. */
+export function isDownloading(l: { state: string; progress: number }): boolean {
+  return downloadStates.has(l.state) || (l.progress < 1 && !isErrorState(l.state))
+}
+
+/** qBittorrent's added_on is a unix timestamp in seconds. */
+export function formatUnix(ts: number): string {
+  return ts > 0 ? dateFmt.format(new Date(ts * 1000)) : "—"
+}
+
 export function isErrorState(s: string): boolean {
   return s === "missingFiles" || s === "error"
 }

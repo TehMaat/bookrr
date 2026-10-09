@@ -22,6 +22,14 @@ export type Archive = {
   createdAt: string
 }
 
+export type Adoption = {
+  id: number
+  adopterId: number
+  adopterName: string
+  notes: string
+  createdAt: string
+}
+
 export type Alert = {
   id: number
   hash: string
@@ -45,13 +53,13 @@ export type Torrent = {
   tracker: string
   personalRelease: boolean
   manual: boolean
-  adoptedBy: string
   notes: string
   firstSeenAt: string
   lastSeenAt: string | null
   updatedAt: string
   locations: Location[]
   archives: Archive[]
+  adoptions: Adoption[]
   openAlert: Alert | null
   duplicate: boolean
   status: TorrentStatus
@@ -69,6 +77,16 @@ export type Disk = {
   createdAt: string
   archiveCount: number
   archivedSize: number
+}
+
+export type Adopter = {
+  id: number
+  name: string
+  contact: string
+  notes: string
+  createdAt: string
+  adoptedCount: number
+  adoptedSize: number
 }
 
 export type Client = {
@@ -100,6 +118,7 @@ export type SyncState = {
 }
 
 export type ArchiveInput = { diskId: number | null; path: string; notes: string }
+export type AdoptionInput = { adopterId: number; notes: string }
 
 export type TorrentInput = {
   hash?: string
@@ -108,13 +127,13 @@ export type TorrentInput = {
   tags?: string[]
   category?: string
   personalRelease?: boolean
-  adoptedBy?: string
   notes?: string
   archive?: ArchiveInput
+  adoption?: AdoptionInput
 }
 
 export type TorrentPatch = Partial<
-  Pick<Torrent, "name" | "size" | "tags" | "category" | "personalRelease" | "adoptedBy" | "notes">
+  Pick<Torrent, "name" | "size" | "tags" | "category" | "personalRelease" | "notes">
 >
 
 export type ClientInput = {
@@ -130,7 +149,7 @@ export type ClientInput = {
 export type ResolveInput = {
   resolution: string
   archive?: ArchiveInput
-  adoptedBy?: string
+  adoption?: AdoptionInput
 }
 
 export class ApiError extends Error {
@@ -173,6 +192,8 @@ export const api = {
   addArchive: (hash: string, a: ArchiveInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/archives`, a),
   updateArchive: (id: number, a: ArchiveInput) => request<void>("PUT", `/api/archives/${id}`, a),
   deleteArchive: (id: number) => request<void>("DELETE", `/api/archives/${id}`),
+  addAdoption: (hash: string, a: AdoptionInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/adoptions`, a),
+  deleteAdoption: (id: number) => request<void>("DELETE", `/api/adoptions/${id}`),
 
   alerts: (open = true) => request<Alert[]>("GET", `/api/alerts?open=${open ? 1 : 0}`),
   resolveAlert: (id: number, r: ResolveInput) => request<void>("POST", `/api/alerts/${id}/resolve`, r),
@@ -181,6 +202,11 @@ export const api = {
   createDisk: (d: Partial<Disk>) => request<Disk>("POST", "/api/disks", d),
   updateDisk: (id: number, d: Partial<Disk>) => request<Disk>("PUT", `/api/disks/${id}`, d),
   deleteDisk: (id: number) => request<void>("DELETE", `/api/disks/${id}`),
+
+  adopters: () => request<Adopter[]>("GET", "/api/adopters"),
+  createAdopter: (a: Partial<Adopter>) => request<Adopter>("POST", "/api/adopters", a),
+  updateAdopter: (id: number, a: Partial<Adopter>) => request<Adopter>("PUT", `/api/adopters/${id}`, a),
+  deleteAdopter: (id: number) => request<void>("DELETE", `/api/adopters/${id}`),
 
   clients: () => request<Client[]>("GET", "/api/clients"),
   createClient: (c: ClientInput) => request<Client>("POST", "/api/clients", c),
