@@ -1,0 +1,11 @@
+# Go
+/bookrr
+/data/
+
+# Frontend
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
+*.tsbuildinfo
+
+.DS_Store
