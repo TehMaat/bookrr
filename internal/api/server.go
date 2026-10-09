@@ -47,6 +47,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/torrents/{hash}", s.getTorrent)
 	mux.HandleFunc("PATCH /api/torrents/{hash}", s.updateTorrent)
 	mux.HandleFunc("DELETE /api/torrents/{hash}", s.deleteTorrent)
+	mux.HandleFunc("DELETE /api/torrents/{hash}/locations/{clientId}", s.removeFromClient)
 	mux.HandleFunc("POST /api/torrents/{hash}/archives", s.addArchive)
 	mux.HandleFunc("PUT /api/archives/{id}", s.updateArchive)
 	mux.HandleFunc("DELETE /api/archives/{id}", s.deleteArchive)
@@ -162,7 +163,7 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrOnClient), errors.Is(err, store.ErrAlreadyAdopted):
+	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrOnClient), errors.Is(err, store.ErrAlreadyAdopted), errors.Is(err, store.ErrLastCopy):
 		writeError(w, http.StatusConflict, err.Error())
 	case strings.Contains(err.Error(), "UNIQUE"):
 		writeError(w, http.StatusConflict, "esiste già un elemento con questo nome")
@@ -292,6 +293,45 @@ func (s *Server) deleteTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// removeFromClient deletes a duplicate torrent from one client, as long as
+// another client keeps a complete copy. ?deleteFiles=1 also deletes the
+// downloaded data on that client.
+func (s *Server) removeFromClient(w http.ResponseWriter, r *http.Request) {
+	hash := r.PathValue("hash")
+	clientID, err := strconv.ParseInt(r.PathValue("clientId"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "id client non valido")
+		return
+	}
+	deleteFiles := r.URL.Query().Get("deleteFiles") == "1"
+	if err := s.store.CheckRemovableLocation(r.Context(), hash, clientID); err != nil {
+		s.fail(w, err)
+		return
+	}
+	c, err := s.store.GetClient(r.Context(), clientID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if err := s.syncer.Qbit(c).DeleteTorrent(ctx, hash, deleteFiles); err != nil {
+		writeError(w, http.StatusBadGateway, "rimozione da "+c.Name+" non riuscita: "+err.Error())
+		return
+	}
+	if err := s.store.RemoveLocation(r.Context(), hash, clientID); err != nil {
+		s.fail(w, err)
+		return
+	}
+	slog.Info("torrent rimosso dal client", "hash", hash, "client", c.Name, "deleteFiles", deleteFiles)
+	t, err := s.store.GetTorrent(r.Context(), hash)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, t)
 }
 
 func (s *Server) addArchive(w http.ResponseWriter, r *http.Request) {
