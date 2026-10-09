@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react"
 import { Archive, HandHeart, MessageSquareText, Trash2 } from "lucide-react"
 
+import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { api, type Alert, type ArchiveInput, type ResolveInput } from "@/lib/api"
 import { formatDate } from "@/lib/format"
-import { useAction, useDisks } from "@/lib/queries"
+import { useAction, useAdopters, useDisks } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 type Kind = "disk" | "adopted" | "deleted" | "other"
 
 const kinds: { value: Kind; label: string; icon: React.ElementType }[] = [
-  { value: "disk", label: "Archiviato su disco", icon: Archive },
+  { value: "disk", label: "Spostato su disco", icon: Archive },
   { value: "adopted", label: "Adottato da qualcuno", icon: HandHeart },
   { value: "deleted", label: "Eliminato", icon: Trash2 },
   { value: "other", label: "Altro", icon: MessageSquareText },
@@ -24,15 +24,16 @@ const kinds: { value: Kind; label: string; icon: React.ElementType }[] = [
 export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose: () => void }) {
   const [kind, setKind] = useState<Kind>("disk")
   const [archive, setArchive] = useState<ArchiveInput>(emptyArchive)
-  const [adoptedBy, setAdoptedBy] = useState("")
+  const [adopterId, setAdopterId] = useState<number | null>(null)
   const [note, setNote] = useState("")
   const disks = useDisks()
+  const adopters = useAdopters()
 
   useEffect(() => {
     if (alert) {
       setKind("disk")
       setArchive(emptyArchive)
-      setAdoptedBy("")
+      setAdopterId(null)
       setNote("")
     }
   }, [alert])
@@ -40,9 +41,10 @@ export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose
   const resolve = useAction((r: ResolveInput) => api.resolveAlert(alert!.id, r), "Posizione registrata")
 
   const disk = disks.data?.find((d) => d.id === archive.diskId)
+  const adopter = adopters.data?.find((a) => a.id === adopterId)
   const valid =
     (kind === "disk" && (archive.diskId !== null || archive.path.trim() !== "")) ||
-    (kind === "adopted" && adoptedBy.trim() !== "") ||
+    (kind === "adopted" && adopterId !== null) ||
     kind === "deleted" ||
     (kind === "other" && note.trim() !== "")
 
@@ -52,11 +54,11 @@ export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose
     const r: ResolveInput = { resolution: "" }
     if (kind === "disk") {
       r.archive = archive
-      parts.push(`Archiviato su ${disk ? `${disk.label}${disk.serial ? ` (SN ${disk.serial})` : ""}` : "archivio"}${archive.path ? ` · ${archive.path}` : ""}`)
+      parts.push(`Spostato su ${disk ? `${disk.label}${disk.serial ? ` (SN ${disk.serial})` : ""}` : "archivio"}${archive.path ? ` · ${archive.path}` : ""}`)
     }
-    if ((kind === "disk" || kind === "adopted") && adoptedBy.trim()) {
-      r.adoptedBy = adoptedBy.trim()
-      parts.push(`Adottato da ${adoptedBy.trim()}`)
+    if ((kind === "disk" || kind === "adopted") && adopter) {
+      r.adoption = { adopterId: adopter.id, notes: "" }
+      parts.push(`Adottato da ${adopter.name}`)
     }
     if (kind === "deleted") parts.push("Eliminato definitivamente")
     if (note.trim()) parts.push(note.trim())
@@ -99,7 +101,7 @@ export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose
           {(kind === "disk" || kind === "adopted") && (
             <div className="grid gap-2">
               <Label htmlFor="adopted-by">{kind === "adopted" ? "Chi l'ha adottato? *" : "Adottato anche da (opzionale)"}</Label>
-              <Input id="adopted-by" value={adoptedBy} onChange={(e) => setAdoptedBy(e.target.value)} placeholder="Nome utente" />
+              <AdopterSelect id="adopted-by" value={adopterId} onChange={setAdopterId} />
             </div>
           )}
 

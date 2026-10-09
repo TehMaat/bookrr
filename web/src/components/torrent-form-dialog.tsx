@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 
+import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -18,7 +19,7 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
   const [size, setSize] = useState("")
   const [tags, setTags] = useState("")
   const [personal, setPersonal] = useState(true)
-  const [adoptedBy, setAdoptedBy] = useState("")
+  const [adopterId, setAdopterId] = useState<number | null>(null)
   const [notes, setNotes] = useState("")
   const [archive, setArchive] = useState<ArchiveInput>(emptyArchive)
 
@@ -29,7 +30,7 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
     setSize("")
     setTags("")
     setPersonal(true)
-    setAdoptedBy("")
+    setAdopterId(null)
     setNotes("")
     setArchive(emptyArchive)
   }, [open])
@@ -50,9 +51,9 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
           .map((t) => t.trim())
           .filter(Boolean),
         personalRelease: personal,
-        adoptedBy: adoptedBy.trim(),
         notes,
         archive,
+        adoption: adopterId ? { adopterId, notes: "" } : undefined,
       },
       { onSuccess: () => onOpenChange(false) }
     )
@@ -94,7 +95,7 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
             </div>
             <div className="grid gap-2">
               <Label htmlFor="t-adopted">Adottato da</Label>
-              <Input id="t-adopted" value={adoptedBy} onChange={(e) => setAdoptedBy(e.target.value)} />
+              <AdopterSelect id="t-adopted" value={adopterId} onChange={setAdopterId} />
             </div>
             <div className="flex items-center gap-2 pt-6">
               <Switch id="t-personal" checked={personal} onCheckedChange={setPersonal} />
@@ -107,7 +108,7 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
           </div>
           <Separator />
           <div>
-            <h4 className="mb-3 text-sm font-semibold">Archivio (opzionale)</h4>
+            <h4 className="mb-3 text-sm font-semibold">Spostato su disco (opzionale)</h4>
             <ArchiveFields value={archive} onChange={setArchive} />
           </div>
           <DialogFooter>

@@ -112,6 +112,29 @@ CREATE TABLE alerts (
 );
 CREATE INDEX alerts_hash ON alerts(hash);
 `,
+	`
+CREATE TABLE adopters (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+	contact TEXT NOT NULL DEFAULT '',
+	notes TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL
+);
+CREATE TABLE adoptions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	hash TEXT NOT NULL REFERENCES torrents(hash) ON DELETE CASCADE,
+	adopter_id INTEGER NOT NULL REFERENCES adopters(id) ON DELETE CASCADE,
+	notes TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	UNIQUE (hash, adopter_id)
+);
+CREATE INDEX adoptions_adopter ON adoptions(adopter_id);
+INSERT OR IGNORE INTO adopters (name, created_at)
+	SELECT trim(adopted_by), MIN(updated_at) FROM torrents WHERE trim(adopted_by) != '' GROUP BY trim(adopted_by) COLLATE NOCASE;
+INSERT OR IGNORE INTO adoptions (hash, adopter_id, created_at)
+	SELECT t.hash, a.id, t.updated_at FROM torrents t JOIN adopters a ON a.name = trim(t.adopted_by);
+ALTER TABLE torrents DROP COLUMN adopted_by;
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

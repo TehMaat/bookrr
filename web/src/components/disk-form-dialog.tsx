@@ -45,7 +45,9 @@ export function DiskFormDialog({
     setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const submit = (e: React.FormEvent) => {
+    // The dialog can be opened from inside another form (e.g. the resolve dialog).
     e.preventDefault()
+    e.stopPropagation()
     save.mutate(
       { ...form, capacity: parseBytes(form.capacity) },
       {

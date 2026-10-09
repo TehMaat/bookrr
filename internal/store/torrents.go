@@ -53,13 +53,13 @@ type Torrent struct {
 	Tracker         string     `json:"tracker"`
 	PersonalRelease bool       `json:"personalRelease"`
 	Manual          bool       `json:"manual"`
-	AdoptedBy       string     `json:"adoptedBy"`
 	Notes           string     `json:"notes"`
 	FirstSeenAt     string     `json:"firstSeenAt"`
 	LastSeenAt      *string    `json:"lastSeenAt"`
 	UpdatedAt       string     `json:"updatedAt"`
 	Locations       []Location `json:"locations"`
 	Archives        []Archive  `json:"archives"`
+	Adoptions       []Adoption `json:"adoptions"`
 	OpenAlert       *Alert     `json:"openAlert"`
 	Duplicate       bool       `json:"duplicate"`
 	Status          string     `json:"status"`
@@ -83,24 +83,25 @@ func (t *Torrent) finalize() {
 		t.Status = StatusMissing
 	case len(t.Archives) > 0:
 		t.Status = StatusArchived
-	case t.AdoptedBy != "":
+	case len(t.Adoptions) > 0:
 		t.Status = StatusAdopted
 	default:
 		t.Status = StatusUnknown
 	}
 }
 
-const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, adopted_by, notes, first_seen_at, last_seen_at, updated_at`
+const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at`
 
 func scanTorrent(row interface{ Scan(...any) error }) (Torrent, error) {
 	var t Torrent
 	var tags string
 	var last sql.NullString
-	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.AdoptedBy, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt)
+	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt)
 	t.Tags = SplitTags(tags)
 	t.LastSeenAt = nullStr(last)
 	t.Locations = []Location{}
 	t.Archives = []Archive{}
+	t.Adoptions = []Adoption{}
 	return t, err
 }
 
@@ -181,6 +182,16 @@ FROM locations l JOIN clients c ON c.id = l.client_id`+lwhere+` ORDER BY c.name 
 		}
 	}
 
+	adoptions, err := s.listAdoptions(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range adoptions {
+		if i, ok := idx[a.hash]; ok {
+			out[i].Adoptions = append(out[i].Adoptions, a)
+		}
+	}
+
 	alerts, err := s.ListAlerts(ctx, true, hash)
 	if err != nil {
 		return nil, err
@@ -233,7 +244,6 @@ type TorrentInput struct {
 	Category        string   `json:"category"`
 	Tracker         string   `json:"tracker"`
 	PersonalRelease bool     `json:"personalRelease"`
-	AdoptedBy       string   `json:"adoptedBy"`
 	Notes           string   `json:"notes"`
 }
 
@@ -242,9 +252,9 @@ var ErrExists = errors.New("esiste già")
 func (s *Store) CreateManualTorrent(ctx context.Context, in TorrentInput) (Torrent, error) {
 	ts := now()
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO torrents (hash, name, size, tags, category, tracker, personal_release, manual, adopted_by, notes, first_seen_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
-		in.Hash, in.Name, in.Size, strings.Join(in.Tags, ","), in.Category, in.Tracker, boolInt(in.PersonalRelease), in.AdoptedBy, in.Notes, ts, ts)
+INSERT INTO torrents (hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+		in.Hash, in.Name, in.Size, strings.Join(in.Tags, ","), in.Category, in.Tracker, boolInt(in.PersonalRelease), in.Notes, ts, ts)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Torrent{}, ErrExists
@@ -261,7 +271,6 @@ type TorrentPatch struct {
 	Tags            *[]string `json:"tags"`
 	Category        *string   `json:"category"`
 	PersonalRelease *bool     `json:"personalRelease"`
-	AdoptedBy       *string   `json:"adoptedBy"`
 	Notes           *string   `json:"notes"`
 }
 
@@ -282,9 +291,6 @@ func (s *Store) UpdateTorrent(ctx context.Context, hash string, p TorrentPatch) 
 	}
 	if p.PersonalRelease != nil {
 		add("personal_release", boolInt(*p.PersonalRelease))
-	}
-	if p.AdoptedBy != nil {
-		add("adopted_by", strings.TrimSpace(*p.AdoptedBy))
 	}
 	if p.Notes != nil {
 		add("notes", *p.Notes)
@@ -327,8 +333,48 @@ type ArchiveInput struct {
 	Notes  string `json:"notes"`
 }
 
+// AddArchive records that the torrent was moved to a disk. A move answers
+// any open "where did it go?" alert for the torrent.
 func (s *Store) AddArchive(ctx context.Context, hash string, in ArchiveInput) error {
-	return addArchive(ctx, s.db, hash, in)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := addArchive(ctx, tx, hash, in); err != nil {
+		return err
+	}
+	desc, err := describeArchive(ctx, tx, in)
+	if err != nil {
+		return err
+	}
+	if err := resolveOpenAlerts(ctx, tx, hash, desc); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// describeArchive renders a move as "Spostato su Disco (SN 123) · /path".
+func describeArchive(ctx context.Context, q txLike, in ArchiveInput) (string, error) {
+	where := "archivio"
+	if in.DiskID != nil {
+		var label, serial string
+		err := q.QueryRowContext(ctx, `SELECT label, serial FROM disks WHERE id = ?`, *in.DiskID).Scan(&label, &serial)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+		if label != "" {
+			where = label
+			if serial != "" {
+				where += " (SN " + serial + ")"
+			}
+		}
+	}
+	desc := "Spostato su " + where
+	if in.Path != "" {
+		desc += " · " + in.Path
+	}
+	return desc, nil
 }
 
 type execer interface {

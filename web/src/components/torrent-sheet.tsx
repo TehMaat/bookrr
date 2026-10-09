@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
-import { Check, Copy, HardDrive, Plus, Server, Trash2, TriangleAlert } from "lucide-react"
+import { Check, Copy, Download, HandHeart, HardDrive, Plus, Server, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
+import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
 import { DuplicateBadge, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -24,8 +25,8 @@ import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { api, type Alert, type ArchiveInput, type Torrent, type TorrentPatch } from "@/lib/api"
-import { formatBytes, formatDate, formatState, isErrorState } from "@/lib/format"
+import { api, type AdoptionInput, type Alert, type ArchiveInput, type Torrent, type TorrentPatch } from "@/lib/api"
+import { formatBytes, formatDate, formatState, formatUnix, isDownloading, isErrorState } from "@/lib/format"
 import { useAction } from "@/lib/queries"
 
 function Section({ title, icon: Icon, children, action }: { title: string; icon?: React.ElementType; children: React.ReactNode; action?: React.ReactNode }) {
@@ -60,33 +61,40 @@ export function TorrentSheet({
   onResolve: (a: Alert) => void
 }) {
   const t = torrent
-  const [adoptedBy, setAdoptedBy] = useState("")
   const [notes, setNotes] = useState("")
   const [name, setName] = useState("")
   const [addingArchive, setAddingArchive] = useState(false)
   const [archive, setArchive] = useState<ArchiveInput>(emptyArchive)
+  const [addingAdoption, setAddingAdoption] = useState(false)
+  const [adopterId, setAdopterId] = useState<number | null>(null)
+  const [adoptionNotes, setAdoptionNotes] = useState("")
   const [copied, setCopied] = useState(false)
 
   const hash = t?.hash
   useEffect(() => {
     if (!t) return
-    setAdoptedBy(t.adoptedBy)
     setNotes(t.notes)
     setName(t.name)
     setAddingArchive(false)
     setArchive(emptyArchive)
+    setAddingAdoption(false)
+    setAdopterId(null)
+    setAdoptionNotes("")
     // Reset only when switching torrent, not on background refreshes.
   }, [hash])
 
   const update = useAction((p: TorrentPatch) => api.updateTorrent(hash!, p), "Salvato")
-  const addArchive = useAction((a: ArchiveInput) => api.addArchive(hash!, a), "Archivio aggiunto")
-  const delArchive = useAction((id: number) => api.deleteArchive(id), "Archivio rimosso")
+  const addArchive = useAction((a: ArchiveInput) => api.addArchive(hash!, a), "Spostamento registrato")
+  const delArchive = useAction((id: number) => api.deleteArchive(id), "Spostamento rimosso")
+  const addAdoption = useAction((a: AdoptionInput) => api.addAdoption(hash!, a), "Adozione aggiunta")
+  const delAdoption = useAction((id: number) => api.deleteAdoption(id), "Adozione rimossa")
   const del = useAction(() => api.deleteTorrent(hash!), "Torrent eliminato")
 
   if (!t) return <Sheet open={false} />
 
   const onClient = t.locations.length > 0
-  const dirty = adoptedBy !== t.adoptedBy || notes !== t.notes || (t.manual && name !== t.name)
+  const dirty = notes !== t.notes || (t.manual && name !== t.name)
+  const downloading = t.locations.filter(isDownloading)
 
   const copyHash = async () => {
     try {
@@ -138,7 +146,14 @@ export function TorrentSheet({
             <AlertBox variant="destructive">
               <Copy />
               <AlertTitle>Presente su {t.locations.length} client</AlertTitle>
-              <AlertDescription>Lo stesso torrent (stesso hash) è caricato su più client.</AlertDescription>
+              <AlertDescription>
+                Lo stesso torrent (stesso hash) è caricato su più client.
+                {downloading.length > 0 && (
+                  <p>
+                    In download su: {downloading.map((l) => `${l.clientName} (${Math.floor(l.progress * 100)}%)`).join(", ")}.
+                  </p>
+                )}
+              </AlertDescription>
             </AlertBox>
           )}
 
@@ -169,11 +184,23 @@ export function TorrentSheet({
                   <li key={l.clientId} className="rounded-lg border p-3 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{l.clientName}</span>
-                      <Badge variant={isErrorState(l.state) ? "destructive" : "secondary"}>{formatState(l.state)}</Badge>
+                      {isDownloading(l) ? (
+                        <Badge variant="warning">
+                          <Download /> {formatState(l.state)}
+                        </Badge>
+                      ) : (
+                        <Badge variant={isErrorState(l.state) ? "destructive" : "secondary"}>{formatState(l.state)}</Badge>
+                      )}
                       <span className="text-muted-foreground ml-auto text-xs">
-                        {(l.progress * 100).toFixed(0)}% · ratio {l.ratio.toFixed(2)}
+                        {Math.floor(l.progress * 100)}% · ratio {l.ratio.toFixed(2)}
                       </span>
                     </div>
+                    {isDownloading(l) && (
+                      <div className="bg-muted mt-2 h-1.5 overflow-hidden rounded-full">
+                        <div className="h-full rounded-full bg-amber-500" style={{ width: `${l.progress * 100}%` }} />
+                      </div>
+                    )}
+                    <div className="text-muted-foreground mt-1 text-xs">Aggiunto il {formatUnix(l.addedOn)}</div>
                     <div className="text-muted-foreground mt-1 font-mono text-xs break-all">{l.savePath}</div>
                     {(l.category || l.tags) && (
                       <div className="text-muted-foreground mt-1 text-xs">
@@ -190,18 +217,21 @@ export function TorrentSheet({
           <Separator />
 
           <Section
-            title={`Archivi (${t.archives.length})`}
+            title={`Spostato su disco (${t.archives.length})`}
             icon={HardDrive}
             action={
               !addingArchive && (
                 <Button size="sm" variant="outline" onClick={() => setAddingArchive(true)}>
-                  <Plus /> Aggiungi
+                  <HardDrive /> Sposta su disco
                 </Button>
               )
             }
           >
             {t.archives.length === 0 && !addingArchive && (
-              <p className="text-muted-foreground text-sm">Nessun archivio registrato.</p>
+              <p className="text-muted-foreground text-sm">
+                Non è stato spostato su nessun disco.
+                {onClient && " Registra lo spostamento prima di toglierlo dal client: la rimozione non verrà segnalata."}
+              </p>
             )}
             <ul className="grid gap-2">
               {t.archives.map((a) => (
@@ -214,12 +244,13 @@ export function TorrentSheet({
                     </div>
                     {a.path && <div className="text-muted-foreground mt-1 font-mono text-xs break-all">{a.path}</div>}
                     {a.notes && <div className="mt-1 text-xs">{a.notes}</div>}
+                    <div className="text-muted-foreground mt-1 text-xs">Spostato il {formatDate(a.createdAt)}</div>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => delArchive.mutate(a.id)}
-                    aria-label="Rimuovi archivio"
+                    aria-label="Rimuovi spostamento"
                   >
                     <Trash2 />
                   </Button>
@@ -245,7 +276,79 @@ export function TorrentSheet({
                       })
                     }
                   >
-                    Salva archivio
+                    Registra spostamento
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          <Separator />
+
+          <Section
+            title={`Adottato da (${t.adoptions.length})`}
+            icon={HandHeart}
+            action={
+              !addingAdoption && (
+                <Button size="sm" variant="outline" onClick={() => setAddingAdoption(true)}>
+                  <Plus /> Aggiungi
+                </Button>
+              )
+            }
+          >
+            {t.adoptions.length === 0 && !addingAdoption && (
+              <p className="text-muted-foreground text-sm">Nessuno l'ha adottato.</p>
+            )}
+            <ul className="grid gap-2">
+              {t.adoptions.map((a) => (
+                <li key={a.id} className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium">{a.adopterName}</span>
+                    {a.notes && <div className="mt-1 text-xs">{a.notes}</div>}
+                    <div className="text-muted-foreground mt-1 text-xs">Dal {formatDate(a.createdAt)}</div>
+                  </div>
+                  <Button variant="ghost" size="icon-sm" onClick={() => delAdoption.mutate(a.id)} aria-label="Rimuovi adozione">
+                    <Trash2 />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            {addingAdoption && (
+              <div className="grid gap-3 rounded-lg border p-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="ts-adopter">Adottatore</Label>
+                  <AdopterSelect
+                    id="ts-adopter"
+                    value={adopterId}
+                    onChange={setAdopterId}
+                    exclude={t.adoptions.map((a) => a.adopterId)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ts-adoption-notes">Note adozione</Label>
+                  <Input id="ts-adoption-notes" value={adoptionNotes} onChange={(e) => setAdoptionNotes(e.target.value)} />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAddingAdoption(false)}>
+                    Annulla
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={adopterId === null || addAdoption.isPending}
+                    onClick={() =>
+                      addAdoption.mutate(
+                        { adopterId: adopterId!, notes: adoptionNotes },
+                        {
+                          onSuccess: () => {
+                            setAddingAdoption(false)
+                            setAdopterId(null)
+                            setAdoptionNotes("")
+                          },
+                        }
+                      )
+                    }
+                  >
+                    Salva adozione
                   </Button>
                 </div>
               </div>
@@ -261,15 +364,6 @@ export function TorrentSheet({
                 <Input id="ts-name" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
             )}
-            <div className="grid gap-2">
-              <Label htmlFor="ts-adopted">Adottato da</Label>
-              <Input
-                id="ts-adopted"
-                value={adoptedBy}
-                onChange={(e) => setAdoptedBy(e.target.value)}
-                placeholder="Nessuno"
-              />
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="ts-notes">Note</Label>
               <Textarea id="ts-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -289,7 +383,6 @@ export function TorrentSheet({
                 disabled={!dirty || update.isPending}
                 onClick={() =>
                   update.mutate({
-                    adoptedBy,
                     notes,
                     ...(t.manual && name.trim() ? { name: name.trim() } : {}),
                   })
@@ -313,7 +406,7 @@ export function TorrentSheet({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Eliminare questo torrent?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Verranno cancellati da bookrr anche archivi, adozione, note e segnalazioni. I file sui dischi non
+                      Verranno cancellati da bookrr anche spostamenti, adozioni, note e segnalazioni. I file sui dischi non
                       vengono toccati.
                     </AlertDialogDescription>
                   </AlertDialogHeader>

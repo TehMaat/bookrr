@@ -42,9 +42,9 @@ FROM alerts a JOIN torrents t ON t.hash = a.hash`+where+` ORDER BY a.created_at 
 
 type ResolveInput struct {
 	// Resolution is a free-text description of where the torrent went.
-	Resolution string        `json:"resolution"`
-	Archive    *ArchiveInput `json:"archive"`
-	AdoptedBy  *string       `json:"adoptedBy"`
+	Resolution string         `json:"resolution"`
+	Archive    *ArchiveInput  `json:"archive"`
+	Adoption   *AdoptionInput `json:"adoption"`
 }
 
 // ResolveAlert records where a removed torrent went and closes every open
@@ -69,17 +69,21 @@ func (s *Store) ResolveAlert(ctx context.Context, id int64, in ResolveInput) err
 			return err
 		}
 	}
-	if in.AdoptedBy != nil {
-		if _, err := tx.ExecContext(ctx, `UPDATE torrents SET adopted_by = ?, updated_at = ? WHERE hash = ?`,
-			strings.TrimSpace(*in.AdoptedBy), now(), hash); err != nil {
+	if in.Adoption != nil {
+		if err := addAdoption(ctx, tx, hash, *in.Adoption); err != nil && !errors.Is(err, ErrAlreadyAdopted) {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE alerts SET resolved_at = ?, resolution = ? WHERE hash = ? AND resolved_at IS NULL`,
-		now(), in.Resolution, hash); err != nil {
+	if err := resolveOpenAlerts(ctx, tx, hash, in.Resolution); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func resolveOpenAlerts(ctx context.Context, db execer, hash, resolution string) error {
+	_, err := db.ExecContext(ctx, `UPDATE alerts SET resolved_at = ?, resolution = ? WHERE hash = ? AND resolved_at IS NULL`,
+		now(), resolution, hash)
+	return err
 }
 
 func openAlertExists(ctx context.Context, q interface {

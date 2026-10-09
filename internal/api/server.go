@@ -50,6 +50,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/torrents/{hash}/archives", s.addArchive)
 	mux.HandleFunc("PUT /api/archives/{id}", s.updateArchive)
 	mux.HandleFunc("DELETE /api/archives/{id}", s.deleteArchive)
+	mux.HandleFunc("POST /api/torrents/{hash}/adoptions", s.addAdoption)
+	mux.HandleFunc("DELETE /api/adoptions/{id}", s.deleteAdoption)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
@@ -58,6 +60,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/disks", s.createDisk)
 	mux.HandleFunc("PUT /api/disks/{id}", s.updateDisk)
 	mux.HandleFunc("DELETE /api/disks/{id}", s.deleteDisk)
+
+	mux.HandleFunc("GET /api/adopters", s.listAdopters)
+	mux.HandleFunc("POST /api/adopters", s.createAdopter)
+	mux.HandleFunc("PUT /api/adopters/{id}", s.updateAdopter)
+	mux.HandleFunc("DELETE /api/adopters/{id}", s.deleteAdopter)
 
 	mux.HandleFunc("GET /api/clients", s.listClients)
 	mux.HandleFunc("POST /api/clients", s.createClient)
@@ -155,7 +162,7 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrOnClient):
+	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrOnClient), errors.Is(err, store.ErrAlreadyAdopted):
 		writeError(w, http.StatusConflict, err.Error())
 	case strings.Contains(err.Error(), "UNIQUE"):
 		writeError(w, http.StatusConflict, "esiste già un elemento con questo nome")
@@ -227,7 +234,8 @@ func (s *Server) getTorrent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createTorrent(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		store.TorrentInput
-		Archive *store.ArchiveInput `json:"archive"`
+		Archive  *store.ArchiveInput  `json:"archive"`
+		Adoption *store.AdoptionInput `json:"adoption"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -250,6 +258,13 @@ func (s *Server) createTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Archive != nil && (in.Archive.DiskID != nil || in.Archive.Path != "") {
 		if err := s.store.AddArchive(r.Context(), t.Hash, *in.Archive); err != nil {
+			s.fail(w, err)
+			return
+		}
+		t, _ = s.store.GetTorrent(r.Context(), t.Hash)
+	}
+	if in.Adoption != nil && in.Adoption.AdopterID != 0 {
+		if err := s.store.AddAdoption(r.Context(), t.Hash, *in.Adoption); err != nil {
 			s.fail(w, err)
 			return
 		}
@@ -319,6 +334,36 @@ func (s *Server) deleteArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteArchive(r.Context(), id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) addAdoption(w http.ResponseWriter, r *http.Request) {
+	var in store.AdoptionInput
+	if !decode(w, r, &in) {
+		return
+	}
+	hash := r.PathValue("hash")
+	if err := s.store.AddAdoption(r.Context(), hash, in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	t, err := s.store.GetTorrent(r.Context(), hash)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, t)
+}
+
+func (s *Server) deleteAdoption(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.DeleteAdoption(r.Context(), id); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -414,6 +459,70 @@ func (s *Server) deleteDisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteDisk(r.Context(), id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- adopters ---
+
+func (s *Server) listAdopters(w http.ResponseWriter, r *http.Request) {
+	as, err := s.store.ListAdopters(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, as)
+}
+
+func validAdopter(w http.ResponseWriter, a *store.Adopter) bool {
+	a.Name = strings.TrimSpace(a.Name)
+	a.Contact = strings.TrimSpace(a.Contact)
+	if a.Name == "" {
+		writeError(w, http.StatusBadRequest, "il nome dell'adottatore è obbligatorio")
+		return false
+	}
+	return true
+}
+
+func (s *Server) createAdopter(w http.ResponseWriter, r *http.Request) {
+	var a store.Adopter
+	if !decode(w, r, &a) || !validAdopter(w, &a) {
+		return
+	}
+	a, err := s.store.CreateAdopter(r.Context(), a)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, a)
+}
+
+func (s *Server) updateAdopter(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var a store.Adopter
+	if !decode(w, r, &a) || !validAdopter(w, &a) {
+		return
+	}
+	a.ID = id
+	a, err := s.store.UpdateAdopter(r.Context(), a)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, a)
+}
+
+func (s *Server) deleteAdopter(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.DeleteAdopter(r.Context(), id); err != nil {
 		s.fail(w, err)
 		return
 	}

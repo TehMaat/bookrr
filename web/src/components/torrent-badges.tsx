@@ -3,7 +3,7 @@ import { CircleHelp, Copy, HandHeart, HardDrive, Server, Star, TriangleAlert } f
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Torrent, TorrentStatus } from "@/lib/api"
-import { formatState, isErrorState } from "@/lib/format"
+import { formatDate, formatState, isErrorState } from "@/lib/format"
 
 export const statusLabels: Record<TorrentStatus, string> = {
   client: "Su client",
@@ -76,7 +76,7 @@ export function DuplicateBadge({ count }: { count: number }) {
 
 /** Compact "where is it" summary: clients, archives and adopter. */
 export function WhereBadges({ t }: { t: Torrent }) {
-  const empty = t.locations.length === 0 && t.archives.length === 0 && !t.adoptedBy
+  const empty = t.locations.length === 0 && t.archives.length === 0 && t.adoptions.length === 0
   return (
     <div className="flex flex-wrap gap-1">
       {t.locations.map((l) => (
@@ -108,14 +108,16 @@ export function WhereBadges({ t }: { t: Torrent }) {
               </>
             )}
             <span className="font-mono">{a.path || "—"}</span>
+            <br />
+            Spostato il {formatDate(a.createdAt)}
           </TooltipContent>
         </Tooltip>
       ))}
-      {t.adoptedBy && (
-        <Badge variant="success">
-          <HandHeart /> {t.adoptedBy}
+      {t.adoptions.map((a) => (
+        <Badge key={`d${a.id}`} variant="success">
+          <HandHeart /> {a.adopterName}
         </Badge>
-      )}
+      ))}
       {empty && <span className="text-muted-foreground text-xs">—</span>}
     </div>
   )

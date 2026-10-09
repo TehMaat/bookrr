@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
@@ -86,13 +87,106 @@ func TestSyncFlagsRemovedPersonalRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adopter := "mario"
-	if err := s.ResolveAlert(ctx, tr.OpenAlert.ID, ResolveInput{Resolution: "su disco", Archive: &ArchiveInput{DiskID: &disk.ID, Path: "/rel/Mine"}, AdoptedBy: &adopter}); err != nil {
+	mario, err := s.CreateAdopter(ctx, Adopter{Name: "mario"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResolveAlert(ctx, tr.OpenAlert.ID, ResolveInput{Resolution: "su disco", Archive: &ArchiveInput{DiskID: &disk.ID, Path: "/rel/Mine"}, Adoption: &AdoptionInput{AdopterID: mario.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	tr, _ = s.GetTorrent(ctx, "h1")
-	if tr.Status != StatusArchived || tr.AdoptedBy != "mario" || len(tr.Archives) != 1 || tr.Archives[0].DiskSerial != "WD-123" {
+	if tr.Status != StatusArchived || len(tr.Adoptions) != 1 || tr.Adoptions[0].AdopterName != "mario" || len(tr.Archives) != 1 || tr.Archives[0].DiskSerial != "WD-123" {
 		t.Fatalf("unexpected after resolve: %+v", tr)
+	}
+}
+
+func TestMoveResolvesAlert(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	a := mustClient(t, s, "a")
+	sync(t, s, map[Client][]SnapshotTorrent{a: {{Hash: "h1", Name: "Mine", Tags: tag}, {Hash: "h2", Name: "Gift", Tags: tag}}})
+	if n := sync(t, s, map[Client][]SnapshotTorrent{a: {}}); n != 2 {
+		t.Fatalf("expected 2 alerts, got %d", n)
+	}
+
+	disk, _ := s.CreateDisk(ctx, Disk{Label: "Archivio 1", Serial: "WD-1"})
+	if err := s.AddArchive(ctx, "h1", ArchiveInput{DiskID: &disk.ID, Path: "/x"}); err != nil {
+		t.Fatal(err)
+	}
+	luigi, _ := s.CreateAdopter(ctx, Adopter{Name: "luigi"})
+	if err := s.AddAdoption(ctx, "h2", AdoptionInput{AdopterID: luigi.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddAdoption(ctx, "h2", AdoptionInput{AdopterID: luigi.ID}); err != ErrAlreadyAdopted {
+		t.Fatalf("expected ErrAlreadyAdopted, got %v", err)
+	}
+	if open, _ := s.ListAlerts(ctx, true, ""); len(open) != 0 {
+		t.Fatalf("moves should resolve alerts: %+v", open)
+	}
+	all, _ := s.ListAlerts(ctx, false, "h1")
+	if len(all) != 1 || all[0].Resolution != "Spostato su Archivio 1 (SN WD-1) · /x" {
+		t.Fatalf("unexpected resolution: %+v", all)
+	}
+	tr, _ := s.GetTorrent(ctx, "h2")
+	if tr.Status != StatusAdopted {
+		t.Fatalf("expected adopted: %+v", tr)
+	}
+	ads, _ := s.ListAdopters(ctx)
+	if len(ads) != 1 || ads[0].AdoptedCount != 1 {
+		t.Fatalf("unexpected adopters: %+v", ads)
+	}
+}
+
+func TestRemovalAfterMoveIsNotFlagged(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	a := mustClient(t, s, "a")
+	mine := SnapshotTorrent{Hash: "h1", Name: "Mine", Tags: tag}
+	sync(t, s, map[Client][]SnapshotTorrent{a: {mine}})
+	// Moved to a disk while still seeding, then removed from the client.
+	if err := s.AddArchive(ctx, "h1", ArchiveInput{Path: "/archivio/Mine"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := sync(t, s, map[Client][]SnapshotTorrent{a: {}}); n != 0 {
+		t.Fatalf("expected no new alert, got %d", n)
+	}
+	tr, _ := s.GetTorrent(ctx, "h1")
+	if tr.Status != StatusArchived || tr.OpenAlert != nil {
+		t.Fatalf("expected archived: %+v", tr)
+	}
+	all, _ := s.ListAlerts(ctx, false, "h1")
+	if len(all) != 1 || all[0].ResolvedAt == nil || all[0].Resolution != "Già spostato su archivio · /archivio/Mine" {
+		t.Fatalf("expected a resolved alert in the history: %+v", all)
+	}
+}
+
+func TestMigrateAdoptedBy(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(migrations[0] + `
+INSERT INTO torrents (hash, name, adopted_by, first_seen_at, updated_at) VALUES
+	('h1', 'One', 'Mario', 't', 't'), ('h2', 'Two', ' mario ', 't', 't'), ('h3', 'Three', '', 't', 't');
+PRAGMA user_version = 1;`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ads, _ := s.ListAdopters(ctx)
+	if len(ads) != 1 || ads[0].Name != "Mario" || ads[0].AdoptedCount != 2 {
+		t.Fatalf("unexpected adopters: %+v", ads)
+	}
+	tr, _ := s.GetTorrent(ctx, "h2")
+	if tr.Status != StatusAdopted || tr.Adoptions[0].AdopterName != "Mario" {
+		t.Fatalf("unexpected torrent: %+v", tr)
 	}
 }
 
