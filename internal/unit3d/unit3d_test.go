@@ -145,12 +145,11 @@ func TestFindHash(t *testing.T) {
 			err: ErrAmbiguous,
 		},
 		{
-			name: "the only torrent containing every word",
+			name: "a bare title is not matched to a longer one",
 			data: func(string) []map[string]any {
 				return []map[string]any{item("6", "La Mia Release 2160p REPACK", 1234, map[string]any{"info_hash": other})}
 			},
-			size: 1240,
-			want: other,
+			err: ErrNotFound,
 		},
 		{
 			name: "containing every word but another size",
@@ -219,8 +218,8 @@ func TestCandidatesAndFetch(t *testing.T) {
 			item(2, remux, 60, map[string]any{"download_link": base + "/download", "details_link": base + "/torrents/2"}),
 		}
 	})
-	if !containsWords(remux, local) {
-		t.Fatal("every word of the file name is in the tracker title")
+	if !sameRelease(local, remux) {
+		t.Fatal("same release")
 	}
 	if got := searchForms(local); len(got) != 4 || got[2] != "ad astra 2019" || got[3] != "ad astra" {
 		t.Fatalf("search forms: %q", got)
@@ -229,7 +228,7 @@ func TestCandidatesAndFetch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cs) != 2 || cs[0].ID != "2" || cs[0].Score <= cs[1].Score || cs[0].DetailsLink == "" {
+	if len(cs) != 2 || cs[0].ID != "2" || !cs[0].Match || cs[1].Match || cs[0].Score <= cs[1].Score || cs[0].DetailsLink == "" {
 		t.Fatalf("unexpected candidates: %+v", cs)
 	}
 	m, err := c.Fetch(ctx, "2")
@@ -242,9 +241,16 @@ func TestCandidatesAndFetch(t *testing.T) {
 	if _, err := c.Fetch(ctx, "../user"); err == nil {
 		t.Fatal("a non numeric id must be rejected")
 	}
-	// Two results: not chosen automatically.
-	if _, err := c.FindHash(ctx, local, 0); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("expected not found, got %v", err)
+	// Two results, but only the REMUX is the same release.
+	if m, err := c.FindHash(ctx, local, 0); err != nil || m.ID != "2" {
+		t.Fatalf("expected the REMUX, got %+v %v", m, err)
+	}
+	// The same release twice: the user chooses.
+	c, _ = fakeTracker(t, func(base string) []map[string]any {
+		return []map[string]any{item("2", remux, 60, nil), item("3", remux+" ", 60, nil)}
+	})
+	if _, err := c.FindHash(ctx, local, 0); !errors.Is(err, ErrAmbiguous) {
+		t.Fatalf("expected ambiguous, got %v", err)
 	}
 }
 
