@@ -14,6 +14,8 @@ services:
       TZ: Europe/Rome
       # Ogni quanto leggere i client qBittorrent (min 30s)
       BOOKRR_SYNC_INTERVAL: 5m
+      # Ogni quanto leggere i bucket S3 degli archivi cloud (min 1m)
+      # BOOKRR_S3_SCAN_INTERVAL: 1h
       # Tag che identifica le tue release
       BOOKRR_RELEASE_TAG: Personal Release
       # Token richiesto dal webhook (consigliato se bookrr è esposto)

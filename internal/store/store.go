@@ -165,6 +165,31 @@ CREATE TABLE settings (
 	value TEXT NOT NULL DEFAULT ''
 );
 `,
+	`
+-- A cloud archive can be an S3 bucket that bookrr reads (never writes).
+ALTER TABLE disks ADD COLUMN s3_endpoint TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_region TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_bucket TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_prefix TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_access_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_secret_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_scan_at TEXT;
+ALTER TABLE disks ADD COLUMN s3_error TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN s3_objects INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE disks ADD COLUMN s3_size INTEGER NOT NULL DEFAULT 0;
+-- Archives found in a bucket are kept in sync with it.
+ALTER TABLE archives ADD COLUMN source TEXT NOT NULL DEFAULT '';
+-- What the bucket holds that matches no torrent.
+CREATE TABLE bucket_entries (
+	disk_id INTEGER NOT NULL REFERENCES disks(id) ON DELETE CASCADE,
+	path TEXT NOT NULL,
+	name TEXT NOT NULL,
+	size INTEGER NOT NULL DEFAULT 0,
+	files INTEGER NOT NULL DEFAULT 0,
+	modified_at TEXT,
+	PRIMARY KEY (disk_id, path)
+);
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

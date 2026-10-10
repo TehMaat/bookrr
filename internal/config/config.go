@@ -14,10 +14,12 @@ type Config struct {
 	Listen       string
 	DataDir      string
 	SyncInterval time.Duration
-	ReleaseTag   string
-	WebhookToken string
-	AuthUser     string
-	AuthPassword string
+	// How often the S3 buckets of the cloud archives are listed.
+	S3ScanInterval time.Duration
+	ReleaseTag     string
+	WebhookToken   string
+	AuthUser       string
+	AuthPassword   string
 	// UNIT3D tracker used to find the info hash of torrents added without one.
 	Unit3DURL    string
 	Unit3DAPIKey string
@@ -45,6 +47,11 @@ func Load() (Config, error) {
 		d = 30 * time.Second
 	}
 	c.SyncInterval = d
+	interval = env("BOOKRR_S3_SCAN_INTERVAL", "1h")
+	if d, err = time.ParseDuration(interval); err != nil {
+		return c, fmt.Errorf("BOOKRR_S3_SCAN_INTERVAL %q non valido: %w", interval, err)
+	}
+	c.S3ScanInterval = max(d, time.Minute)
 	if (c.AuthUser == "") != (c.AuthPassword == "") {
 		return c, fmt.Errorf("BOOKRR_AUTH_USER e BOOKRR_AUTH_PASSWORD vanno impostati insieme")
 	}

@@ -131,7 +131,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     {a.message}
-                    <Badge variant="outline">{a.source === "webhook" ? "webhook" : "sync"}</Badge>
+                    <Badge variant="outline">{a.source === "s3" ? "bucket" : a.source === "webhook" ? "webhook" : "sync"}</Badge>
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(a.createdAt)}</TableCell>

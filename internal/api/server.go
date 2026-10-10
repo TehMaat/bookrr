@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tehmaat/bookrr/internal/bucket"
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/qbit"
 	"github.com/tehmaat/bookrr/internal/smart"
@@ -33,13 +34,14 @@ type Server struct {
 	cfg     config.Config
 	store   *store.Store
 	syncer  *syncer.Syncer
+	buckets *bucket.Scanner
 	hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
 	web     fs.FS
 	version string
 }
 
-func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, hashes *unit3d.Resolver, web fs.FS, version string) *Server {
-	return &Server{cfg: cfg, store: s, syncer: sy, hashes: hashes, web: web, version: version}
+func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, web fs.FS, version string) *Server {
+	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, web: web, version: version}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -71,8 +73,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/disks", s.listDisks)
 	mux.HandleFunc("POST /api/disks", s.createDisk)
 	mux.HandleFunc("POST /api/disks/smart", s.importSmart)
+	mux.HandleFunc("POST /api/disks/test-s3", s.testS3)
 	mux.HandleFunc("PUT /api/disks/{id}", s.updateDisk)
 	mux.HandleFunc("DELETE /api/disks/{id}", s.deleteDisk)
+	mux.HandleFunc("POST /api/disks/{id}/scan", s.scanDisk)
+	mux.HandleFunc("GET /api/disks/{id}/bucket-entries", s.bucketEntries)
 
 	mux.HandleFunc("GET /api/adopters", s.listAdopters)
 	mux.HandleFunc("POST /api/adopters", s.createAdopter)
@@ -215,6 +220,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"version":              s.version,
 		"releaseTag":           s.cfg.ReleaseTag,
 		"syncInterval":         shortDuration(s.cfg.SyncInterval),
+		"s3ScanInterval":       shortDuration(s.cfg.S3ScanInterval),
 		"webhookTokenRequired": s.cfg.WebhookToken != "",
 		"unit3d":               s.hashes != nil,
 	})
@@ -783,12 +789,73 @@ func (s *Server) listDisks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, ds)
 }
 
-func validDisk(w http.ResponseWriter, d *store.Disk) bool {
+// diskInput is a disk as sent by the form. The secret key of the bucket is
+// write-only: nil keeps the stored one.
+type diskInput struct {
+	store.Disk
+	S3 *s3Input `json:"s3"`
+}
+
+type s3Input struct {
+	Endpoint  string  `json:"endpoint"`
+	Region    string  `json:"region"`
+	Bucket    string  `json:"bucket"`
+	Prefix    string  `json:"prefix"`
+	AccessKey string  `json:"accessKey"`
+	SecretKey *string `json:"secretKey"`
+}
+
+// bucket validates the bucket settings and returns them with the secret
+// key, taken from old when it was not sent again.
+func (in *s3Input) bucket(old *store.DiskS3) (*store.DiskS3, error) {
+	b := &store.DiskS3{
+		Endpoint:  strings.TrimRight(strings.TrimSpace(in.Endpoint), "/"),
+		Region:    strings.TrimSpace(in.Region),
+		Bucket:    strings.TrimSpace(in.Bucket),
+		Prefix:    bucket.NormalizePrefix(in.Prefix),
+		AccessKey: strings.TrimSpace(in.AccessKey),
+	}
+	if b.Endpoint != "" && !strings.Contains(b.Endpoint, "://") {
+		b.Endpoint = "https://" + b.Endpoint
+	}
+	if in.SecretKey != nil {
+		b.SecretKey = strings.TrimSpace(*in.SecretKey)
+	} else if old != nil {
+		b.SecretKey = old.SecretKey
+	}
+	switch {
+	case b.Endpoint == "" || b.Bucket == "":
+		return nil, errors.New("endpoint e bucket sono obbligatori")
+	case strings.ContainsAny(b.Bucket, "/ "):
+		return nil, fmt.Errorf("nome del bucket %q non valido: indica la cartella nel prefisso", b.Bucket)
+	case b.AccessKey == "" || b.SecretKey == "":
+		return nil, errors.New("access key e secret key sono obbligatorie")
+	}
+	if _, err := bucket.Client(b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func validDisk(w http.ResponseWriter, in *diskInput, old *store.DiskS3) bool {
+	d := &in.Disk
 	d.Label = strings.TrimSpace(d.Label)
 	d.Serial = strings.TrimSpace(d.Serial)
 	if d.Label == "" {
 		writeError(w, http.StatusBadRequest, "il nome del disco è obbligatorio")
 		return false
+	}
+	d.S3 = nil
+	if in.S3 != nil {
+		b, err := in.S3.bucket(old)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return false
+		}
+		d.S3 = b
+		if d.Kind == "" {
+			d.Kind = "Cloud"
+		}
 	}
 	if d.Kind == "" {
 		d.Kind = "HDD"
@@ -797,11 +864,11 @@ func validDisk(w http.ResponseWriter, d *store.Disk) bool {
 }
 
 func (s *Server) createDisk(w http.ResponseWriter, r *http.Request) {
-	var d store.Disk
-	if !decode(w, r, &d) || !validDisk(w, &d) {
+	var in diskInput
+	if !decode(w, r, &in) || !validDisk(w, &in, nil) {
 		return
 	}
-	d, err := s.store.CreateDisk(r.Context(), d)
+	d, err := s.store.CreateDisk(r.Context(), in.Disk)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -814,17 +881,97 @@ func (s *Server) updateDisk(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var d store.Disk
-	if !decode(w, r, &d) || !validDisk(w, &d) {
+	old, err := s.store.GetDisk(r.Context(), id)
+	if err != nil {
+		s.fail(w, err)
 		return
 	}
-	d.ID = id
-	d, err := s.store.UpdateDisk(r.Context(), d)
+	var in diskInput
+	if !decode(w, r, &in) || !validDisk(w, &in, old.S3) {
+		return
+	}
+	in.ID = id
+	d, err := s.store.UpdateDisk(r.Context(), in.Disk)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	writeJSON(w, 200, d)
+}
+
+// scanDisk reads the disk's bucket now and returns what changed.
+func (s *Server) scanDisk(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	d, err := s.store.GetDisk(r.Context(), id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if d.S3 == nil || s.buckets == nil {
+		writeError(w, http.StatusBadRequest, "questo archivio non è collegato a un bucket")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Minute)
+	defer cancel()
+	res, err := s.buckets.Scan(ctx, d)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if d, err = s.store.GetDisk(r.Context(), id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"added": res.Added, "removed": res.Removed, "alerts": res.Alerts, "disk": d})
+}
+
+func (s *Server) bucketEntries(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	es, err := s.store.BucketEntries(r.Context(), id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, es)
+}
+
+// testS3 checks the bucket settings of the form by reading the first page
+// of the bucket. When editing an archive, the stored secret key is used if
+// none was typed.
+func (s *Server) testS3(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		s3Input
+		ID *int64 `json:"id"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	var old *store.DiskS3
+	if in.ID != nil {
+		if d, err := s.store.GetDisk(r.Context(), *in.ID); err == nil {
+			old = d.S3
+		}
+	}
+	b, err := in.bucket(old)
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	c, _ := bucket.Client(b)
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	page, err := c.ListPage(ctx, b.Prefix, "", 1000)
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "objects": len(page.Objects), "more": page.Truncated})
 }
 
 func (s *Server) deleteDisk(w http.ResponseWriter, r *http.Request) {

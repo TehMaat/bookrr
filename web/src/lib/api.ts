@@ -20,6 +20,8 @@ export type Archive = {
   path: string
   notes: string
   createdAt: string
+  /** "s3" when found in the disk's bucket: kept in sync with it, not edited by hand. */
+  source: string
 }
 
 export type Adoption = {
@@ -34,7 +36,8 @@ export type Alert = {
   id: number
   hash: string
   torrentName: string
-  source: "sync" | "webhook"
+  /** "s3": the torrent is no longer in the bucket of a cloud archive. */
+  source: "sync" | "webhook" | "s3"
   clientName: string
   message: string
   createdAt: string
@@ -88,7 +91,41 @@ export type Disk = {
   health: string
   powerOnHours: number
   smartAt: string | null
+  /** The S3 bucket behind a cloud archive, read by bookrr (never written). */
+  s3: DiskS3 | null
 }
+
+export type DiskS3 = {
+  endpoint: string
+  region: string
+  bucket: string
+  /** Folder of the bucket that is scanned, ending with "/"; empty = the whole bucket. */
+  prefix: string
+  accessKey: string
+  hasSecret: boolean
+  scanAt: string | null
+  scanError: string
+  objects: number
+  size: number
+  /** Files and folders of the bucket that match no torrent. */
+  unmatched: number
+}
+
+/** Bucket settings sent by the form; no secretKey keeps the stored one. */
+export type S3Input = {
+  endpoint: string
+  region: string
+  bucket: string
+  prefix: string
+  accessKey: string
+  secretKey?: string
+}
+
+export type DiskInput = Partial<Omit<Disk, "s3">> & { s3: S3Input | null }
+
+/** A file or folder of a bucket that matches no torrent. */
+export type BucketEntry = { path: string; name: string; size: number; files: number; modifiedAt: string | null }
+export type ScanResult = { added: number; removed: number; alerts: number; disk: Disk }
 
 export type SmartInfo = {
   model: string
@@ -145,6 +182,7 @@ export type Info = {
   version: string
   releaseTag: string
   syncInterval: string
+  s3ScanInterval: string
   webhookTokenRequired: boolean
   /** A UNIT3D tracker is configured to find missing info hashes. */
   unit3d: boolean
@@ -269,9 +307,14 @@ export const api = {
   resolveAlerts: (ids: number[], r: ResolveInput) => request<void>("POST", "/api/alerts/resolve", { ids, ...r }),
 
   disks: () => request<Disk[]>("GET", "/api/disks"),
-  createDisk: (d: Partial<Disk>) => request<Disk>("POST", "/api/disks", d),
-  updateDisk: (id: number, d: Partial<Disk>) => request<Disk>("PUT", `/api/disks/${id}`, d),
+  createDisk: (d: DiskInput) => request<Disk>("POST", "/api/disks", d),
+  updateDisk: (id: number, d: DiskInput) => request<Disk>("PUT", `/api/disks/${id}`, d),
   deleteDisk: (id: number) => request<void>("DELETE", `/api/disks/${id}`),
+  /** Reads the first page of the bucket; with id, the stored secret key is used if none is given. */
+  testS3: (b: S3Input & { id?: number }) =>
+    request<{ ok: boolean; error?: string; objects?: number; more?: boolean }>("POST", "/api/disks/test-s3", b),
+  scanDisk: (id: number) => request<ScanResult>("POST", `/api/disks/${id}/scan`),
+  bucketEntries: (id: number) => request<BucketEntry[]>("GET", `/api/disks/${id}/bucket-entries`),
   importSmart: (report: string, t: SmartTarget = {}) => {
     const q = new URLSearchParams()
     if (t.id) q.set("id", String(t.id))
