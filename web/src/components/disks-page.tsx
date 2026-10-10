@@ -1,6 +1,7 @@
 import { useState } from "react"
-import { Activity, Clock, HardDrive, ListTree, MapPin, Pencil, Plus, QrCode, Trash2 } from "lucide-react"
+import { Activity, Clock, Cloud, HardDrive, ListTree, MapPin, Pencil, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react"
 
+import { BucketStatus } from "@/components/bucket-status"
 import { DiskArchivesPage } from "@/components/disk-archives-page"
 import { DiskFormDialog, isPhysicalDisk } from "@/components/disk-form-dialog"
 import { DiskQrDialog } from "@/components/disk-qr-dialog"
@@ -21,7 +22,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, type Alert, type Disk } from "@/lib/api"
 import { formatBytes, formatDate, formatHours, healthVariant } from "@/lib/format"
-import { useAction, useDisks } from "@/lib/queries"
+import { useAction, useDisks, useScanDisk } from "@/lib/queries"
 
 export function DisksPage({
   diskId,
@@ -50,6 +51,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
     setSmartOpen(true)
   }
   const del = useAction((id: number) => api.deleteDisk(id), "Disco eliminato")
+  const scan = useScanDisk()
 
   return (
     <div className="grid gap-4">
@@ -84,20 +86,35 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
             <Card key={d.id} className="gap-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <HardDrive className="text-violet-600 size-4" />
+                  {d.s3 ? <Cloud className="text-violet-600 size-4" /> : <HardDrive className="text-violet-600 size-4" />}
                   {d.label}
                   <Badge variant="outline">{d.kind}</Badge>
                 </CardTitle>
-                <CardDescription className="font-mono text-xs">{d.serial ? `SN ${d.serial}` : "Seriale non indicato"}</CardDescription>
+                <CardDescription className="font-mono text-xs break-all">
+                  {d.s3 ? `s3://${d.s3.bucket}/${d.s3.prefix}` : d.serial ? `SN ${d.serial}` : "Seriale non indicato"}
+                </CardDescription>
                 <CardAction className="flex gap-1">
                   {isPhysicalDisk(d.kind) && (
                     <Button variant="ghost" size="icon-sm" aria-label="QR code" title="QR code" onClick={() => setQr(d)}>
                       <QrCode />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon-sm" aria-label="Aggiorna da SMART" title="Aggiorna da SMART" onClick={() => openSmart(d)}>
-                    <Activity />
-                  </Button>
+                  {d.s3 ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Leggi il bucket"
+                      title="Leggi il bucket"
+                      disabled={scan.isPending && scan.variables === d.id}
+                      onClick={() => scan.mutate(d.id)}
+                    >
+                      <RefreshCw className={scan.isPending && scan.variables === d.id ? "animate-spin" : undefined} />
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" size="icon-sm" aria-label="Aggiorna da SMART" title="Aggiorna da SMART" onClick={() => openSmart(d)}>
+                      <Activity />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -137,6 +154,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                     <MapPin className="text-muted-foreground size-3.5" /> {d.place}
                   </div>
                 )}
+                {d.s3 && <BucketStatus disk={d} />}
                 <div>
                   <span className="font-medium">{d.archiveCount}</span> torrent · {formatBytes(d.archivedSize)}
                   {d.capacity > 0 && <span className="text-muted-foreground"> su {formatBytes(d.capacity)}</span>}
@@ -183,3 +201,4 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
     </div>
   )
 }
+

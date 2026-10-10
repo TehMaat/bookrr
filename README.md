@@ -6,6 +6,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🖥️ **Su quale client** si trova ogni torrent (percorso, stato, ratio).
 - 🧬 **Duplicati**: segnala lo stesso torrent (stesso hash) caricato su più client e su quali è ancora **in download**; quando è completato ovunque puoi **toglierlo da uno dei client** (con o senza i file) direttamente da bookrr.
 - 💽 **Archivi offline**: dischi con nome, tipo, **numero di serie**, modello, capacità e posizione fisica; per ogni torrent registri lo **spostamento** su un disco/cartella.
+- ☁️ **Archivi su cloud S3** (Scaleway e altri servizi compatibili), collegati in **sola lettura**: bookrr legge l'elenco dei file del bucket e riconosce da solo quali torrent ci hai spostato.
 - 📱 **QR code sui dischi**: ogni disco fisico ha la sua pagina con i torrent archiviati sopra; stampa il QR code da attaccare al disco e inquadrandolo con il telefono apri quella pagina. L'indirizzo di bookrr nella tua rete (es. `http://192.168.1.10:8080`, utile se il container è in una rete Docker) si imposta dalla finestra del QR code.
 - 🩺 **Dati SMART**: crea o aggiorna un disco incollando l'output di `smartctl` (testo o JSON) o di CrystalDiskInfo: modello, seriale, capacità, firmware, stato di salute e ore di accensione.
 - 🤝 **Adottatori**: elenco delle persone che hanno adottato le tue release; ogni torrent può avere uno o più adottatori, scelti da un menu.
@@ -38,7 +39,7 @@ docker compose up -d --build
 
 ### Versioni
 
-La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.5.0` blocca una versione precisa, `:0.5` riceve solo le correzioni della 0.5, `:latest` segue sempre `main`.
+La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.6.0` blocca una versione precisa, `:0.6` riceve solo le correzioni della 0.6, `:latest` segue sempre `main`.
 
 ### Configurazione
 
@@ -51,11 +52,12 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_WEBHOOK_TOKEN` | — | Se impostato, il webhook richiede il token (`?token=…`, header `X-Bookrr-Token` o `Authorization: Bearer …`). |
 | `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` | — | Se impostati, l'interfaccia e le API richiedono login (HTTP Basic). |
 | `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza. |
+| `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
 | `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
 | `TZ` | — | Fuso orario dei log (es. `Europe/Rome`). |
 
-> Le password dei client qBittorrent sono salvate in chiaro nel database in `./data`: proteggi quella cartella.
+> Le password dei client qBittorrent e le chiavi dei bucket S3 sono salvate in chiaro nel database in `./data`: proteggi quella cartella.
 
 ## Come funziona
 
@@ -110,6 +112,30 @@ curl -X POST http://bookrr:8080/api/webhook/qbit \
 ```
 
 Viene aperta una segnalazione solo se il torrent ha il tag delle release (nel payload o già noto a bookrr) e non è presente su altri client. qBittorrent non offre un'opzione nativa "esegui programma alla rimozione": il webhook è pensato per script, qbit_manage, n8n, Home Assistant e simili. La sincronizzazione periodica rileva comunque tutte le rimozioni.
+
+### Archivi su cloud S3 (Scaleway)
+
+Un archivio di tipo **Cloud** può essere collegato a un bucket S3: in **Dischi → Nuovo disco** scegli il tipo *Cloud*, attiva *Collega un bucket S3* e indica:
+
+| Campo | Note |
+|---|---|
+| Servizio | *Scaleway Object Storage* (scegli la regione: `fr-par`, `nl-ams`, `pl-waw`) o *Altro servizio S3* con endpoint e regione (AWS, MinIO, Backblaze B2, Cloudflare R2, Wasabi, …) |
+| Bucket | solo il nome, es. `mie-release` |
+| Cartella | facoltativa: legge solo questa cartella del bucket (es. `torrent/`) |
+| Access key / Secret key | la chiave API; la secret key non viene mai mostrata di nuovo |
+
+Il collegamento è in **sola lettura**: bookrr usa soltanto l'elenco dei file (`ListObjectsV2`), non scarica, non scrive e non cancella nulla. Per sicurezza usa comunque una chiave che possa solo leggere: su Scaleway crea un'applicazione IAM con il permesso **ObjectStorageReadOnly** sul progetto del bucket e genera la chiave API con quel progetto come *progetto preferito*. *Prova connessione* verifica la chiave leggendo la prima pagina del bucket.
+
+Dopo il salvataggio, ogni ora (`BOOKRR_S3_SCAN_INTERVAL`) o con il pulsante *Leggi il bucket*:
+
+- ogni **cartella o file con lo stesso nome di un torrent** (il nome che gli dà qBittorrent), a qualunque profondità (`Film/Nome.Release/` come `Nome.Release/`), viene registrato come **spostato sull'archivio**, con il percorso `s3://bucket/…`; se il torrent aveva una segnalazione aperta, viene chiusa;
+- se ci sposti una release prima di toglierla dal client, la rimozione non apre segnalazioni (come per gli spostamenti registrati a mano);
+- se una release sparisce dal bucket e non è su nessun client, su nessun altro disco e non è adottata, viene aperta una segnalazione ("Rimosso da *nome archivio*");
+- ciò che non corrisponde a nessun torrent compare nella pagina dell'archivio, in *Non riconosciuti nel bucket*: con *Aggiungi* diventa un torrent (con il nome del bucket) archiviato lì, e se è configurato UNIT3D bookrr ne cerca l'hash sul tracker.
+
+Gli spostamenti trovati nel bucket si aggiornano da soli e non si cancellano a mano; se registri a mano lo stesso torrent sullo stesso archivio vale la tua registrazione. Se cambi bucket, endpoint o cartella, ciò che era stato trovato nel vecchio bucket viene dimenticato senza segnalazioni. Un bucket non raggiungibile non cambia nulla: l'errore è mostrato sulla scheda dell'archivio.
+
+Via API: `POST /api/disks/{id}/scan` legge subito il bucket, `GET /api/disks/{id}/bucket-entries` restituisce gli elementi non riconosciuti.
 
 ### Dati SMART dei dischi
 
@@ -200,7 +226,9 @@ Struttura:
 ```
 cmd/bookrr        entrypoint
 internal/api      API REST, webhook, file statici
+internal/bucket   lettura dei bucket S3 degli archivi cloud
 internal/qbit     client minimale per la Web API di qBittorrent
+internal/s3       client S3 minimale in sola lettura (ListObjectsV2, firma SigV4)
 internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
 internal/syncer   sincronizzazione periodica

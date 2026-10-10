@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react"
-import { ArrowLeft, FolderOpen, HardDrive, MapPin, QrCode, Search } from "lucide-react"
+import { ArrowLeft, Cloud, FileQuestion, FolderOpen, HardDrive, MapPin, Plus, QrCode, RefreshCw, Search } from "lucide-react"
+import { toast } from "sonner"
 
+import { BucketStatus } from "@/components/bucket-status"
 import { isPhysicalDisk } from "@/components/disk-form-dialog"
 import { DiskQrDialog } from "@/components/disk-qr-dialog"
 import { PersonalBadge } from "@/components/torrent-badges"
@@ -10,9 +12,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { Alert, Disk } from "@/lib/api"
+import { api, type Alert, type BucketEntry, type Disk } from "@/lib/api"
 import { formatBytes, formatDate } from "@/lib/format"
-import { useDisks, useTorrents } from "@/lib/queries"
+import { useBucketEntries, useDisks, useScanDisk, useTorrents } from "@/lib/queries"
 
 /** The torrents archived on one disk: the page opened by the disk's QR code. */
 export function DiskArchivesPage({
@@ -31,6 +33,7 @@ export function DiskArchivesPage({
   const [qr, setQr] = useState<Disk | null>(null)
 
   const disk = disks.data?.find((d) => d.id === diskId)
+  const scan = useScanDisk()
   const all = useMemo(() => torrents.data ?? [], [torrents.data])
   const entries = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -64,17 +67,27 @@ export function DiskArchivesPage({
       <Card className="gap-3">
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
-            <HardDrive className="text-violet-600 size-4" />
+            {disk.s3 ? <Cloud className="text-violet-600 size-4" /> : <HardDrive className="text-violet-600 size-4" />}
             {disk.label}
             <Badge variant="outline">{disk.kind}</Badge>
           </CardTitle>
-          <CardDescription className="font-mono text-xs">{disk.serial ? `SN ${disk.serial}` : "Seriale non indicato"}</CardDescription>
-          {isPhysicalDisk(disk.kind) && (
+          <CardDescription className="font-mono text-xs break-all">
+            {disk.s3 ? `s3://${disk.s3.bucket}/${disk.s3.prefix}` : disk.serial ? `SN ${disk.serial}` : "Seriale non indicato"}
+          </CardDescription>
+          {disk.s3 ? (
             <CardAction>
-              <Button variant="outline" size="sm" onClick={() => setQr(disk)}>
-                <QrCode /> QR code
+              <Button variant="outline" size="sm" onClick={() => scan.mutate(disk.id)} disabled={scan.isPending}>
+                <RefreshCw className={scan.isPending ? "animate-spin" : undefined} /> Leggi il bucket
               </Button>
             </CardAction>
+          ) : (
+            isPhysicalDisk(disk.kind) && (
+              <CardAction>
+                <Button variant="outline" size="sm" onClick={() => setQr(disk)}>
+                  <QrCode /> QR code
+                </Button>
+              </CardAction>
+            )
           )}
         </CardHeader>
         <CardContent className="grid gap-1.5 text-sm">
@@ -84,6 +97,7 @@ export function DiskArchivesPage({
               <MapPin className="text-muted-foreground size-3.5" /> {disk.place}
             </div>
           )}
+          {disk.s3 && <BucketStatus disk={disk} />}
           <div>
             <span className="font-medium">{disk.archiveCount}</span> torrent · {formatBytes(disk.archivedSize)}
             {disk.capacity > 0 && <span className="text-muted-foreground"> su {formatBytes(disk.capacity)}</span>}
@@ -101,7 +115,7 @@ export function DiskArchivesPage({
         <CardContent className="px-0">
           {entries.length === 0 ? (
             <p className="text-muted-foreground py-6 text-center text-sm">
-              {query ? "Nessun torrent trovato." : "Nessun torrent archiviato su questo disco."}
+              {query ? "Nessun torrent trovato." : disk.s3 ? "Nessun torrent trovato nel bucket." : "Nessun torrent archiviato su questo disco."}
             </p>
           ) : (
             <ul className="divide-y">
@@ -123,7 +137,7 @@ export function DiskArchivesPage({
                           <FolderOpen className="size-3.5 shrink-0" /> {a.path}
                         </span>
                       )}
-                      <span>archiviato il {formatDate(a.createdAt)}</span>
+                      <span>{a.source === "s3" ? "trovato nel bucket il" : "archiviato il"} {formatDate(a.createdAt)}</span>
                     </div>
                     {a.notes && <p className="text-muted-foreground text-xs whitespace-pre-wrap">{a.notes}</p>}
                   </button>
@@ -134,8 +148,80 @@ export function DiskArchivesPage({
         </CardContent>
       </Card>
 
+      {disk.s3 && <Unmatched disk={disk} query={query} onAdded={setSelected} />}
+
       <DiskQrDialog disk={qr} onClose={() => setQr(null)} />
       <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} onHashChange={setSelected} />
+    </div>
+  )
+}
+
+/** What the bucket holds that matches no torrent, each addable as a torrent archived there. */
+function Unmatched({ disk, query, onAdded }: { disk: Disk; query: string; onAdded: (hash: string) => void }) {
+  const count = disk.s3?.unmatched ?? 0
+  const entries = useBucketEntries(disk.id, count > 0)
+  const scan = useScanDisk()
+  const [adding, setAdding] = useState<string | null>(null)
+  const q = query.trim().toLowerCase()
+  const shown = (entries.data ?? []).filter((e) => !q || e.path.toLowerCase().includes(q))
+
+  const add = async (e: BucketEntry) => {
+    setAdding(e.path)
+    try {
+      const t = await api.createTorrent({ name: e.name, size: e.size })
+      // The next read of the bucket finds it by name and records it as archived here.
+      await scan.mutateAsync(disk.id)
+      onAdded(t.hash)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setAdding(null)
+    }
+  }
+
+  if (count === 0) return null
+  return (
+    <div className="grid gap-2">
+      <div>
+        <h3 className="flex items-center gap-2 font-medium">
+          <FileQuestion className="text-muted-foreground size-4" /> Non riconosciuti nel bucket ({count})
+        </h3>
+        <p className="text-muted-foreground text-sm">
+          File e cartelle che non hanno il nome di nessun torrent noto a bookrr. Aggiungili come torrent per tenerne traccia: il
+          nome resta quello del bucket.
+        </p>
+      </div>
+      <Card className="py-0">
+        <CardContent className="px-0">
+          {entries.isLoading ? (
+            <Skeleton className="m-4 h-12" />
+          ) : shown.length === 0 ? (
+            <p className="text-muted-foreground py-6 text-center text-sm">Nessun elemento trovato.</p>
+          ) : (
+            <ul className="divide-y">
+              {shown.map((e) => (
+                <li key={e.path} className="flex items-start gap-3 px-4 py-3">
+                  <div className="grid min-w-0 flex-1 gap-1">
+                    <span className="font-medium break-words">{e.name}</span>
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                      <span className="flex min-w-0 items-center gap-1 font-mono break-all">
+                        <FolderOpen className="size-3.5 shrink-0" /> {e.path}
+                      </span>
+                      <span className="tabular-nums">
+                        {e.files} file · {formatBytes(e.size)}
+                      </span>
+                      {e.modifiedAt && <span>modificato il {formatDate(e.modifiedAt)}</span>}
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" className="shrink-0" disabled={adding !== null} onClick={() => add(e)}>
+                    <Plus /> {adding === e.path ? "Aggiunta…" : "Aggiungi"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

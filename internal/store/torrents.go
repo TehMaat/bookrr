@@ -29,7 +29,9 @@ type Archive struct {
 	Path       string `json:"path"`
 	Notes      string `json:"notes"`
 	CreatedAt  string `json:"createdAt"`
-	hash       string
+	// "s3" when found in the disk's bucket: kept in sync with it by the scans.
+	Source string `json:"source"`
+	hash   string
 }
 
 type Alert struct {
@@ -221,7 +223,7 @@ func (s *Store) listArchives(ctx context.Context, hash string) ([]Archive, error
 		where, args = " WHERE a.hash = ?", []any{hash}
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT a.id, a.hash, a.disk_id, COALESCE(d.label, ''), COALESCE(d.serial, ''), COALESCE(d.kind, ''), a.path, a.notes, a.created_at
+SELECT a.id, a.hash, a.disk_id, COALESCE(d.label, ''), COALESCE(d.serial, ''), COALESCE(d.kind, ''), a.path, a.notes, a.created_at, a.source
 FROM archives a LEFT JOIN disks d ON d.id = a.disk_id`+where+` ORDER BY a.created_at`, args...)
 	if err != nil {
 		return nil, err
@@ -231,7 +233,7 @@ FROM archives a LEFT JOIN disks d ON d.id = a.disk_id`+where+` ORDER BY a.create
 	for rows.Next() {
 		var a Archive
 		var disk sql.NullInt64
-		if err := rows.Scan(&a.ID, &a.hash, &disk, &a.DiskLabel, &a.DiskSerial, &a.DiskKind, &a.Path, &a.Notes, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.hash, &disk, &a.DiskLabel, &a.DiskSerial, &a.DiskKind, &a.Path, &a.Notes, &a.CreatedAt, &a.Source); err != nil {
 			return nil, err
 		}
 		if disk.Valid {

@@ -84,7 +84,7 @@ export function ResolveDialog({ alerts, onClose }: { alerts: Alert[]; onClose: (
               <DialogDescription className="break-all">
                 <span className="text-foreground font-medium">{alert.torrentName}</span>
                 <br />
-                {alert.message} · {formatDate(alert.createdAt)} · via {alert.source === "webhook" ? "webhook" : "sincronizzazione"}
+                {alert.message} · {formatDate(alert.createdAt)} · via {alert.source === "s3" ? "lettura del bucket" : alert.source === "webhook" ? "webhook" : "sincronizzazione"}
               </DialogDescription>
             ) : (
               <DialogDescription asChild>

@@ -353,16 +353,22 @@ export function TorrentSheet({
                     </div>
                     {a.path && <div className="text-muted-foreground mt-1 font-mono text-xs break-all">{a.path}</div>}
                     {a.notes && <div className="mt-1 text-xs">{a.notes}</div>}
-                    <div className="text-muted-foreground mt-1 text-xs">Spostato il {formatDate(a.createdAt)}</div>
+                    <div className="text-muted-foreground mt-1 text-xs">
+                      {a.source === "s3"
+                        ? `Trovato nel bucket il ${formatDate(a.createdAt)}: si aggiorna da solo a ogni lettura`
+                        : `Spostato il ${formatDate(a.createdAt)}`}
+                    </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => delArchive.mutate(a.id)}
-                    aria-label="Rimuovi spostamento"
-                  >
-                    <Trash2 />
-                  </Button>
+                  {a.source !== "s3" && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => delArchive.mutate(a.id)}
+                      aria-label="Rimuovi spostamento"
+                    >
+                      <Trash2 />
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
