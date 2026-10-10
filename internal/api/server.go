@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +47,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/torrents", s.listTorrents)
 	mux.HandleFunc("POST /api/torrents", s.createTorrent)
+	mux.HandleFunc("POST /api/torrents/import", s.importTorrents)
 	mux.HandleFunc("GET /api/torrents/{hash}", s.getTorrent)
 	mux.HandleFunc("PATCH /api/torrents/{hash}", s.updateTorrent)
 	mux.HandleFunc("DELETE /api/torrents/{hash}", s.deleteTorrent)
@@ -176,7 +179,11 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	return decodeLimit(w, r, v, 1<<20)
+}
+
+func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	dec := json.NewDecoder(io.LimitReader(r.Body, limit))
 	if err := dec.Decode(v); err != nil {
 		writeError(w, http.StatusBadRequest, "JSON non valido: "+err.Error())
 		return false
@@ -234,46 +241,161 @@ func (s *Server) getTorrent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, t)
 }
 
-func (s *Server) createTorrent(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		store.TorrentInput
-		Archive  *store.ArchiveInput  `json:"archive"`
-		Adoption *store.AdoptionInput `json:"adoption"`
-	}
-	if !decode(w, r, &in) {
-		return
-	}
+var hashRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// normalizeManual cleans up a hand-entered torrent the same way for the
+// "Aggiungi" form and for the bulk import.
+func normalizeManual(in *store.ManualInput) error {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Hash = strings.ToLower(strings.TrimSpace(in.Hash))
+	tags := []string{}
+	for _, t := range in.Tags {
+		if t = strings.TrimSpace(t); t != "" {
+			tags = append(tags, t)
+		}
+	}
+	in.Tags = tags
 	if in.Name == "" {
-		writeError(w, http.StatusBadRequest, "il nome è obbligatorio")
-		return
+		return errors.New("il nome è obbligatorio")
+	}
+	if in.Hash != "" && !hashRe.MatchString(in.Hash) {
+		return errors.New("info hash non valido: servono 40 o 64 caratteri esadecimali")
 	}
 	if in.Hash == "" {
 		b := make([]byte, 8)
 		rand.Read(b)
 		in.Hash = "manual-" + hex.EncodeToString(b)
 	}
-	t, err := s.store.CreateManualTorrent(r.Context(), in.TorrentInput)
+	return nil
+}
+
+func (s *Server) createTorrent(w http.ResponseWriter, r *http.Request) {
+	var in store.ManualInput
+	if !decode(w, r, &in) {
+		return
+	}
+	if err := normalizeManual(&in); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	t, err := s.store.CreateManualTorrent(r.Context(), in)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	if in.Archive != nil && (in.Archive.DiskID != nil || in.Archive.Path != "") {
-		if err := s.store.AddArchive(r.Context(), t.Hash, *in.Archive); err != nil {
-			s.fail(w, err)
-			return
-		}
-		t, _ = s.store.GetTorrent(r.Context(), t.Hash)
-	}
-	if in.Adoption != nil && in.Adoption.AdopterID != 0 {
-		if err := s.store.AddAdoption(r.Context(), t.Hash, *in.Adoption); err != nil {
-			s.fail(w, err)
-			return
-		}
-		t, _ = s.store.GetTorrent(r.Context(), t.Hash)
-	}
 	writeJSON(w, http.StatusCreated, t)
+}
+
+type importRow struct {
+	Row   int    `json:"row"`
+	Hash  string `json:"hash"`
+	Name  string `json:"name"`
+	Error string `json:"error,omitempty"`
+}
+
+// importTorrents adds many archived torrents at once. Each item has the same
+// shape as the body of POST /api/torrents and is stored exactly like a
+// torrent added from the form. Nothing is written unless every item is
+// valid; with dryRun nothing is written at all and the per-row check is
+// returned.
+func (s *Server) importTorrents(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Items  []store.ManualInput `json:"items"`
+		DryRun bool                `json:"dryRun"`
+	}
+	if !decodeLimit(w, r, &in, 32<<20) {
+		return
+	}
+	if len(in.Items) == 0 {
+		writeError(w, http.StatusBadRequest, "nessun torrent da importare")
+		return
+	}
+	ctx := r.Context()
+	rows := make([]importRow, len(in.Items))
+	seen := map[string]int{}
+	disks := map[int64]bool{}
+	adopters := map[int64]bool{}
+	failed := false
+	for i := range in.Items {
+		item := &in.Items[i]
+		err := s.checkImportItem(ctx, item, seen, disks, adopters)
+		rows[i] = importRow{Row: i, Hash: item.Hash, Name: item.Name}
+		if err != nil {
+			rows[i].Error = err.Error()
+			failed = true
+		} else {
+			seen[item.Hash] = i
+		}
+	}
+	if failed {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"rows": rows, "imported": 0})
+		return
+	}
+	if in.DryRun {
+		writeJSON(w, 200, map[string]any{"rows": rows, "imported": 0})
+		return
+	}
+	if err := s.store.ImportManualTorrents(ctx, in.Items); err != nil {
+		var re *store.RowError
+		if !errors.As(err, &re) {
+			s.fail(w, err)
+			return
+		}
+		rows[re.Row].Error = re.Err.Error()
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"rows": rows, "imported": 0})
+		return
+	}
+	slog.Info("import torrent archiviati", "count", len(in.Items))
+	writeJSON(w, http.StatusCreated, map[string]any{"rows": rows, "imported": len(in.Items)})
+}
+
+func (s *Server) checkImportItem(ctx context.Context, item *store.ManualInput, seen map[string]int, disks, adopters map[int64]bool) error {
+	if err := normalizeManual(item); err != nil {
+		return err
+	}
+	if !item.HasArchive() {
+		return errors.New("indica il disco o il percorso dove è archiviato")
+	}
+	if i, dup := seen[item.Hash]; dup {
+		return fmt.Errorf("hash ripetuto (riga %d)", i+1)
+	}
+	exists, err := s.store.TorrentExists(ctx, item.Hash)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("torrent già presente in bookrr")
+	}
+	if id := item.Archive.DiskID; id != nil {
+		ok, known := disks[*id]
+		if !known {
+			_, err := s.store.GetDisk(ctx, *id)
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
+				return err
+			}
+			ok = err == nil
+			disks[*id] = ok
+		}
+		if !ok {
+			return errors.New("disco inesistente")
+		}
+	}
+	if item.HasAdoption() {
+		id := item.Adoption.AdopterID
+		ok, known := adopters[id]
+		if !known {
+			_, err := s.store.GetAdopter(ctx, id)
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
+				return err
+			}
+			ok = err == nil
+			adopters[id] = ok
+		}
+		if !ok {
+			return errors.New("adottatore inesistente")
+		}
+	}
+	return nil
 }
 
 func (s *Server) updateTorrent(w http.ResponseWriter, r *http.Request) {
