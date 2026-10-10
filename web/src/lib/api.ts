@@ -60,6 +60,10 @@ export type Torrent = {
   /** Last failed lookup of the hash on the UNIT3D tracker. */
   hashLookupAt: string | null
   hashLookupError: string
+  /** Page of the torrent on the UNIT3D tracker, once found there. */
+  trackerUrl: string
+  /** The .torrent file downloaded from the tracker is saved in bookrr. */
+  hasTorrentFile: boolean
   locations: Location[]
   archives: Archive[]
   adoptions: Adoption[]
@@ -122,6 +126,17 @@ export type Client = {
   lastError: string
   torrentCount: number
   createdAt: string
+}
+
+/** A tracker torrent that may be the one a torrent without hash refers to. */
+export type TrackerCandidate = {
+  id: string
+  name: string
+  size: number
+  createdAt: string
+  detailsLink: string
+  /** Share of words in common with the torrent name, 0-100. */
+  score: number
 }
 
 export type Info = {
@@ -227,6 +242,11 @@ export const api = {
   deleteTorrent: (hash: string) => request<void>("DELETE", `/api/torrents/${enc(hash)}`),
   /** Looks up on the UNIT3D tracker the hash of a torrent added without one; returns it under the new hash. */
   lookupHash: (hash: string) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/lookup-hash`),
+  trackerCandidates: (hash: string, q = "") =>
+    request<TrackerCandidate[]>("GET", `/api/torrents/${enc(hash)}/tracker-candidates?q=${enc(q)}`),
+  /** Gives the torrent the hash of the tracker torrent picked by the user; returns it under the new hash. */
+  trackerMatch: (hash: string, id: string) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/tracker-match`, { id }),
+  torrentFileUrl: (hash: string) => `/api/torrents/${enc(hash)}/torrent-file`,
   removeFromClient: (hash: string, clientId: number, deleteFiles: boolean) =>
     request<Torrent>("DELETE", `/api/torrents/${enc(hash)}/locations/${clientId}?deleteFiles=${deleteFiles ? 1 : 0}`),
   addArchive: (hash: string, a: ArchiveInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/archives`, a),

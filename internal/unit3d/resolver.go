@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,12 +114,42 @@ func (r *Resolver) resolve(ctx context.Context, p store.HashLookup) (string, err
 		}
 		return "", err
 	}
-	merged, err := r.store.ReplaceHash(ctx, p.Hash, m.Hash)
+	return r.save(ctx, p, m)
+}
+
+func (r *Resolver) save(ctx context.Context, p store.HashLookup, m Match) (string, error) {
+	merged, err := r.store.ReplaceHash(ctx, p.Hash, store.TrackerTorrent{Hash: m.Hash, URL: m.DetailsLink, File: m.File})
 	if err != nil {
 		return "", err
 	}
-	slog.Info("hash trovato su UNIT3D", "name", p.Name, "hash", m.Hash, "trackerId", m.ID, "unito", merged)
+	slog.Info("hash trovato su UNIT3D", "name", p.Name, "tracker", m.Name, "hash", m.Hash, "trackerId", m.ID,
+		"torrentFile", len(m.File) > 0, "unito", merged)
 	return m.Hash, nil
+}
+
+// Candidates lists the tracker torrents the user can pick for a torrent
+// whose hash was not found automatically. An empty query searches by name.
+func (r *Resolver) Candidates(ctx context.Context, hash, query string) ([]Candidate, error) {
+	t, err := r.store.GetTorrent(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return r.client.Candidates(ctx, t.Name, strings.TrimSpace(query), t.Size)
+}
+
+// Choose gives the torrent the hash of the tracker torrent the user picked.
+func (r *Resolver) Choose(ctx context.Context, hash, trackerID string) (string, error) {
+	t, err := r.store.GetTorrent(ctx, hash)
+	if err != nil {
+		return "", err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m, err := r.client.Fetch(ctx, trackerID)
+	if err != nil {
+		return "", err
+	}
+	return r.save(ctx, store.HashLookup{Hash: t.Hash, Name: t.Name, Size: t.Size}, m)
 }
 
 func sleep(ctx context.Context, d time.Duration) bool {

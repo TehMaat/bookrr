@@ -145,6 +145,16 @@ ALTER TABLE disks ADD COLUMN smart_at TEXT;
 ALTER TABLE torrents ADD COLUMN hash_lookup_at TEXT;
 ALTER TABLE torrents ADD COLUMN hash_lookup_error TEXT NOT NULL DEFAULT '';
 `,
+	`
+CREATE TABLE torrent_files (
+	hash TEXT PRIMARY KEY REFERENCES torrents(hash) ON DELETE CASCADE,
+	data BLOB NOT NULL,
+	created_at TEXT NOT NULL
+);
+ALTER TABLE torrents ADD COLUMN tracker_url TEXT NOT NULL DEFAULT '';
+-- The tracker lookup got smarter: try again the torrents it missed.
+UPDATE torrents SET hash_lookup_at = NULL WHERE substr(hash, 1, 7) = 'manual-';
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

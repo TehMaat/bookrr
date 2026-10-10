@@ -153,10 +153,18 @@ Prima dell'import ogni riga viene verificata (anche dal server: hash già presen
 Se imposti `BOOKRR_UNIT3D_URL` e `BOOKRR_UNIT3D_API_KEY`, i torrent aggiunti a mano o importati **senza hash** vengono cercati in background sul tracker:
 
 1. bookrr chiama `GET /api/torrents/filter?name=…` e sceglie il torrent con **lo stesso nome** (maiuscole, punti e underscore non contano); se più torrent hanno lo stesso nome usa la dimensione per scegliere, altrimenti non indovina;
-2. l'hash viene letto da `info_hash` o dal magnet link quando il tracker li fornisce, altrimenti bookrr scarica il file `.torrent` (con il link di download della tua API) e lo calcola;
-3. il torrent prende l'hash vero, con spostamenti, adozioni e note. Se bookrr conosce già quell'hash (per esempio perché il torrent è ancora su un client) i due vengono uniti in uno solo.
+2. se il nome è scritto diversamente (`AD.ASTRA.2019.REMUX.2160P…` contro `Ad astra 2019 2160p UHD VU REMUX…`) viene accettato solo se il tracker restituisce **un solo** torrent che contiene tutte le parole del nome (e, se nota, ha la stessa dimensione);
+3. bookrr scarica il file `.torrent` (con il link di download della tua API), ne calcola l'hash e lo **salva**: lo scarichi dalla scheda del torrent, nella sezione *Spostato su disco*. Se il download non riesce usa l'hash che alcune versioni di UNIT3D forniscono (`info_hash` o magnet link);
+4. il torrent prende l'hash vero, con spostamenti, adozioni e note, e il link alla sua pagina sul tracker. Se bookrr conosce già quell'hash (per esempio perché il torrent è ancora su un client) i due vengono uniti in uno solo.
 
-La ricerca parte subito dopo l'import e poi ogni ora. UNIT3D permette 30 richieste API al minuto, quindi bookrr ne fa al massimo una ogni 2,5 secondi (una o due per torrent, circa 12–24 torrent al minuto): un import grande viene completato in background mentre continui a usare bookrr. I torrent non trovati (nome diverso, più risultati) mostrano il motivo nella scheda del torrent e vengono ricercati dopo 24 ore; dalla scheda puoi anche lanciare subito la ricerca (`POST /api/torrents/{hash}/lookup-hash`).
+La ricerca parte subito dopo l'import e poi ogni ora. UNIT3D permette 30 richieste API al minuto, quindi bookrr ne fa al massimo una ogni 2,5 secondi (una o due per torrent, circa 12–24 torrent al minuto): un import grande viene completato in background mentre continui a usare bookrr. I torrent non trovati mostrano il motivo nella scheda del torrent e vengono ricercati dopo 24 ore. Dalla scheda puoi:
+
+- **Cerca ora sul tracker**: ripete subito la ricerca automatica (`POST /api/torrents/{hash}/lookup-hash`);
+- **Scegli dal tracker**: mostra i torrent simili, ordinati per parole in comune, con dimensione, data e link alla pagina; puoi cambiare la ricerca (es. solo `Ad Astra 2019`) e con *Usa questo* il torrent prende hash e file `.torrent` di quello scelto (`GET /api/torrents/{hash}/tracker-candidates?q=…`, `POST /api/torrents/{hash}/tracker-match` con `{"id": "123"}`).
+
+Il file `.torrent` salvato si scarica anche da `GET /api/torrents/{hash}/torrent-file`.
+
+I **tag** dei torrent che non sono su un client si cambiano dalla scheda, in *Dati personali*; per quelli su un client fanno fede i tag di qBittorrent.
 
 > UNIT3D aggiunge il nome del tracker al file .torrent, quindi lo stesso contenuto ha un hash diverso su ogni tracker: bookrr usa quello del tracker configurato, che è lo stesso caricato nel tuo client.
 

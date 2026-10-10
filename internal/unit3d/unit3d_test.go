@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,8 +43,8 @@ func TestInfoHash(t *testing.T) {
 	}
 }
 
-// fakeTracker answers /api/torrents/filter with the given torrents and
-// serves the .torrent file at /download.
+// fakeTracker answers /api/torrents/filter and /api/torrents/{id} with the
+// given torrents and serves the .torrent file at /download.
 func fakeTracker(t *testing.T, data func(base string) []map[string]any) (*Client, *int) {
 	t.Helper()
 	downloads := 0
@@ -59,6 +61,17 @@ func fakeTracker(t *testing.T, data func(base string) []map[string]any) (*Client
 			downloads++
 			w.Write(torrentFile())
 		default:
+			id, ok := strings.CutPrefix(r.URL.Path, "/api/torrents/")
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			for _, it := range data(srv.URL) {
+				if fmt.Sprint(it["id"]) == id {
+					json.NewEncoder(w).Encode(it)
+					return
+				}
+			}
 			http.NotFound(w, r)
 		}
 	}))
@@ -132,11 +145,42 @@ func TestFindHash(t *testing.T) {
 			err: ErrAmbiguous,
 		},
 		{
-			name: "only similar names",
+			name: "the only torrent containing every word",
 			data: func(string) []map[string]any {
-				return []map[string]any{item("6", "La.Mia.Release.REPACK", 1, map[string]any{"info_hash": other})}
+				return []map[string]any{item("6", "La Mia Release 2160p REPACK", 1234, map[string]any{"info_hash": other})}
+			},
+			size: 1240,
+			want: other,
+		},
+		{
+			name: "containing every word but another size",
+			data: func(string) []map[string]any {
+				return []map[string]any{item("6", "La Mia Release 2160p REPACK", 5000, map[string]any{"info_hash": other})}
+			},
+			size: 1234,
+			err:  ErrNotFound,
+		},
+		{
+			name: "several torrents containing every word",
+			data: func(string) []map[string]any {
+				return []map[string]any{item("6", "La.Mia.Release.REPACK", 1, nil), item("7", "La.Mia.Release.PROPER", 1, nil)}
 			},
 			err: ErrNotFound,
+		},
+		{
+			name: "the .torrent file wins over info_hash",
+			data: func(base string) []map[string]any {
+				return []map[string]any{item("9", "La.Mia.Release", 1, map[string]any{"info_hash": other, "download_link": base + "/download"})}
+			},
+			want:      infoHash(),
+			downloads: 1,
+		},
+		{
+			name: "info_hash when the download fails",
+			data: func(base string) []map[string]any {
+				return []map[string]any{item("9", "La.Mia.Release", 1, map[string]any{"info_hash": other, "download_link": base + "/missing"})}
+			},
+			want: other,
 		},
 		{
 			name: "no hash and no download link",
@@ -157,10 +201,50 @@ func TestFindHash(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if m.Hash != tc.want || *downloads != tc.downloads {
-				t.Fatalf("got %s (%d downloads), want %s (%d)", m.Hash, *downloads, tc.want, tc.downloads)
+			if m.Hash != tc.want || *downloads != tc.downloads || (len(m.File) > 0) != (tc.downloads > 0) {
+				t.Fatalf("got %s (%d downloads, file %d bytes), want %s (%d)", m.Hash, *downloads, len(m.File), tc.want, tc.downloads)
 			}
 		})
+	}
+}
+
+// The example from the issue: a file name that differs from the tracker title.
+func TestCandidatesAndFetch(t *testing.T) {
+	ctx := context.Background()
+	local := "AD.ASTRA.2019.REMUX.2160P.VU.HDR10.DTS.ITA.TRUEHD.ENG.SUBS.ITA.ENG"
+	remux := "Ad astra 2019 2160p UHD VU REMUX TrueHD 7.1 Atmos DD 5.1 DTS 5.1 DD 2.0 ENG ITA SUBS HDR10 H.265-MaTiTa"
+	c, downloads := fakeTracker(t, func(base string) []map[string]any {
+		return []map[string]any{
+			item("1", "Ad Astra 2019 1080p BluRay x264", 8, nil),
+			item(2, remux, 60, map[string]any{"download_link": base + "/download", "details_link": base + "/torrents/2"}),
+		}
+	})
+	if !containsWords(remux, local) {
+		t.Fatal("every word of the file name is in the tracker title")
+	}
+	if got := searchForms(local); len(got) != 4 || got[2] != "ad astra 2019" || got[3] != "ad astra" {
+		t.Fatalf("search forms: %q", got)
+	}
+	cs, err := c.Candidates(ctx, local, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 2 || cs[0].ID != "2" || cs[0].Score <= cs[1].Score || cs[0].DetailsLink == "" {
+		t.Fatalf("unexpected candidates: %+v", cs)
+	}
+	m, err := c.Fetch(ctx, "2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Hash != infoHash() || len(m.File) == 0 || m.Name != remux || *downloads != 1 {
+		t.Fatalf("unexpected match: %+v", m)
+	}
+	if _, err := c.Fetch(ctx, "../user"); err == nil {
+		t.Fatal("a non numeric id must be rejected")
+	}
+	// Two results: not chosen automatically.
+	if _, err := c.FindHash(ctx, local, 0); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected not found, got %v", err)
 	}
 }
 
@@ -214,7 +298,7 @@ func TestResolver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Name != "La.Mia.Release" || len(got.Archives) != 1 || got.Archives[0].Path != "/archivio/La.Mia.Release" || !got.PersonalRelease {
+	if got.Name != "La.Mia.Release" || len(got.Archives) != 1 || got.Archives[0].Path != "/archivio/La.Mia.Release" || !got.PersonalRelease || !got.HasTorrentFile {
 		t.Fatalf("unexpected torrent: %+v", got)
 	}
 	if found, _ := st.TorrentExists(ctx, store.ManualHashPrefix+"1"); found {
