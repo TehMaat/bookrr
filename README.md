@@ -69,6 +69,7 @@ A ogni intervallo bookrr legge `/api/v2/torrents/info` da ogni client attivo e c
 Registrare che un torrent è stato **spostato su un disco** o **adottato** da qualcuno risponde alla domanda "dove è finito?":
 
 - se c'è una segnalazione aperta, viene chiusa con la destinazione indicata;
+- nella pagina **Segnalazioni** puoi selezionarne più di una (anche a intervalli, con Maiusc+clic) e indicare per tutte la stessa destinazione in un colpo solo;
 - se lo registri mentre il torrent è ancora sul client, quando lo togli dal client bookrr non apre una segnalazione (resta nello storico come già gestita).
 
 Un client irraggiungibile **non** genera segnalazioni: i suoi torrent restano com'erano fino alla prossima lettura riuscita.
