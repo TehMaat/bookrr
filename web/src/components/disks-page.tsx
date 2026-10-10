@@ -1,7 +1,9 @@
 import { useState } from "react"
-import { Activity, Clock, HardDrive, MapPin, Pencil, Plus, Trash2 } from "lucide-react"
+import { Activity, Clock, HardDrive, ListTree, MapPin, Pencil, Plus, QrCode, Trash2 } from "lucide-react"
 
-import { DiskFormDialog } from "@/components/disk-form-dialog"
+import { DiskArchivesPage } from "@/components/disk-archives-page"
+import { DiskFormDialog, isPhysicalDisk } from "@/components/disk-form-dialog"
+import { DiskQrDialog } from "@/components/disk-qr-dialog"
 import { SmartImportDialog } from "@/components/smart-import-dialog"
 import {
   AlertDialog,
@@ -17,17 +19,32 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api, type Disk } from "@/lib/api"
+import { api, type Alert, type Disk } from "@/lib/api"
 import { formatBytes, formatDate, formatHours, healthVariant } from "@/lib/format"
 import { useAction, useDisks } from "@/lib/queries"
 
-export function DisksPage() {
+export function DisksPage({
+  diskId,
+  onOpenDisk,
+  onResolve,
+}: {
+  /** Show the torrents archived on this disk instead of the list of disks. */
+  diskId: number | null
+  onOpenDisk: (id: number | null) => void
+  onResolve: (a: Alert) => void
+}) {
+  if (diskId !== null) return <DiskArchivesPage diskId={diskId} onBack={() => onOpenDisk(null)} onResolve={onResolve} />
+  return <DiskList onOpenDisk={onOpenDisk} />
+}
+
+function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
   const disks = useDisks()
   const [editing, setEditing] = useState<Disk | null>(null)
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState<Disk | null>(null)
   const [smartOpen, setSmartOpen] = useState(false)
   const [smartDisk, setSmartDisk] = useState<Disk | null>(null)
+  const [qr, setQr] = useState<Disk | null>(null)
   const openSmart = (d: Disk | null) => {
     setSmartDisk(d)
     setSmartOpen(true)
@@ -73,6 +90,11 @@ export function DisksPage() {
                 </CardTitle>
                 <CardDescription className="font-mono text-xs">{d.serial ? `SN ${d.serial}` : "Seriale non indicato"}</CardDescription>
                 <CardAction className="flex gap-1">
+                  {isPhysicalDisk(d.kind) && (
+                    <Button variant="ghost" size="icon-sm" aria-label="QR code" title="QR code" onClick={() => setQr(d)}>
+                      <QrCode />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon-sm" aria-label="Aggiorna da SMART" title="Aggiorna da SMART" onClick={() => openSmart(d)}>
                     <Activity />
                   </Button>
@@ -125,6 +147,9 @@ export function DisksPage() {
                   </div>
                 )}
                 {d.notes && <p className="text-muted-foreground text-xs whitespace-pre-wrap">{d.notes}</p>}
+                <Button variant="outline" size="sm" className="mt-1 w-fit" onClick={() => onOpenDisk(d.id)}>
+                  <ListTree /> Torrent archiviati
+                </Button>
               </CardContent>
             </Card>
           )
@@ -133,6 +158,7 @@ export function DisksPage() {
 
       <DiskFormDialog open={open} disk={editing} onOpenChange={setOpen} />
       <SmartImportDialog open={smartOpen} disk={smartDisk} onOpenChange={setSmartOpen} />
+      <DiskQrDialog disk={qr} onClose={() => setQr(null)} />
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

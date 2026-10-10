@@ -11,6 +11,7 @@ export const keys = {
   clients: ["clients"] as const,
   info: ["info"] as const,
   sync: ["sync"] as const,
+  settings: ["settings"] as const,
 }
 
 export const useTorrents = () => useQuery({ queryKey: keys.torrents, queryFn: api.torrents, refetchInterval: 30_000 })
@@ -20,6 +21,7 @@ export const useDisks = () => useQuery({ queryKey: keys.disks, queryFn: api.disk
 export const useAdopters = () => useQuery({ queryKey: keys.adopters, queryFn: api.adopters })
 export const useClients = () => useQuery({ queryKey: keys.clients, queryFn: api.clients, refetchInterval: 30_000 })
 export const useInfo = () => useQuery({ queryKey: keys.info, queryFn: api.info, staleTime: Infinity })
+export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: api.settings })
 export const useSyncState = () => useQuery({ queryKey: keys.sync, queryFn: api.syncState, refetchInterval: 5_000 })
 
 /** Invalidates every query: data in bookrr is small and highly interrelated. */

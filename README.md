@@ -6,6 +6,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🖥️ **Su quale client** si trova ogni torrent (percorso, stato, ratio).
 - 🧬 **Duplicati**: segnala lo stesso torrent (stesso hash) caricato su più client e su quali è ancora **in download**; quando è completato ovunque puoi **toglierlo da uno dei client** (con o senza i file) direttamente da bookrr.
 - 💽 **Archivi offline**: dischi con nome, tipo, **numero di serie**, modello, capacità e posizione fisica; per ogni torrent registri lo **spostamento** su un disco/cartella.
+- 📱 **QR code sui dischi**: ogni disco fisico ha la sua pagina con i torrent archiviati sopra; stampa il QR code da attaccare al disco e inquadrandolo con il telefono apri quella pagina. L'indirizzo di bookrr nella tua rete (es. `http://192.168.1.10:8080`, utile se il container è in una rete Docker) si imposta dalla finestra del QR code.
 - 🩺 **Dati SMART**: crea o aggiorna un disco incollando l'output di `smartctl` (testo o JSON) o di CrystalDiskInfo: modello, seriale, capacità, firmware, stato di salute e ore di accensione.
 - 🤝 **Adottatori**: elenco delle persone che hanno adottato le tue release; ogni torrent può avere uno o più adottatori, scelti da un menu.
 - 🔔 **Rimozioni delle Personal Release**: quando un torrent con tag `Personal Release` sparisce da tutti i client (rilevato dalla sincronizzazione o ricevuto via webhook) viene evidenziato e bookrr ti chiede **dove è stato spostato** (disco, adottato, eliminato, altro).

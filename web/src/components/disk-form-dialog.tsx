@@ -12,6 +12,9 @@ import { useAction } from "@/lib/queries"
 
 export const diskKinds = ["HDD", "SSD", "NVMe", "USB", "NAS", "Nastro", "Cloud", "Altro"]
 
+/** A disk you can hold in your hand, so it can carry a QR label. */
+export const isPhysicalDisk = (kind: string) => kind !== "Cloud"
+
 export function DiskFormDialog({
   open,
   disk,

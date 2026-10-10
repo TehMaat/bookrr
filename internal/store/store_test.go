@@ -297,3 +297,17 @@ func TestRemoveDuplicateLocation(t *testing.T) {
 		t.Fatalf("expected no alerts, got %d", n)
 	}
 }
+
+func TestSettings(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if st, err := s.GetSettings(ctx); err != nil || st.PublicURL != "" {
+		t.Fatalf("empty settings = %+v, %v", st, err)
+	}
+	for _, u := range []string{"http://192.168.1.10:8080", ""} {
+		st, err := s.SaveSettings(ctx, Settings{PublicURL: u})
+		if err != nil || st.PublicURL != u {
+			t.Fatalf("SaveSettings(%q) = %+v, %v", u, st, err)
+		}
+	}
+}
