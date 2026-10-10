@@ -152,11 +152,16 @@ export type ResolveInput = {
   adoption?: AdoptionInput
 }
 
+export type ImportRow = { row: number; hash: string; name: string; error?: string }
+export type ImportResult = { rows: ImportRow[]; imported: number }
+
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  data: unknown
+  constructor(status: number, message: string, data?: unknown) {
     super(message)
     this.status = status
+    this.data = data
   }
 }
 
@@ -168,13 +173,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   })
   if (!res.ok) {
     let msg = `HTTP ${res.status}`
+    let data: unknown
     try {
-      const data = await res.json()
-      if (data?.error) msg = data.error
+      data = await res.json()
+      if (data && typeof data === "object" && "error" in data && data.error) msg = String(data.error)
     } catch {
       /* not JSON */
     }
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, msg, data)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -187,6 +193,12 @@ export const api = {
 
   torrents: () => request<Torrent[]>("GET", "/api/torrents"),
   createTorrent: (t: TorrentInput) => request<Torrent>("POST", "/api/torrents", t),
+  /** Resolves with the per-row check also when some rows are rejected (HTTP 422). */
+  importTorrents: (items: TorrentInput[], dryRun: boolean) =>
+    request<ImportResult>("POST", "/api/torrents/import", { items, dryRun }).catch((err) => {
+      if (err instanceof ApiError && err.status === 422) return err.data as ImportResult
+      throw err
+    }),
   updateTorrent: (hash: string, p: TorrentPatch) => request<Torrent>("PATCH", `/api/torrents/${enc(hash)}`, p),
   deleteTorrent: (hash: string) => request<void>("DELETE", `/api/torrents/${enc(hash)}`),
   removeFromClient: (hash: string, clientId: number, deleteFiles: boolean) =>

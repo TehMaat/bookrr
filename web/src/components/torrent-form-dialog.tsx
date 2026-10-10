@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { api, type ArchiveInput, type TorrentInput } from "@/lib/api"
-import { parseBytes } from "@/lib/format"
+import { buildTorrentInput, isValidHash } from "@/lib/manual"
 import { useAction } from "@/lib/queries"
 
 export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -37,26 +37,13 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   const create = useAction((t: TorrentInput) => api.createTorrent(t), "Torrent aggiunto")
 
-  const hashValid = hash.trim() === "" || /^[0-9a-f]{40}$|^[0-9a-f]{64}$/i.test(hash.trim())
+  const hashValid = isValidHash(hash)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    create.mutate(
-      {
-        name: name.trim(),
-        hash: hash.trim(),
-        size: parseBytes(size),
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        personalRelease: personal,
-        notes,
-        archive,
-        adoption: adopterId ? { adopterId, notes: "" } : undefined,
-      },
-      { onSuccess: () => onOpenChange(false) }
-    )
+    create.mutate(buildTorrentInput({ name, hash, size, tags, personal, notes, adopterId, archive }), {
+      onSuccess: () => onOpenChange(false),
+    })
   }
 
   return (
