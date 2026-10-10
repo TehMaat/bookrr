@@ -265,6 +265,8 @@ export const api = {
 
   alerts: (open = true) => request<Alert[]>("GET", `/api/alerts?open=${open ? 1 : 0}`),
   resolveAlert: (id: number, r: ResolveInput) => request<void>("POST", `/api/alerts/${id}/resolve`, r),
+  /** Records the same destination for several alerts at once: all or none are resolved. */
+  resolveAlerts: (ids: number[], r: ResolveInput) => request<void>("POST", "/api/alerts/resolve", { ids, ...r }),
 
   disks: () => request<Disk[]>("GET", "/api/disks"),
   createDisk: (d: Partial<Disk>) => request<Disk>("POST", "/api/disks", d),

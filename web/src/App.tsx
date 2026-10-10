@@ -29,7 +29,8 @@ function routeFromHash(): Route {
 
 export default function App() {
   const [{ tab, diskId }, setRoute] = useState<Route>(routeFromHash)
-  const [resolving, setResolving] = useState<Alert | null>(null)
+  const [resolving, setResolving] = useState<Alert[]>([])
+  const resolveOne = (a: Alert) => setResolving([a])
   const alerts = useAlerts(true)
   const openCount = alerts.data?.length ?? 0
 
@@ -48,7 +49,7 @@ export default function App() {
     <div className="min-h-screen">
       <Header />
       <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-6">
-        <AlertsBanner alerts={alerts.data ?? []} onResolve={setResolving} onShowAll={() => go("alerts")} />
+        <AlertsBanner alerts={alerts.data ?? []} onResolve={resolveOne} onShowAll={() => go("alerts")} />
         <Tabs value={tab} onValueChange={go}>
           <TabsList className="w-full justify-start overflow-x-auto sm:w-fit">
             <TabsTrigger value="torrents">
@@ -73,23 +74,23 @@ export default function App() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="torrents">
-            <TorrentsPage onResolve={setResolving} />
+            <TorrentsPage onResolve={resolveOne} />
           </TabsContent>
           <TabsContent value="alerts">
             <AlertsPage onResolve={setResolving} />
           </TabsContent>
           <TabsContent value="disks">
-            <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={setResolving} />
+            <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={resolveOne} />
           </TabsContent>
           <TabsContent value="adopters">
-            <AdoptersPage onResolve={setResolving} />
+            <AdoptersPage onResolve={resolveOne} />
           </TabsContent>
           <TabsContent value="clients">
             <ClientsPage />
           </TabsContent>
         </Tabs>
       </main>
-      <ResolveDialog alert={resolving} onClose={() => setResolving(null)} />
+      <ResolveDialog alerts={resolving} onClose={() => setResolving([])} />
       <footer className="text-muted-foreground flex items-center justify-center gap-1.5 py-6 text-xs">
         <BookCheck className="size-3.5" /> bookrr
       </footer>

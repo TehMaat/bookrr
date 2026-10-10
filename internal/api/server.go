@@ -66,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
+	mux.HandleFunc("POST /api/alerts/resolve", s.resolveAlerts)
 
 	mux.HandleFunc("GET /api/disks", s.listDisks)
 	mux.HandleFunc("POST /api/disks", s.createDisk)
@@ -699,6 +700,25 @@ func (s *Server) resolveAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.ResolveAlert(r.Context(), id, in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) resolveAlerts(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IDs []int64 `json:"ids"`
+		store.ResolveInput
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if len(in.IDs) == 0 {
+		writeError(w, 400, "nessuna segnalazione selezionata")
+		return
+	}
+	if err := s.store.ResolveAlerts(r.Context(), in.IDs, in.ResolveInput); err != nil {
 		s.fail(w, err)
 		return
 	}

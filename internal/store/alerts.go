@@ -50,32 +50,47 @@ type ResolveInput struct {
 // ResolveAlert records where a removed torrent went and closes every open
 // alert for the same torrent.
 func (s *Store) ResolveAlert(ctx context.Context, id int64, in ResolveInput) error {
+	return s.ResolveAlerts(ctx, []int64{id}, in)
+}
+
+// ResolveAlerts records the same destination for the torrents of several
+// alerts at once and closes every open alert for those torrents. Either all
+// of them are resolved or none is.
+func (s *Store) ResolveAlerts(ctx context.Context, ids []int64, in ResolveInput) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	var hash string
-	err = tx.QueryRowContext(ctx, `SELECT hash FROM alerts WHERE id = ?`, id).Scan(&hash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return err
-	}
-	if in.Archive != nil {
-		if err := addArchive(ctx, tx, hash, *in.Archive); err != nil {
+	seen := map[string]bool{}
+	for _, id := range ids {
+		var hash string
+		err = tx.QueryRowContext(ctx, `SELECT hash FROM alerts WHERE id = ?`, id).Scan(&hash)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
 			return err
 		}
-	}
-	if in.Adoption != nil {
-		if err := addAdoption(ctx, tx, hash, *in.Adoption); err != nil && !errors.Is(err, ErrAlreadyAdopted) {
+		// Several alerts of the same torrent get a single archive/adoption.
+		if seen[hash] {
+			continue
+		}
+		seen[hash] = true
+		if in.Archive != nil {
+			if err := addArchive(ctx, tx, hash, *in.Archive); err != nil {
+				return err
+			}
+		}
+		if in.Adoption != nil {
+			if err := addAdoption(ctx, tx, hash, *in.Adoption); err != nil && !errors.Is(err, ErrAlreadyAdopted) {
+				return err
+			}
+		}
+		if err := resolveOpenAlerts(ctx, tx, hash, in.Resolution); err != nil {
 			return err
 		}
-	}
-	if err := resolveOpenAlerts(ctx, tx, hash, in.Resolution); err != nil {
-		return err
 	}
 	return tx.Commit()
 }

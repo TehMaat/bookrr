@@ -21,7 +21,8 @@ const kinds: { value: Kind; label: string; icon: React.ElementType }[] = [
   { value: "other", label: "Altro", icon: MessageSquareText },
 ]
 
-export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose: () => void }) {
+/** Asks where the torrents of one or more alerts went; `alerts` empty means closed. */
+export function ResolveDialog({ alerts, onClose }: { alerts: Alert[]; onClose: () => void }) {
   const [kind, setKind] = useState<Kind>("disk")
   const [archive, setArchive] = useState<ArchiveInput>(emptyArchive)
   const [adopterId, setAdopterId] = useState<number | null>(null)
@@ -29,16 +30,23 @@ export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose
   const disks = useDisks()
   const adopters = useAdopters()
 
+  const open = alerts.length > 0
+  const alert = alerts.length === 1 ? alerts[0] : null
+
   useEffect(() => {
-    if (alert) {
+    if (open) {
       setKind("disk")
       setArchive(emptyArchive)
       setAdopterId(null)
       setNote("")
     }
-  }, [alert])
+  }, [open])
 
-  const resolve = useAction((r: ResolveInput) => api.resolveAlert(alert!.id, r), "Posizione registrata")
+  const resolve = useAction(
+    (r: ResolveInput) =>
+      alerts.length === 1 ? api.resolveAlert(alerts[0].id, r) : api.resolveAlerts(alerts.map((a) => a.id), r),
+    alerts.length === 1 ? "Posizione registrata" : `Posizione registrata per ${alerts.length} release`
+  )
 
   const disk = disks.data?.find((d) => d.id === archive.diskId)
   const adopter = adopters.data?.find((a) => a.id === adopterId)
@@ -67,16 +75,31 @@ export function ResolveDialog({ alert, onClose }: { alert: Alert | null; onClose
   }
 
   return (
-    <Dialog open={alert !== null} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Dove è stato spostato?</DialogTitle>
-            <DialogDescription className="break-all">
-              <span className="text-foreground font-medium">{alert?.torrentName}</span>
-              <br />
-              {alert?.message} · {formatDate(alert?.createdAt)} · via {alert?.source === "webhook" ? "webhook" : "sincronizzazione"}
-            </DialogDescription>
+            <DialogTitle>{alert ? "Dove è stato spostato?" : `Dove sono state spostate ${alerts.length} release?`}</DialogTitle>
+            {alert ? (
+              <DialogDescription className="break-all">
+                <span className="text-foreground font-medium">{alert.torrentName}</span>
+                <br />
+                {alert.message} · {formatDate(alert.createdAt)} · via {alert.source === "webhook" ? "webhook" : "sincronizzazione"}
+              </DialogDescription>
+            ) : (
+              <DialogDescription asChild>
+                <div>
+                  La stessa posizione verrà registrata per tutte:
+                  <ul className="mt-1.5 max-h-32 overflow-y-auto rounded-md border px-3 py-1.5">
+                    {alerts.map((a) => (
+                      <li key={a.id} className="text-foreground truncate text-xs font-medium" title={a.torrentName}>
+                        {a.torrentName}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </DialogDescription>
+            )}
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

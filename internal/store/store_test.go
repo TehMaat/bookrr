@@ -137,6 +137,45 @@ func TestMoveResolvesAlert(t *testing.T) {
 	}
 }
 
+func TestResolveAlertsInBulk(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	a := mustClient(t, s, "a")
+	sync(t, s, map[Client][]SnapshotTorrent{a: {{Hash: "h1", Name: "One", Tags: tag}, {Hash: "h2", Name: "Two", Tags: tag}, {Hash: "h3", Name: "Three", Tags: tag}}})
+	sync(t, s, map[Client][]SnapshotTorrent{a: {}})
+	open, _ := s.ListAlerts(ctx, true, "")
+	if len(open) != 3 {
+		t.Fatalf("expected 3 alerts, got %+v", open)
+	}
+	ids := map[string]int64{}
+	for _, al := range open {
+		ids[al.Hash] = al.ID
+	}
+
+	if err := s.ResolveAlerts(ctx, []int64{ids["h1"], 9999}, ResolveInput{Resolution: "x"}); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+	if open, _ := s.ListAlerts(ctx, true, ""); len(open) != 3 {
+		t.Fatalf("a failed bulk resolve must change nothing: %+v", open)
+	}
+
+	disk, _ := s.CreateDisk(ctx, Disk{Label: "Archivio 1"})
+	in := ResolveInput{Resolution: "Spostato su Archivio 1", Archive: &ArchiveInput{DiskID: &disk.ID, Path: "/x"}}
+	if err := s.ResolveAlerts(ctx, []int64{ids["h1"], ids["h2"], ids["h1"]}, in); err != nil {
+		t.Fatal(err)
+	}
+	open, _ = s.ListAlerts(ctx, true, "")
+	if len(open) != 1 || open[0].Hash != "h3" {
+		t.Fatalf("expected only h3 open: %+v", open)
+	}
+	for _, h := range []string{"h1", "h2"} {
+		tr, _ := s.GetTorrent(ctx, h)
+		if len(tr.Archives) != 1 {
+			t.Fatalf("%s: expected one archive, got %+v", h, tr.Archives)
+		}
+	}
+}
+
 func TestRemovalAfterMoveIsNotFlagged(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
