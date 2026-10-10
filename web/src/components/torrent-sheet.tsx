@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Check, Copy, Download, HandHeart, HardDrive, Plus, Server, Trash2, TriangleAlert } from "lucide-react"
+import { Check, Copy, Download, HandHeart, HardDrive, Plus, Search, Server, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
@@ -36,7 +36,8 @@ import {
   type TorrentPatch,
 } from "@/lib/api"
 import { formatBytes, formatDate, formatState, formatUnix, isDownloading, isErrorState } from "@/lib/format"
-import { useAction } from "@/lib/queries"
+import { isManualHash } from "@/lib/manual"
+import { useAction, useInfo } from "@/lib/queries"
 
 function Section({ title, icon: Icon, children, action }: { title: string; icon?: React.ElementType; children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -64,12 +65,16 @@ export function TorrentSheet({
   torrent,
   onClose,
   onResolve,
+  onHashChange,
 }: {
   torrent: Torrent | null
   onClose: () => void
   onResolve: (a: Alert) => void
+  /** The torrent got its real info hash: keep it selected under the new one. */
+  onHashChange?: (hash: string) => void
 }) {
   const t = torrent
+  const info = useInfo()
   const [notes, setNotes] = useState("")
   const [name, setName] = useState("")
   const [addingArchive, setAddingArchive] = useState(false)
@@ -100,6 +105,11 @@ export function TorrentSheet({
   const addAdoption = useAction((a: AdoptionInput) => api.addAdoption(hash!, a), "Adozione aggiunta")
   const delAdoption = useAction((id: number) => api.deleteAdoption(id), "Adozione rimossa")
   const del = useAction(() => api.deleteTorrent(hash!), "Torrent eliminato")
+  const lookup = useAction(async () => {
+    const found = await api.lookupHash(hash!)
+    onHashChange?.(found.hash)
+    return found
+  }, "Hash trovato sul tracker")
 
   if (!t) return <Sheet open={false} />
 
@@ -170,12 +180,30 @@ export function TorrentSheet({
 
           <div className="grid gap-1.5">
             <Field label="Hash">
-              <span className="inline-flex items-center gap-1 font-mono text-xs">
-                {t.hash}
-                <Button variant="ghost" size="icon-sm" className="size-6" onClick={copyHash} aria-label="Copia hash">
-                  {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                </Button>
-              </span>
+              {isManualHash(t.hash) ? (
+                <span className="grid justify-items-start gap-1">
+                  <span className="text-muted-foreground">Non indicato</span>
+                  {info.data?.unit3d && (
+                    <>
+                      <span className={t.hashLookupError ? "text-destructive text-xs" : "text-muted-foreground text-xs"}>
+                        {t.hashLookupError
+                          ? `Tracker: ${t.hashLookupError}${t.hashLookupAt ? ` (${formatDate(t.hashLookupAt)})` : ""}`
+                          : "In coda per la ricerca sul tracker UNIT3D."}
+                      </span>
+                      <Button size="sm" variant="outline" disabled={lookup.isPending} onClick={() => lookup.mutate(undefined)}>
+                        <Search /> {lookup.isPending ? "Ricerca…" : "Cerca ora sul tracker"}
+                      </Button>
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 font-mono text-xs">
+                  {t.hash}
+                  <Button variant="ghost" size="icon-sm" className="size-6" onClick={copyHash} aria-label="Copia hash">
+                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                  </Button>
+                </span>
+              )}
             </Field>
             <Field label="Dimensione">{formatBytes(t.size)}</Field>
             {t.category && <Field label="Categoria">{t.category}</Field>}

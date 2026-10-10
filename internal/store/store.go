@@ -141,6 +141,10 @@ ALTER TABLE disks ADD COLUMN health TEXT NOT NULL DEFAULT '';
 ALTER TABLE disks ADD COLUMN power_on_hours INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE disks ADD COLUMN smart_at TEXT;
 `,
+	`
+ALTER TABLE torrents ADD COLUMN hash_lookup_at TEXT;
+ALTER TABLE torrents ADD COLUMN hash_lookup_error TEXT NOT NULL DEFAULT '';
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

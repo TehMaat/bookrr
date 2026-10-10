@@ -49,7 +49,7 @@ func TestImportSmart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	h := New(config.Config{}, st, nil, fstest.MapFS{}, "test").Handler()
+	h := New(config.Config{}, st, nil, nil, fstest.MapFS{}, "test").Handler()
 
 	// A dry run saves nothing.
 	code, res := postSmart(t, h, "?dryRun=1", smartReport)

@@ -427,7 +427,12 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </div>
       </Card>
 
-      <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} />
+      <TorrentSheet
+        torrent={selectedTorrent}
+        onClose={() => setSelected(null)}
+        onResolve={onResolve}
+        onHashChange={setSelected}
+      />
       <TorrentFormDialog open={adding} onOpenChange={setAdding} />
       <ImportDialog open={importing} onOpenChange={setImporting} />
     </div>

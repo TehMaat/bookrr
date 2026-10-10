@@ -57,6 +57,9 @@ export type Torrent = {
   firstSeenAt: string
   lastSeenAt: string | null
   updatedAt: string
+  /** Last failed lookup of the hash on the UNIT3D tracker. */
+  hashLookupAt: string | null
+  hashLookupError: string
   locations: Location[]
   archives: Archive[]
   adoptions: Adoption[]
@@ -126,6 +129,8 @@ export type Info = {
   releaseTag: string
   syncInterval: string
   webhookTokenRequired: boolean
+  /** A UNIT3D tracker is configured to find missing info hashes. */
+  unit3d: boolean
 }
 
 export type SyncState = {
@@ -220,6 +225,8 @@ export const api = {
     }),
   updateTorrent: (hash: string, p: TorrentPatch) => request<Torrent>("PATCH", `/api/torrents/${enc(hash)}`, p),
   deleteTorrent: (hash: string) => request<void>("DELETE", `/api/torrents/${enc(hash)}`),
+  /** Looks up on the UNIT3D tracker the hash of a torrent added without one; returns it under the new hash. */
+  lookupHash: (hash: string) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/lookup-hash`),
   removeFromClient: (hash: string, clientId: number, deleteFiles: boolean) =>
     request<Torrent>("DELETE", `/api/torrents/${enc(hash)}/locations/${clientId}?deleteFiles=${deleteFiles ? 1 : 0}`),
   addArchive: (hash: string, a: ArchiveInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/archives`, a),

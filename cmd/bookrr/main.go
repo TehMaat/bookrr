@@ -16,6 +16,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/syncer"
+	"github.com/tehmaat/bookrr/internal/unit3d"
 	"github.com/tehmaat/bookrr/web"
 )
 
@@ -51,9 +52,15 @@ func main() {
 	sy := syncer.New(st, cfg.ReleaseTag, cfg.SyncInterval)
 	go sy.Run(ctx)
 
+	var hashes *unit3d.Resolver
+	if cfg.Unit3DURL != "" {
+		hashes = unit3d.NewResolver(st, unit3d.New(cfg.Unit3DURL, cfg.Unit3DAPIKey))
+		go hashes.Run(ctx)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           api.New(cfg, st, sy, web.FS(), version).Handler(),
+		Handler:           api.New(cfg, st, sy, hashes, web.FS(), version).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
@@ -64,7 +71,7 @@ func main() {
 	}()
 
 	slog.Info("bookrr avviato", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
-		"sync", cfg.SyncInterval.String(), "releaseTag", cfg.ReleaseTag)
+		"sync", cfg.SyncInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server", "err", err)
 		os.Exit(1)

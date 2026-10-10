@@ -57,6 +57,8 @@ type Torrent struct {
 	FirstSeenAt     string     `json:"firstSeenAt"`
 	LastSeenAt      *string    `json:"lastSeenAt"`
 	UpdatedAt       string     `json:"updatedAt"`
+	HashLookupAt    *string    `json:"hashLookupAt"`
+	HashLookupError string     `json:"hashLookupError"`
 	Locations       []Location `json:"locations"`
 	Archives        []Archive  `json:"archives"`
 	Adoptions       []Adoption `json:"adoptions"`
@@ -90,15 +92,16 @@ func (t *Torrent) finalize() {
 	}
 }
 
-const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at`
+const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at, hash_lookup_at, hash_lookup_error`
 
 func scanTorrent(row interface{ Scan(...any) error }) (Torrent, error) {
 	var t Torrent
 	var tags string
-	var last sql.NullString
-	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt)
+	var last, lookup sql.NullString
+	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt, &lookup, &t.HashLookupError)
 	t.Tags = SplitTags(tags)
 	t.LastSeenAt = nullStr(last)
+	t.HashLookupAt = nullStr(lookup)
 	t.Locations = []Location{}
 	t.Archives = []Archive{}
 	t.Adoptions = []Adoption{}

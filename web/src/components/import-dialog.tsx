@@ -16,7 +16,7 @@ import { api, type Adopter, type Disk, type ImportResult, type TorrentInput } fr
 import { parseCsv, toCsv } from "@/lib/csv"
 import { formatBytes, parseBytes } from "@/lib/format"
 import { buildTorrentInput, isValidHash, type ManualFields } from "@/lib/manual"
-import { useAdopters, useDisks, useRefreshAll } from "@/lib/queries"
+import { useAdopters, useDisks, useInfo, useRefreshAll } from "@/lib/queries"
 
 /** Accepted header names for each field, compared without case, accents, spaces and punctuation. */
 const columns = {
@@ -150,6 +150,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const disks = useDisks()
   const adopters = useAdopters()
   const refresh = useRefreshAll()
+  const info = useInfo()
   const [text, setText] = useState("")
   const [defaultDisk, setDefaultDisk] = useState<number | null>(null)
   const [defaultPersonal, setDefaultPersonal] = useState(true)
@@ -227,6 +228,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             Carica o incolla un file CSV (anche esportato da Excel): ogni riga viene salvata esattamente come se la
             inserissi con "Aggiungi". Colonne: Nome (obbligatoria), Hash, Dimensione, Tag, Personal Release, Note,
             Disco (nome o numero di serie), Percorso, Note archivio, Adottato da.
+            {info.data?.unit3d &&
+              " Se manca l'hash, dopo l'import bookrr lo cerca da solo per nome sul tracker UNIT3D configurato."}
           </DialogDescription>
         </DialogHeader>
 
