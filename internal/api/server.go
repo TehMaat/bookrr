@@ -55,6 +55,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/torrents/{hash}", s.deleteTorrent)
 	mux.HandleFunc("DELETE /api/torrents/{hash}/locations/{clientId}", s.removeFromClient)
 	mux.HandleFunc("POST /api/torrents/{hash}/lookup-hash", s.lookupHash)
+	mux.HandleFunc("GET /api/torrents/{hash}/tracker-candidates", s.trackerCandidates)
+	mux.HandleFunc("POST /api/torrents/{hash}/tracker-match", s.trackerMatch)
+	mux.HandleFunc("GET /api/torrents/{hash}/torrent-file", s.torrentFile)
 	mux.HandleFunc("POST /api/torrents/{hash}/archives", s.addArchive)
 	mux.HandleFunc("PUT /api/archives/{id}", s.updateArchive)
 	mux.HandleFunc("DELETE /api/archives/{id}", s.deleteArchive)
@@ -308,28 +311,71 @@ func (s *Server) findHashes(hashes ...string) {
 // lookupHash looks up on the tracker, right now, the info hash of a torrent
 // added without one, and returns the torrent under its new hash.
 func (s *Server) lookupHash(w http.ResponseWriter, r *http.Request) {
-	if s.hashes == nil {
-		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato (BOOKRR_UNIT3D_URL)")
-		return
-	}
-	hash := r.PathValue("hash")
-	if !store.IsManualHash(hash) {
-		writeError(w, http.StatusBadRequest, "il torrent ha già il suo info hash")
+	hash, ok := s.placeholder(w, r)
+	if !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	newHash, err := s.hashes.Resolve(ctx, hash)
+	s.writeFound(w, r, newHash, err)
+}
+
+// trackerCandidates lists the tracker torrents the user can pick when the
+// hash was not found automatically. ?q= searches something else than the
+// torrent's name.
+func (s *Server) trackerCandidates(w http.ResponseWriter, r *http.Request) {
+	hash, ok := s.placeholder(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	cs, err := s.hashes.Candidates(ctx, hash, r.URL.Query().Get("q"))
 	if err != nil {
-		var rl *unit3d.RateLimitError
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-			s.fail(w, err)
-		case unit3d.Final(err), errors.As(err, &rl):
-			writeError(w, http.StatusUnprocessableEntity, err.Error())
-		default:
-			writeError(w, http.StatusBadGateway, err.Error())
-		}
+		s.trackerFail(w, err)
+		return
+	}
+	writeJSON(w, 200, cs)
+}
+
+// trackerMatch gives the torrent the hash of the tracker torrent the user
+// picked ({"id": "123"}), and returns it under its new hash.
+func (s *Server) trackerMatch(w http.ResponseWriter, r *http.Request) {
+	hash, ok := s.placeholder(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		ID string `json:"id"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	newHash, err := s.hashes.Choose(ctx, hash, strings.TrimSpace(in.ID))
+	s.writeFound(w, r, newHash, err)
+}
+
+// placeholder checks that a tracker is configured and that the torrent in
+// the path still has a placeholder hash.
+func (s *Server) placeholder(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if s.hashes == nil {
+		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato (BOOKRR_UNIT3D_URL)")
+		return "", false
+	}
+	hash := r.PathValue("hash")
+	if !store.IsManualHash(hash) {
+		writeError(w, http.StatusBadRequest, "il torrent ha già il suo info hash")
+		return "", false
+	}
+	return hash, true
+}
+
+func (s *Server) writeFound(w http.ResponseWriter, r *http.Request, newHash string, err error) {
+	if err != nil {
+		s.trackerFail(w, err)
 		return
 	}
 	t, err := s.store.GetTorrent(r.Context(), newHash)
@@ -338,6 +384,41 @@ func (s *Server) lookupHash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, t)
+}
+
+func (s *Server) trackerFail(w http.ResponseWriter, err error) {
+	var rl *unit3d.RateLimitError
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		s.fail(w, err)
+	case unit3d.Final(err), errors.As(err, &rl):
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+	default:
+		writeError(w, http.StatusBadGateway, err.Error())
+	}
+}
+
+// torrentFile downloads the .torrent file saved from the tracker.
+func (s *Server) torrentFile(w http.ResponseWriter, r *http.Request) {
+	t, err := s.store.GetTorrent(r.Context(), r.PathValue("hash"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	data, err := s.store.TorrentFile(r.Context(), t.Hash)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	name := strings.Map(func(r rune) rune {
+		if strings.ContainsRune(`/\:*?"<>|`, r) || r < 0x20 {
+			return '_'
+		}
+		return r
+	}, t.Name) + ".torrent"
+	w.Header().Set("Content-Type", "application/x-bittorrent")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	w.Write(data)
 }
 
 type importRow struct {

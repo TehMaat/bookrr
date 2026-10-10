@@ -59,6 +59,8 @@ type Torrent struct {
 	UpdatedAt       string     `json:"updatedAt"`
 	HashLookupAt    *string    `json:"hashLookupAt"`
 	HashLookupError string     `json:"hashLookupError"`
+	TrackerURL      string     `json:"trackerUrl"`
+	HasTorrentFile  bool       `json:"hasTorrentFile"`
 	Locations       []Location `json:"locations"`
 	Archives        []Archive  `json:"archives"`
 	Adoptions       []Adoption `json:"adoptions"`
@@ -92,13 +94,14 @@ func (t *Torrent) finalize() {
 	}
 }
 
-const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at, hash_lookup_at, hash_lookup_error`
+const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at, hash_lookup_at, hash_lookup_error, tracker_url,
+	EXISTS (SELECT 1 FROM torrent_files f WHERE f.hash = torrents.hash)`
 
 func scanTorrent(row interface{ Scan(...any) error }) (Torrent, error) {
 	var t Torrent
 	var tags string
 	var last, lookup sql.NullString
-	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt, &lookup, &t.HashLookupError)
+	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt, &lookup, &t.HashLookupError, &t.TrackerURL, &t.HasTorrentFile)
 	t.Tags = SplitTags(tags)
 	t.LastSeenAt = nullStr(last)
 	t.HashLookupAt = nullStr(lookup)
@@ -368,7 +371,7 @@ func (s *Store) UpdateTorrent(ctx context.Context, hash string, p TorrentPatch) 
 		add("size", *p.Size)
 	}
 	if p.Tags != nil {
-		add("tags", strings.Join(*p.Tags, ","))
+		add("tags", strings.Join(SplitTags(strings.Join(*p.Tags, ",")), ","))
 	}
 	if p.Category != nil {
 		add("category", *p.Category)

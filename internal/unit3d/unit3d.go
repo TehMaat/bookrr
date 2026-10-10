@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,10 +61,23 @@ func New(baseURL, apiKey string) *Client {
 
 // Match is the tracker torrent chosen for a name.
 type Match struct {
-	ID   string
-	Name string
-	Size int64
-	Hash string
+	ID          string
+	Name        string
+	Size        int64
+	Hash        string
+	DetailsLink string
+	File        []byte // the .torrent file, when the tracker gives a download link
+}
+
+// Candidate is a tracker torrent that may be the one with a given name.
+type Candidate struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	CreatedAt   string `json:"createdAt"`
+	DetailsLink string `json:"detailsLink"`
+	// Score is the share of words the two names have in common (0-100).
+	Score int `json:"score"`
 }
 
 type torrent struct {
@@ -75,6 +89,8 @@ type torrent struct {
 		InfoHash     string  `json:"info_hash"`
 		MagnetLink   string  `json:"magnet_link"`
 		DownloadLink string  `json:"download_link"`
+		DetailsLink  string  `json:"details_link"`
+		CreatedAt    string  `json:"created_at"`
 	} `json:"attributes"`
 }
 
@@ -95,26 +111,122 @@ func (f *flexString) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// FindHash looks the name up on the tracker and returns the info hash of
-// the torrent with exactly that name. When several torrents share the name,
-// size (if known) picks the one with the same size.
-func (c *Client) FindHash(ctx context.Context, name string, size int64) (Match, error) {
-	q := url.Values{"name": {name}, "perPage": {"100"}}
+func (c *Client) search(ctx context.Context, query string) ([]torrent, error) {
+	q := url.Values{"name": {query}, "perPage": {"100"}}
 	var res struct {
 		Data []torrent `json:"data"`
 	}
 	if err := c.getJSON(ctx, c.base+"/api/torrents/filter?"+q.Encode(), &res); err != nil {
-		return Match{}, err
+		return nil, err
 	}
-	t, err := pick(res.Data, name, size)
+	return res.Data, nil
+}
+
+// FindHash looks the name up on the tracker and returns the torrent with
+// exactly that name (size, if known, picks between equal names). A name
+// written differently ("AD.ASTRA.2019.REMUX…" for "Ad Astra 2019 … REMUX")
+// is accepted only when the tracker has a single torrent containing every
+// word of it.
+func (c *Client) FindHash(ctx context.Context, name string, size int64) (Match, error) {
+	queries := []string{name}
+	if words := strings.Join(uniq(tokens(name)), " "); words != "" && words != name {
+		queries = append(queries, words)
+	}
+	var t torrent
+	var err error
+	for _, q := range queries {
+		var ts []torrent
+		if ts, err = c.search(ctx, q); err != nil {
+			return Match{}, err
+		}
+		if t, err = pick(ts, name, size); !errors.Is(err, ErrNotFound) {
+			break
+		}
+		if len(ts) > 0 {
+			// Something similar exists: let the user choose.
+			err = fmt.Errorf("%w; %d simili: scegli quello giusto con \"Scegli dal tracker\"", err, len(ts))
+			break
+		}
+	}
 	if err != nil {
 		return Match{}, err
 	}
-	m := Match{ID: string(t.ID), Name: t.Attributes.Name, Size: int64(t.Attributes.Size)}
-	if m.Hash, err = c.hashOf(ctx, t); err != nil {
+	return c.fetchHash(ctx, t)
+}
+
+// Candidates lists the tracker torrents that may be the one with this name,
+// best first. With query empty it searches the name, then shorter forms
+// of it (title and year, title) until something turns up.
+func (c *Client) Candidates(ctx context.Context, name, query string, size int64) ([]Candidate, error) {
+	queries := []string{query}
+	if query == "" {
+		queries = searchForms(name)
+	}
+	seen := map[string]bool{}
+	var out []Candidate
+	for _, q := range queries {
+		ts, err := c.search(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range ts {
+			if seen[string(t.ID)] {
+				continue
+			}
+			seen[string(t.ID)] = true
+			a := t.Attributes
+			out = append(out, Candidate{
+				ID: string(t.ID), Name: a.Name, Size: int64(a.Size), CreatedAt: a.CreatedAt,
+				DetailsLink: a.DetailsLink, Score: score(name, a.Name),
+			})
+		}
+		if len(out) > 0 {
+			break
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return sizeGap(out[i].Size, size) < sizeGap(out[j].Size, size)
+	})
+	if len(out) > 25 {
+		out = out[:25]
+	}
+	return out, nil
+}
+
+// Fetch returns the hash (and .torrent file) of the tracker torrent with
+// this id, as chosen by the user.
+func (c *Client) Fetch(ctx context.Context, id string) (Match, error) {
+	if _, err := strconv.ParseUint(id, 10, 64); err != nil {
+		return Match{}, errors.New("id del torrent sul tracker non valido")
+	}
+	// UNIT3D answers with the torrent itself; be lenient with forks that
+	// wrap it in "data".
+	var res struct {
+		torrent
+		Data *torrent `json:"data"`
+	}
+	if err := c.getJSON(ctx, c.base+"/api/torrents/"+id, &res); err != nil {
 		return Match{}, err
 	}
-	return m, nil
+	t := res.torrent
+	if res.Data != nil {
+		t = *res.Data
+	}
+	if t.ID == "" {
+		t.ID = flexString(id)
+	}
+	return c.fetchHash(ctx, t)
+}
+
+func (c *Client) fetchHash(ctx context.Context, t torrent) (Match, error) {
+	a := t.Attributes
+	m := Match{ID: string(t.ID), Name: a.Name, Size: int64(a.Size), DetailsLink: a.DetailsLink}
+	var err error
+	m.Hash, m.File, err = c.hashOf(ctx, t)
+	return m, err
 }
 
 func pick(ts []torrent, name string, size int64) (torrent, error) {
@@ -125,11 +237,15 @@ func pick(ts []torrent, name string, size int64) (torrent, error) {
 			same = append(same, t)
 		}
 	}
+	if len(same) == 0 && len(ts) == 1 && containsWords(ts[0].Attributes.Name, name) &&
+		(size == 0 || sizeGap(int64(ts[0].Attributes.Size), size) <= 0.02) {
+		same = ts
+	}
 	if len(same) > 1 && size > 0 {
 		var sized []torrent
 		for _, t := range same {
 			// A size typed by hand ("12,5 GB") is only approximate.
-			if math.Abs(t.Attributes.Size-float64(size)) <= float64(size)*0.01 {
+			if sizeGap(int64(t.Attributes.Size), size) <= 0.01 {
 				sized = append(sized, t)
 			}
 		}
@@ -159,30 +275,134 @@ func normName(s string) string {
 	}), " ")
 }
 
+// tokens splits a release name into lowercase words.
+func tokens(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+}
+
+func uniq(ws []string) []string {
+	seen := map[string]bool{}
+	out := ws[:0:0]
+	for _, w := range ws {
+		if !seen[w] {
+			seen[w] = true
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+func wordSet(s string) map[string]bool {
+	set := map[string]bool{}
+	for _, w := range tokens(s) {
+		set[w] = true
+	}
+	return set
+}
+
+// containsWords reports whether every word of name appears in candidate.
+func containsWords(candidate, name string) bool {
+	have, want := wordSet(candidate), wordSet(name)
+	if len(want) == 0 {
+		return false
+	}
+	for w := range want {
+		if !have[w] {
+			return false
+		}
+	}
+	return true
+}
+
+// score is the share of words the two names have in common (Jaccard, 0-100).
+func score(a, b string) int {
+	wa, wb := wordSet(a), wordSet(b)
+	common := 0
+	for w := range wa {
+		if wb[w] {
+			common++
+		}
+	}
+	all := len(wa) + len(wb) - common
+	if all == 0 {
+		return 0
+	}
+	return common * 100 / all
+}
+
+// sizeGap is the relative difference between two sizes; an unknown size
+// is no gap at all.
+func sizeGap(a, b int64) float64 {
+	if a <= 0 || b <= 0 {
+		return 0
+	}
+	return math.Abs(float64(a-b)) / float64(b)
+}
+
+var yearRe = regexp.MustCompile(`^(19|20)\d\d$`)
+
+// searchForms is the name, then its words, then title and year, then the
+// title alone: "AD.ASTRA.2019.REMUX…" → "ad astra 2019", "ad astra".
+func searchForms(name string) []string {
+	ws := uniq(tokens(name))
+	forms := []string{name}
+	add := func(f string) {
+		if f != "" && f != forms[len(forms)-1] {
+			forms = append(forms, f)
+		}
+	}
+	add(strings.Join(ws, " "))
+	year := -1
+	for i, w := range ws {
+		if i > 0 && yearRe.MatchString(w) {
+			year = i
+			break
+		}
+	}
+	if year > 0 {
+		add(strings.Join(ws[:year+1], " "))
+		add(strings.Join(ws[:year], " "))
+	} else if len(ws) > 3 {
+		add(strings.Join(ws[:3], " "))
+	}
+	return forms
+}
+
 var (
 	hexHash    = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 	magnetHash = regexp.MustCompile(`(?i)xt=urn:btih:([0-9a-f]{40})\b`)
 )
 
-// hashOf reads the hash from the API when the tracker exposes it (some
-// UNIT3D versions return info_hash, others only inside the magnet link);
-// otherwise it downloads the .torrent file and computes it.
-func (c *Client) hashOf(ctx context.Context, t torrent) (string, error) {
+// hashOf downloads the .torrent file, to keep it and compute the hash from
+// it. Without a download link (or if the download fails) it falls back to
+// the hash some UNIT3D versions return as info_hash or in the magnet link.
+func (c *Client) hashOf(ctx context.Context, t torrent) (string, []byte, error) {
 	a := t.Attributes
+	known := ""
 	if h := strings.TrimSpace(a.InfoHash); hexHash.MatchString(h) {
-		return strings.ToLower(h), nil
-	}
-	if m := magnetHash.FindStringSubmatch(a.MagnetLink); m != nil {
-		return strings.ToLower(m[1]), nil
+		known = strings.ToLower(h)
+	} else if m := magnetHash.FindStringSubmatch(a.MagnetLink); m != nil {
+		known = strings.ToLower(m[1])
 	}
 	if a.DownloadLink == "" {
-		return "", ErrNoHash
+		if known == "" {
+			return "", nil, ErrNoHash
+		}
+		return known, nil, nil
 	}
 	body, err := c.get(ctx, a.DownloadLink, false, 20<<20)
-	if err != nil {
-		return "", fmt.Errorf("download del .torrent: %w", err)
+	var hash string
+	if err == nil {
+		hash, err = InfoHash(body)
 	}
-	return InfoHash(body)
+	if err != nil {
+		var rl *RateLimitError
+		if known != "" && !errors.As(err, &rl) {
+			return known, nil, nil
+		}
+		return "", nil, fmt.Errorf("download del .torrent: %w", err)
+	}
+	return hash, body, nil
 }
 
 func (c *Client) getJSON(ctx context.Context, u string, out any) error {

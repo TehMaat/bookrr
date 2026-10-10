@@ -60,12 +60,21 @@ func (s *Store) SetHashLookupError(ctx context.Context, hash, msg string, final 
 	return err
 }
 
+// TrackerTorrent is what the tracker told about a torrent found there.
+type TrackerTorrent struct {
+	Hash string
+	URL  string // page of the torrent on the tracker
+	File []byte // .torrent file, if it could be downloaded
+}
+
 // ReplaceHash gives the torrent stored under a placeholder hash its real
-// info hash, moving its archives, adoptions and alerts along. If bookrr
-// already knows the real hash (e.g. the torrent is still on a client), the
-// placeholder is merged into it: the existing torrent keeps its data and
-// gains what only the placeholder had. It reports whether a merge happened.
-func (s *Store) ReplaceHash(ctx context.Context, oldHash, newHash string) (bool, error) {
+// info hash, moving its archives, adoptions and alerts along, and stores
+// what the tracker told about it. If bookrr already knows the real hash
+// (e.g. the torrent is still on a client), the placeholder is merged into
+// it: the existing torrent keeps its data and gains what only the
+// placeholder had. It reports whether a merge happened.
+func (s *Store) ReplaceHash(ctx context.Context, oldHash string, found TrackerTorrent) (bool, error) {
+	newHash := found.Hash
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
@@ -99,13 +108,13 @@ UPDATE torrents SET
 	tags = CASE WHEN tags = '' THEN ? ELSE tags END,
 	personal_release = MAX(personal_release, ?),
 	notes = CASE WHEN notes = '' THEN ? WHEN ? = '' OR notes = ? THEN notes ELSE notes || char(10) || ? END,
-	hash_lookup_at = ?, hash_lookup_error = '', updated_at = ?
-WHERE hash = ?`, old.size, old.tags, boolInt(old.personal), old.notes, old.notes, old.notes, old.notes, ts, ts, newHash)
+	hash_lookup_at = ?, hash_lookup_error = '', tracker_url = ?, updated_at = ?
+WHERE hash = ?`, old.size, old.tags, boolInt(old.personal), old.notes, old.notes, old.notes, old.notes, ts, found.URL, ts, newHash)
 	} else {
 		_, err = tx.ExecContext(ctx, `
-INSERT INTO torrents (hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at, hash_lookup_at, hash_lookup_error)
-SELECT ?, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, ?, ?, ''
-FROM torrents WHERE hash = ?`, newHash, ts, ts, oldHash)
+INSERT INTO torrents (hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at, hash_lookup_at, hash_lookup_error, tracker_url)
+SELECT ?, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, ?, ?, '', ?
+FROM torrents WHERE hash = ?`, newHash, ts, ts, found.URL, oldHash)
 	}
 	if err != nil {
 		return false, err
@@ -118,6 +127,7 @@ FROM torrents WHERE hash = ?`, newHash, ts, ts, oldHash)
 		`UPDATE OR IGNORE adoptions SET hash = ? WHERE hash = ?`,
 		`UPDATE alerts SET hash = ? WHERE hash = ?`,
 		`UPDATE OR IGNORE locations SET hash = ? WHERE hash = ?`,
+		`UPDATE OR IGNORE torrent_files SET hash = ? WHERE hash = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, newHash, oldHash); err != nil {
 			return false, err
@@ -125,6 +135,12 @@ FROM torrents WHERE hash = ?`, newHash, ts, ts, oldHash)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM torrents WHERE hash = ?`, oldHash); err != nil {
 		return false, err
+	}
+	if len(found.File) > 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO torrent_files (hash, data, created_at) VALUES (?, ?, ?)`,
+			newHash, found.File, ts); err != nil {
+			return false, err
+		}
 	}
 	if merged {
 		// An archive or adoption coming from the placeholder answers an open
@@ -146,4 +162,14 @@ FROM torrents WHERE hash = ?`, newHash, ts, ts, oldHash)
 		}
 	}
 	return merged, tx.Commit()
+}
+
+// TorrentFile returns the .torrent file saved for the torrent.
+func (s *Store) TorrentFile(ctx context.Context, hash string) ([]byte, error) {
+	var data []byte
+	err := s.db.QueryRowContext(ctx, `SELECT data FROM torrent_files WHERE hash = ?`, hash).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return data, err
 }

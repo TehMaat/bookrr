@@ -1,11 +1,26 @@
 import { useEffect, useState } from "react"
-import { Check, Copy, Download, HandHeart, HardDrive, Plus, Search, Server, Trash2, TriangleAlert } from "lucide-react"
+import {
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  FileDown,
+  HandHeart,
+  HardDrive,
+  ListChecks,
+  Plus,
+  Search,
+  Server,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
 import { DuplicateBadge, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
+import { TrackerPickDialog } from "@/components/tracker-pick-dialog"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -52,6 +67,12 @@ function Section({ title, icon: Icon, children, action }: { title: string; icon?
   )
 }
 
+const splitTags = (s: string) =>
+  s
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[10rem_1fr] gap-2 text-sm">
@@ -77,6 +98,8 @@ export function TorrentSheet({
   const info = useInfo()
   const [notes, setNotes] = useState("")
   const [name, setName] = useState("")
+  const [tags, setTags] = useState("")
+  const [picking, setPicking] = useState(false)
   const [addingArchive, setAddingArchive] = useState(false)
   const [archive, setArchive] = useState<ArchiveInput>(emptyArchive)
   const [addingAdoption, setAddingAdoption] = useState(false)
@@ -90,6 +113,8 @@ export function TorrentSheet({
     if (!t) return
     setNotes(t.notes)
     setName(t.name)
+    setTags(t.tags.join(", "))
+    setPicking(false)
     setAddingArchive(false)
     setArchive(emptyArchive)
     setAddingAdoption(false)
@@ -114,7 +139,9 @@ export function TorrentSheet({
   if (!t) return <Sheet open={false} />
 
   const onClient = t.locations.length > 0
-  const dirty = notes !== t.notes || (t.manual && name !== t.name)
+  const tagList = splitTags(tags)
+  const tagsChanged = !onClient && tagList.join(",") !== t.tags.join(",")
+  const dirty = notes !== t.notes || (t.manual && name !== t.name) || tagsChanged
   const downloading = t.locations.filter(isDownloading)
 
   const copyHash = async () => {
@@ -190,9 +217,20 @@ export function TorrentSheet({
                           ? `Tracker: ${t.hashLookupError}${t.hashLookupAt ? ` (${formatDate(t.hashLookupAt)})` : ""}`
                           : "In coda per la ricerca sul tracker UNIT3D."}
                       </span>
-                      <Button size="sm" variant="outline" disabled={lookup.isPending} onClick={() => lookup.mutate(undefined)}>
-                        <Search /> {lookup.isPending ? "Ricerca…" : "Cerca ora sul tracker"}
-                      </Button>
+                      <span className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" disabled={lookup.isPending} onClick={() => lookup.mutate(undefined)}>
+                          <Search /> {lookup.isPending ? "Ricerca…" : "Cerca ora sul tracker"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setPicking(true)}>
+                          <ListChecks /> Scegli dal tracker
+                        </Button>
+                      </span>
+                      <TrackerPickDialog
+                        torrent={t}
+                        open={picking}
+                        onOpenChange={setPicking}
+                        onPicked={(h) => onHashChange?.(h)}
+                      />
                     </>
                   )}
                 </span>
@@ -205,6 +243,18 @@ export function TorrentSheet({
                 </span>
               )}
             </Field>
+            {t.trackerUrl && (
+              <Field label="Sul tracker">
+                <a
+                  href={t.trackerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
+                >
+                  <ExternalLink className="size-3.5" /> Apri pagina del torrent
+                </a>
+              </Field>
+            )}
             <Field label="Dimensione">{formatBytes(t.size)}</Field>
             {t.category && <Field label="Categoria">{t.category}</Field>}
             {t.tracker && <Field label="Tracker">{t.tracker}</Field>}
@@ -279,6 +329,13 @@ export function TorrentSheet({
               )
             }
           >
+            {t.hasTorrentFile && (
+              <Button variant="outline" size="sm" className="w-fit" asChild>
+                <a href={api.torrentFileUrl(t.hash)} download>
+                  <FileDown /> Scarica il file .torrent
+                </a>
+              </Button>
+            )}
             {t.archives.length === 0 && !addingArchive && (
               <p className="text-muted-foreground text-sm">
                 Non è stato spostato su nessun disco.
@@ -417,6 +474,21 @@ export function TorrentSheet({
               </div>
             )}
             <div className="grid gap-2">
+              <Label htmlFor="ts-tags">Tag (separati da virgola)</Label>
+              <Input
+                id="ts-tags"
+                value={tags}
+                disabled={onClient}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="Personal Release, 4K"
+              />
+              {onClient && (
+                <span className="text-muted-foreground text-xs">
+                  Il torrent è su un client: i tag si cambiano in qBittorrent e bookrr li legge alla sincronizzazione.
+                </span>
+              )}
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="ts-notes">Note</Label>
               <Textarea id="ts-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
@@ -437,6 +509,7 @@ export function TorrentSheet({
                   update.mutate({
                     notes,
                     ...(t.manual && name.trim() ? { name: name.trim() } : {}),
+                    ...(tagsChanged ? { tags: tagList } : {}),
                   })
                 }
               >
