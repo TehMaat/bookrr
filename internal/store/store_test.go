@@ -256,3 +256,44 @@ func TestHasTag(t *testing.T) {
 		t.Fatal("NormalizeTags")
 	}
 }
+
+func TestRemoveDuplicateLocation(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	a, b := mustClient(t, s, "a"), mustClient(t, s, "b")
+
+	done := SnapshotTorrent{Hash: "h1", Name: "Mine", Size: 10, Tags: tag, Progress: 1}
+	partial := done
+	partial.Progress = 0.5
+	sync(t, s, map[Client][]SnapshotTorrent{a: {done}, b: {partial}})
+
+	// b still has a complete copy on a: removable. a holds the only complete one.
+	if err := s.CheckRemovableLocation(ctx, "h1", b.ID); err != nil {
+		t.Fatalf("b should be removable: %v", err)
+	}
+	if err := s.CheckRemovableLocation(ctx, "h1", a.ID); err != ErrLastCopy {
+		t.Fatalf("a is the only complete copy, got %v", err)
+	}
+	if err := s.CheckRemovableLocation(ctx, "h1", 999); err != ErrNotFound {
+		t.Fatalf("unknown client, got %v", err)
+	}
+
+	if err := s.RemoveLocation(ctx, "h1", b.ID); err != nil {
+		t.Fatal(err)
+	}
+	tr, err := s.GetTorrent(ctx, "h1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Duplicate || len(tr.Locations) != 1 || tr.Locations[0].ClientID != a.ID {
+		t.Fatalf("expected only on a, got %+v", tr.Locations)
+	}
+	if err := s.CheckRemovableLocation(ctx, "h1", a.ID); err != ErrLastCopy {
+		t.Fatalf("last copy must not be removable, got %v", err)
+	}
+
+	// The next sync confirms the removal from b without opening an alert.
+	if n := sync(t, s, map[Client][]SnapshotTorrent{a: {done}, b: {}}); n != 0 {
+		t.Fatalf("expected no alerts, got %d", n)
+	}
+}

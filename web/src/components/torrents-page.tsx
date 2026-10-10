@@ -13,15 +13,24 @@ import {
   Plus,
   Search,
   Server,
+  Trash2,
   TriangleAlert,
 } from "lucide-react"
 
+import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import { DuplicateBadge, PersonalBadge, StatusBadge, WhereBadges } from "@/components/torrent-badges"
 import { Badge } from "@/components/ui/badge"
 import { TorrentFormDialog } from "@/components/torrent-form-dialog"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -29,7 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Alert, Torrent } from "@/lib/api"
+import type { Alert, Location, Torrent } from "@/lib/api"
 import { formatBytes, formatState, formatUnix, isDownloading } from "@/lib/format"
 import { useAdopters, useClients, useDisks, useInfo, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
@@ -59,7 +68,7 @@ function matches(t: Torrent, f: Filter) {
 /** Per-client download state, used in the duplicates view to pick which copy to keep. */
 function DownloadCell({ t }: { t: Torrent }) {
   const downloading = t.locations.filter(isDownloading)
-  if (downloading.length === 0) return <span className="text-muted-foreground text-xs">Completato ovunque</span>
+  if (downloading.length === 0) return <RemoveDuplicate t={t} />
   return (
     <div className="flex flex-wrap gap-1">
       {downloading.map((l) => (
@@ -74,6 +83,35 @@ function DownloadCell({ t }: { t: Torrent }) {
           </TooltipContent>
         </Tooltip>
       ))}
+    </div>
+  )
+}
+
+/** "Completato ovunque" plus a menu to delete the torrent from one of the clients. */
+function RemoveDuplicate({ t }: { t: Torrent }) {
+  const [removing, setRemoving] = useState<Location | null>(null)
+  return (
+    // Events from the menu and the dialog (portals included) must not open the sheet.
+    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+      <span className="text-muted-foreground text-xs whitespace-nowrap">Completato ovunque</span>
+      {canRemoveDuplicate(t) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7">
+              <Trash2 /> Rimuovi da…
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Togli il duplicato da</DropdownMenuLabel>
+            {t.locations.map((l) => (
+              <DropdownMenuItem key={l.clientId} onSelect={() => setRemoving(l)}>
+                <Server /> {l.clientName}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <RemoveFromClientDialog torrent={t} location={removing} onClose={() => setRemoving(null)} />
     </div>
   )
 }

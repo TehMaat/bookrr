@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Check, Copy, Download, HandHeart, HardDrive, Plus, Server, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
+import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
 import { DuplicateBadge, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
@@ -25,7 +26,15 @@ import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { api, type AdoptionInput, type Alert, type ArchiveInput, type Torrent, type TorrentPatch } from "@/lib/api"
+import {
+  api,
+  type AdoptionInput,
+  type Alert,
+  type ArchiveInput,
+  type Location,
+  type Torrent,
+  type TorrentPatch,
+} from "@/lib/api"
 import { formatBytes, formatDate, formatState, formatUnix, isDownloading, isErrorState } from "@/lib/format"
 import { useAction } from "@/lib/queries"
 
@@ -69,6 +78,7 @@ export function TorrentSheet({
   const [adopterId, setAdopterId] = useState<number | null>(null)
   const [adoptionNotes, setAdoptionNotes] = useState("")
   const [copied, setCopied] = useState(false)
+  const [removing, setRemoving] = useState<Location | null>(null)
 
   const hash = t?.hash
   useEffect(() => {
@@ -80,6 +90,7 @@ export function TorrentSheet({
     setAddingAdoption(false)
     setAdopterId(null)
     setAdoptionNotes("")
+    setRemoving(null)
     // Reset only when switching torrent, not on background refreshes.
   }, [hash])
 
@@ -194,6 +205,18 @@ export function TorrentSheet({
                       <span className="text-muted-foreground ml-auto text-xs">
                         {Math.floor(l.progress * 100)}% · ratio {l.ratio.toFixed(2)}
                       </span>
+                      {canRemoveDuplicate(t) && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-6"
+                          onClick={() => setRemoving(l)}
+                          aria-label={`Rimuovi da ${l.clientName}`}
+                          title={`Rimuovi da ${l.clientName}`}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
                     </div>
                     {isDownloading(l) && (
                       <div className="bg-muted mt-2 h-1.5 overflow-hidden rounded-full">
@@ -212,6 +235,7 @@ export function TorrentSheet({
                 ))}
               </ul>
             )}
+            <RemoveFromClientDialog torrent={t} location={removing} onClose={() => setRemoving(null)} />
           </Section>
 
           <Separator />

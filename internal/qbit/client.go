@@ -137,3 +137,49 @@ func (c *Client) Torrents(ctx context.Context) ([]Torrent, error) {
 	}
 	return ts, nil
 }
+
+// post performs an authenticated form POST, logging in when needed.
+func (c *Client) post(ctx context.Context, path string, form url.Values) error {
+	if !c.loggedIn && c.username != "" {
+		if err := c.login(ctx); err != nil {
+			return err
+		}
+	}
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, strings.NewReader(form.Encode()))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Referer", c.base)
+		req.Header.Set("Origin", c.base)
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusForbidden && attempt == 0 {
+			if c.username == "" {
+				return errors.New("qBittorrent richiede l'autenticazione: imposta utente e password")
+			}
+			if err := c.login(ctx); err != nil {
+				return err
+			}
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("%s: HTTP %d", path, resp.StatusCode)
+		}
+		return nil
+	}
+}
+
+// DeleteTorrent removes a torrent from the client, optionally deleting its
+// downloaded files too. qBittorrent succeeds even if the hash is unknown.
+func (c *Client) DeleteTorrent(ctx context.Context, hash string, deleteFiles bool) error {
+	return c.post(ctx, "/api/v2/torrents/delete", url.Values{
+		"hashes":      {hash},
+		"deleteFiles": {fmt.Sprint(deleteFiles)},
+	})
+}

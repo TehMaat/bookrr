@@ -327,6 +327,38 @@ func (s *Store) DeleteTorrent(ctx context.Context, hash string) error {
 	return nil
 }
 
+var ErrLastCopy = errors.New("non è presente completo su nessun altro client: questa è l'unica copia")
+
+// CheckRemovableLocation verifies that the torrent is on the given client and
+// that at least one other client holds a complete copy, so removing it from
+// this client never loses the torrent.
+func (s *Store) CheckRemovableLocation(ctx context.Context, hash string, clientID int64) error {
+	var here, elsewhere int
+	err := s.db.QueryRowContext(ctx, `
+SELECT
+	COUNT(*) FILTER (WHERE client_id = ?),
+	COUNT(*) FILTER (WHERE client_id != ? AND progress >= 1)
+FROM locations WHERE hash = ?`, clientID, clientID, hash).Scan(&here, &elsewhere)
+	if err != nil {
+		return err
+	}
+	if here == 0 {
+		return ErrNotFound
+	}
+	if elsewhere == 0 {
+		return ErrLastCopy
+	}
+	return nil
+}
+
+// RemoveLocation forgets that the torrent is on the given client, after it
+// has been deleted there. The torrent is still on another client, so no
+// alert is needed.
+func (s *Store) RemoveLocation(ctx context.Context, hash string, clientID int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM locations WHERE hash = ? AND client_id = ?`, hash, clientID)
+	return err
+}
+
 type ArchiveInput struct {
 	DiskID *int64 `json:"diskId"`
 	Path   string `json:"path"`
