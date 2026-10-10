@@ -15,17 +15,19 @@ FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/golang:1.24-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-ARG VERSION=dev
+# Empty VERSION (local builds) falls back to the VERSION file.
+ARG VERSION=
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
+COPY VERSION ./
 COPY web/embed.go ./web/
 COPY --from=web /web/dist ./web/dist
 # timetzdata embeds the time zone database, so TZ works without tzdata.
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
-    go build -trimpath -tags timetzdata -ldflags="-s -w -X main.version=${VERSION}" -o /out/bookrr ./cmd/bookrr \
+    go build -trimpath -tags timetzdata -ldflags="-s -w -X main.version=${VERSION:-v$(cat VERSION)}" -o /out/bookrr ./cmd/bookrr \
  && mkdir -p /out/data
 
 # No RUN steps here: the runtime image needs no emulation to build for any arch.

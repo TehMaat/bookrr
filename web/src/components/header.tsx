@@ -1,6 +1,7 @@
 import { BookCheck, Laptop, Moon, RefreshCw, Sun } from "lucide-react"
 import { toast } from "sonner"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -30,7 +31,16 @@ export function Header() {
             <BookCheck className="size-5" />
           </div>
           <span className="text-lg">bookrr</span>
-          {info.data && <span className="text-muted-foreground hidden text-xs font-normal sm:inline">{info.data.version}</span>}
+          {info.data && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="violet" className="font-mono">
+                  {info.data.version}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Versione di bookrr</TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Tooltip>

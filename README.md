@@ -36,6 +36,10 @@ docker compose up -d --build
 
 > La compilazione locale richiede un'immagine `node` per la tua piattaforma: su macchine x86 a 32 bit usa l'immagine pubblicata oppure compila da un'altra macchina con `docker buildx build --platform linux/386`.
 
+### Versioni
+
+La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.5.0` blocca una versione precisa, `:0.5` riceve solo le correzioni della 0.5, `:latest` segue sempre `main`.
+
 ### Configurazione
 
 Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
