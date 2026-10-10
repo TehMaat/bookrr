@@ -135,6 +135,12 @@ INSERT OR IGNORE INTO adoptions (hash, adopter_id, created_at)
 	SELECT t.hash, a.id, t.updated_at FROM torrents t JOIN adopters a ON a.name = trim(t.adopted_by);
 ALTER TABLE torrents DROP COLUMN adopted_by;
 `,
+	`
+ALTER TABLE disks ADD COLUMN firmware TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN health TEXT NOT NULL DEFAULT '';
+ALTER TABLE disks ADD COLUMN power_on_hours INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE disks ADD COLUMN smart_at TEXT;
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

@@ -6,6 +6,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🖥️ **Su quale client** si trova ogni torrent (percorso, stato, ratio).
 - 🧬 **Duplicati**: segnala lo stesso torrent (stesso hash) caricato su più client e su quali è ancora **in download**; quando è completato ovunque puoi **toglierlo da uno dei client** (con o senza i file) direttamente da bookrr.
 - 💽 **Archivi offline**: dischi con nome, tipo, **numero di serie**, modello, capacità e posizione fisica; per ogni torrent registri lo **spostamento** su un disco/cartella.
+- 🩺 **Dati SMART**: crea o aggiorna un disco incollando l'output di `smartctl` (testo o JSON) o di CrystalDiskInfo: modello, seriale, capacità, firmware, stato di salute e ore di accensione.
 - 🤝 **Adottatori**: elenco delle persone che hanno adottato le tue release; ogni torrent può avere uno o più adottatori, scelti da un menu.
 - 🔔 **Rimozioni delle Personal Release**: quando un torrent con tag `Personal Release` sparisce da tutti i client (rilevato dalla sincronizzazione o ricevuto via webhook) viene evidenziato e bookrr ti chiede **dove è stato spostato** (disco, adottato, eliminato, altro).
 - ✍️ **Dati manuali**: aggiungi torrent che non sono su nessun client, note, adozioni e archivi.
@@ -102,6 +103,31 @@ curl -X POST http://bookrr:8080/api/webhook/qbit \
 
 Viene aperta una segnalazione solo se il torrent ha il tag delle release (nel payload o già noto a bookrr) e non è presente su altri client. qBittorrent non offre un'opzione nativa "esegui programma alla rimozione": il webhook è pensato per script, qbit_manage, n8n, Home Assistant e simili. La sincronizzazione periodica rileva comunque tutte le rimozioni.
 
+### Dati SMART dei dischi
+
+Nella pagina **Dischi**, *Importa da SMART* legge il rapporto SMART di un disco e crea il disco o aggiorna quello con lo stesso numero di serie (il pulsante sulla scheda di un disco aggiorna proprio quello). Formati accettati:
+
+- `smartctl -a /dev/sdX` o `smartctl -x /dev/sdX` (SATA, NVMe, SAS);
+- `smartctl -a -j /dev/sdX` (JSON);
+- il testo copiato da CrystalDiskInfo (*Modifica → Copia*).
+
+Vengono copiati modello, numero di serie, capacità, tipo (HDD/SSD/NVMe), firmware, stato SMART e ore di accensione, con la data della lettura; nome, posizione e note restano come li hai impostati, e un tipo come `USB` o `NAS` non viene sovrascritto.
+
+Lo stesso si può fare da script, inviando il rapporto così com'è:
+
+```bash
+sudo smartctl -a -j /dev/sdb | curl -X POST --data-binary @- -H "Content-Type: text/plain" \
+  "http://bookrr:8080/api/disks/smart?label=Archivio%2003"
+```
+
+| Parametro | Note |
+|---|---|
+| `id` | aggiorna il disco con questo id invece di cercarlo per numero di serie |
+| `new=1` | crea sempre un disco nuovo |
+| `label` | nome del disco se viene creato (default: il modello) |
+| `dryRun=1` | mostra il risultato senza salvare |
+
+Senza `id` né `new=1` un rapporto privo di numero di serie viene rifiutato.
 ### Import degli archiviati
 
 In **Torrent → Importa** puoi caricare (o incollare) un file CSV con molti torrent già spostati su disco. Separatore `;`, `,` o tabulazione, prima riga con le intestazioni (c'è un modello da scaricare):
@@ -147,6 +173,7 @@ Struttura:
 cmd/bookrr        entrypoint
 internal/api      API REST, webhook, file statici
 internal/qbit     client minimale per la Web API di qBittorrent
+internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
 internal/syncer   sincronizzazione periodica
 web/              frontend React + Vite + Tailwind + shadcn/ui

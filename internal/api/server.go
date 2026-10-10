@@ -23,6 +23,7 @@ import (
 
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/qbit"
+	"github.com/tehmaat/bookrr/internal/smart"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/syncer"
 )
@@ -62,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/disks", s.listDisks)
 	mux.HandleFunc("POST /api/disks", s.createDisk)
+	mux.HandleFunc("POST /api/disks/smart", s.importSmart)
 	mux.HandleFunc("PUT /api/disks/{id}", s.updateDisk)
 	mux.HandleFunc("DELETE /api/disks/{id}", s.deleteDisk)
 
@@ -625,6 +627,113 @@ func (s *Server) deleteDisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// importSmart creates or updates a disk from a SMART report sent as the raw
+// request body (smartctl text or JSON output, CrystalDiskInfo export).
+// The disk is ?id=N, a new one with ?new=1 (named ?label=…), or by default
+// the one with the report's serial number, created if missing.
+// ?dryRun=1 returns the result without saving it.
+func (s *Server) importSmart(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query()
+	dryRun := q.Get("dryRun") == "1"
+	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	info, err := smart.Parse(body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var d store.Disk
+	created := false
+	switch {
+	case q.Get("id") != "":
+		id, err := strconv.ParseInt(q.Get("id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "id non valido")
+			return
+		}
+		if d, err = s.store.GetDisk(ctx, id); err != nil {
+			s.fail(w, err)
+			return
+		}
+	case q.Get("new") == "1":
+		created = true
+	default:
+		d, err = s.store.FindDiskBySerial(ctx, info.Serial)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			if info.Serial == "" && !dryRun {
+				writeError(w, http.StatusBadRequest, "numero di serie assente nei dati SMART: indica il disco da aggiornare (?id=) o creane uno nuovo (?new=1)")
+				return
+			}
+			created = true
+		case err != nil:
+			s.fail(w, err)
+			return
+		}
+	}
+	if created {
+		d = store.Disk{Label: firstNonEmpty(q.Get("label"), info.Model, info.Serial, "Nuovo disco"), Kind: "HDD"}
+	}
+	mergeSmart(&d, info)
+
+	if !dryRun {
+		if d, err = s.store.SaveDiskSmart(ctx, d); err != nil {
+			s.fail(w, err)
+			return
+		}
+		slog.Info("dati SMART importati", "disk", d.Label, "serial", d.Serial, "created", created)
+	}
+	status := http.StatusOK
+	if created && !dryRun {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, map[string]any{"created": created, "disk": d, "smart": info})
+}
+
+// mergeSmart copies onto d what the SMART report knows, keeping everything
+// else (name, place, notes) as the user set it.
+func mergeSmart(d *store.Disk, info smart.Info) {
+	if info.Model != "" {
+		d.Model = info.Model
+	}
+	if info.Serial != "" {
+		d.Serial = info.Serial
+	}
+	if info.Capacity > 0 {
+		d.Capacity = info.Capacity
+	}
+	if info.Firmware != "" {
+		d.Firmware = info.Firmware
+	}
+	if info.Health != "" {
+		d.Health = info.Health
+	}
+	if info.PowerOnHours > 0 {
+		d.PowerOnHours = info.PowerOnHours
+	}
+	// SMART can't tell a USB enclosure or a NAS apart: keep such a kind.
+	switch d.Kind {
+	case "", "HDD", "SSD", "NVMe":
+		if info.Kind != "" {
+			d.Kind = info.Kind
+		}
+	}
+}
+
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // --- adopters ---
