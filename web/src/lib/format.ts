@@ -92,3 +92,20 @@ export function formatUnix(ts: number): string {
 export function isErrorState(s: string): boolean {
   return s === "missingFiles" || s === "error"
 }
+
+const intFmt = new Intl.NumberFormat("it-IT")
+const yearsFmt = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 })
+
+/** Power-on hours, e.g. "28.734 h (3,3 anni)". */
+export function formatHours(h: number): string {
+  if (!h || h <= 0) return "—"
+  const years = h / (24 * 365)
+  return years >= 0.1 ? `${intFmt.format(h)} h (${yearsFmt.format(years)} anni)` : `${intFmt.format(h)} h`
+}
+
+/** Badge variant for a SMART health status (PASSED, OK, Good, FAILED, Caution…). */
+export function healthVariant(h: string): "success" | "destructive" | "warning" {
+  if (/pass|^ok|good|buon/i.test(h)) return "success"
+  if (/fail|bad|cattiv/i.test(h)) return "destructive"
+  return "warning"
+}

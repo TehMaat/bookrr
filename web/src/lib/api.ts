@@ -77,7 +77,25 @@ export type Disk = {
   createdAt: string
   archiveCount: number
   archivedSize: number
+  firmware: string
+  health: string
+  powerOnHours: number
+  smartAt: string | null
 }
+
+export type SmartInfo = {
+  model: string
+  serial: string
+  firmware: string
+  capacity: number
+  kind: string
+  health: string
+  powerOnHours: number
+}
+
+/** Target of a SMART import: a disk id, a new disk, or (by default) the disk with the same serial. */
+export type SmartTarget = { id?: number; newLabel?: string; dryRun?: boolean }
+export type SmartResult = { created: boolean; disk: Disk; smart: SmartInfo }
 
 export type Adopter = {
   id: number
@@ -161,10 +179,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const text = typeof body === "string"
   const res = await fetch(path, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    headers: body !== undefined ? { "Content-Type": text ? "text/plain" : "application/json" } : undefined,
+    body: body !== undefined ? (text ? body : JSON.stringify(body)) : undefined,
   })
   if (!res.ok) {
     let msg = `HTTP ${res.status}`
@@ -204,6 +223,16 @@ export const api = {
   createDisk: (d: Partial<Disk>) => request<Disk>("POST", "/api/disks", d),
   updateDisk: (id: number, d: Partial<Disk>) => request<Disk>("PUT", `/api/disks/${id}`, d),
   deleteDisk: (id: number) => request<void>("DELETE", `/api/disks/${id}`),
+  importSmart: (report: string, t: SmartTarget = {}) => {
+    const q = new URLSearchParams()
+    if (t.id) q.set("id", String(t.id))
+    if (t.newLabel !== undefined) {
+      q.set("new", "1")
+      q.set("label", t.newLabel)
+    }
+    if (t.dryRun) q.set("dryRun", "1")
+    return request<SmartResult>("POST", `/api/disks/smart?${q}`, report)
+  },
 
   adopters: () => request<Adopter[]>("GET", "/api/adopters"),
   createAdopter: (a: Partial<Adopter>) => request<Adopter>("POST", "/api/adopters", a),
