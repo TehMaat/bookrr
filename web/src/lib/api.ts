@@ -150,6 +150,12 @@ export type Info = {
   unit3d: boolean
 }
 
+/** Options changed from the web UI. */
+export type Settings = {
+  /** Address of bookrr from other devices, used in the disk QR codes; empty = the browser's address. */
+  publicUrl: string
+}
+
 export type SyncState = {
   running: boolean
   lastRunAt: string | null
@@ -286,6 +292,9 @@ export const api = {
   deleteClient: (id: number) => request<void>("DELETE", `/api/clients/${id}`),
   testClient: (c: ClientInput) =>
     request<{ ok: boolean; error?: string; version?: string; torrents?: number }>("POST", "/api/clients/test", c),
+
+  settings: () => request<Settings>("GET", "/api/settings"),
+  saveSettings: (st: Settings) => request<Settings>("PUT", "/api/settings", st),
 
   syncState: () => request<SyncState>("GET", "/api/sync"),
   syncNow: () => request<{ result: string }>("POST", "/api/sync"),

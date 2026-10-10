@@ -17,26 +17,31 @@ import { useAlerts } from "@/lib/queries"
 const tabs = ["torrents", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
 
-function tabFromHash(): Tab {
-  const h = window.location.hash.replace("#", "")
-  return (tabs as readonly string[]).includes(h) ? (h as Tab) : "torrents"
+type Route = { tab: Tab; diskId: number | null }
+
+/** "#disks" or "#disks/3" (the torrents archived on disk 3, the target of its QR code). */
+function routeFromHash(): Route {
+  const [h, id] = window.location.hash.replace("#", "").split("/")
+  const tab = (tabs as readonly string[]).includes(h) ? (h as Tab) : "torrents"
+  const diskId = tab === "disks" && /^\d+$/.test(id ?? "") ? Number(id) : null
+  return { tab, diskId }
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>(tabFromHash)
+  const [{ tab, diskId }, setRoute] = useState<Route>(routeFromHash)
   const [resolving, setResolving] = useState<Alert | null>(null)
   const alerts = useAlerts(true)
   const openCount = alerts.data?.length ?? 0
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash())
+    const onHash = () => setRoute(routeFromHash())
     window.addEventListener("hashchange", onHash)
     return () => window.removeEventListener("hashchange", onHash)
   }, [])
 
   const go = (t: string) => {
     window.location.hash = t
-    setTab(t as Tab)
+    setRoute(routeFromHash())
   }
 
   return (
@@ -74,7 +79,7 @@ export default function App() {
             <AlertsPage onResolve={setResolving} />
           </TabsContent>
           <TabsContent value="disks">
-            <DisksPage />
+            <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={setResolving} />
           </TabsContent>
           <TabsContent value="adopters">
             <AdoptersPage onResolve={setResolving} />

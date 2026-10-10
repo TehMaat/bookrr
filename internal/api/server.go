@@ -84,6 +84,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/clients/{id}", s.deleteClient)
 	mux.HandleFunc("POST /api/clients/test", s.testClient)
 
+	mux.HandleFunc("GET /api/settings", s.getSettings)
+	mux.HandleFunc("PUT /api/settings", s.saveSettings)
+
 	mux.HandleFunc("GET /api/sync", s.syncState)
 	mux.HandleFunc("POST /api/sync", s.syncNow)
 
@@ -700,6 +703,53 @@ func (s *Server) resolveAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- settings ---
+
+func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
+	st, err := s.store.GetSettings(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, st)
+}
+
+func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
+	var st store.Settings
+	if !decode(w, r, &st) {
+		return
+	}
+	u, err := normalizePublicURL(st.PublicURL)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	st.PublicURL = u
+	st, err = s.store.SaveSettings(r.Context(), st)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, st)
+}
+
+// normalizePublicURL accepts "192.168.1.10:8080" or "http://nas.lan:8080/"
+// and returns it as an http(s) URL without the trailing slash.
+func normalizePublicURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("indirizzo %q non valido (es. http://192.168.1.10:8080)", raw)
+	}
+	return strings.TrimRight(u.String(), "/"), nil
 }
 
 // --- disks ---
