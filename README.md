@@ -9,6 +9,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🤝 **Adottatori**: elenco delle persone che hanno adottato le tue release; ogni torrent può avere uno o più adottatori, scelti da un menu.
 - 🔔 **Rimozioni delle Personal Release**: quando un torrent con tag `Personal Release` sparisce da tutti i client (rilevato dalla sincronizzazione o ricevuto via webhook) viene evidenziato e bookrr ti chiede **dove è stato spostato** (disco, adottato, eliminato, altro).
 - ✍️ **Dati manuali**: aggiungi torrent che non sono su nessun client, note, adozioni e archivi.
+- 📥 **Import degli archiviati** da CSV/Excel: ogni riga viene salvata esattamente come se l'avessi inserita con "Aggiungi".
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
 Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro.
@@ -100,6 +101,24 @@ curl -X POST http://bookrr:8080/api/webhook/qbit \
 ```
 
 Viene aperta una segnalazione solo se il torrent ha il tag delle release (nel payload o già noto a bookrr) e non è presente su altri client. qBittorrent non offre un'opzione nativa "esegui programma alla rimozione": il webhook è pensato per script, qbit_manage, n8n, Home Assistant e simili. La sincronizzazione periodica rileva comunque tutte le rimozioni.
+
+### Import degli archiviati
+
+In **Torrent → Importa** puoi caricare (o incollare) un file CSV con molti torrent già spostati su disco. Separatore `;`, `,` o tabulazione, prima riga con le intestazioni (c'è un modello da scaricare):
+
+| Colonna | Note |
+|---|---|
+| `Nome` | obbligatoria |
+| `Hash` | facoltativo, 40 o 64 caratteri esadecimali |
+| `Dimensione` | `12,5 GB`, `1.5 TB`, byte… |
+| `Tag` | separati da virgola |
+| `Personal Release` | sì/no; se vuota vale l'interruttore nella finestra |
+| `Note` | |
+| `Disco` | nome o numero di serie di un disco già registrato; se vuota vale il disco scelto nella finestra |
+| `Percorso`, `Note archivio` | serve almeno il disco o il percorso |
+| `Adottato da` | nome di un adottatore già registrato |
+
+Prima dell'import ogni riga viene verificata (anche dal server: hash già presente, ripetuto nel file, …). L'import è tutto-o-niente: se una riga non va bene non viene scritto nulla. Il form e l'import usano lo stesso codice (`POST /api/torrents` e `POST /api/torrents/import` con gli stessi campi), quindi i dati salvati sono identici.
 
 ## API
 

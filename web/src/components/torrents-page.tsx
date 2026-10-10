@@ -15,8 +15,10 @@ import {
   Server,
   Trash2,
   TriangleAlert,
+  Upload,
 } from "lucide-react"
 
+import { ImportDialog } from "@/components/import-dialog"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import { DuplicateBadge, PersonalBadge, StatusBadge, WhereBadges } from "@/components/torrent-badges"
 import { Badge } from "@/components/ui/badge"
@@ -132,6 +134,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const all = useMemo(() => torrents.data ?? [], [torrents.data])
   const scoped = useMemo(() => (onlyPersonal ? all.filter((t) => t.personalRelease) : all), [all, onlyPersonal])
@@ -289,6 +292,9 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             Solo {info.data?.releaseTag ?? "Personal Release"}
           </Label>
         </div>
+        <Button variant="outline" onClick={() => setImporting(true)}>
+          <Upload /> Importa
+        </Button>
         <Button onClick={() => setAdding(true)}>
           <Plus /> Aggiungi
         </Button>
@@ -423,6 +429,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
 
       <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} />
       <TorrentFormDialog open={adding} onOpenChange={setAdding} />
+      <ImportDialog open={importing} onOpenChange={setImporting} />
     </div>
   )
 }

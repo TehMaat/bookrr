@@ -249,19 +249,100 @@ type TorrentInput struct {
 
 var ErrExists = errors.New("esiste già")
 
-func (s *Store) CreateManualTorrent(ctx context.Context, in TorrentInput) (Torrent, error) {
+// ManualInput is a torrent added by hand, optionally already moved to a disk
+// or adopted. The "Aggiungi" form and the bulk import both create torrents
+// through it, so the stored data is the same whichever way it was entered.
+type ManualInput struct {
+	TorrentInput
+	Archive  *ArchiveInput  `json:"archive"`
+	Adoption *AdoptionInput `json:"adoption"`
+}
+
+func (in ManualInput) HasArchive() bool {
+	return in.Archive != nil && (in.Archive.DiskID != nil || in.Archive.Path != "")
+}
+
+func (in ManualInput) HasAdoption() bool { return in.Adoption != nil && in.Adoption.AdopterID != 0 }
+
+func (s *Store) CreateManualTorrent(ctx context.Context, in ManualInput) (Torrent, error) {
+	if err := s.ImportManualTorrents(ctx, []ManualInput{in}); err != nil {
+		var re *RowError
+		if errors.As(err, &re) {
+			err = re.Err
+		}
+		return Torrent{}, err
+	}
+	return s.GetTorrent(ctx, in.Hash)
+}
+
+// RowError tells which item of a bulk import failed.
+type RowError struct {
+	Row int
+	Err error
+}
+
+func (e *RowError) Error() string { return e.Err.Error() }
+func (e *RowError) Unwrap() error { return e.Err }
+
+// ImportManualTorrents creates every torrent, or none of them if one fails.
+func (s *Store) ImportManualTorrents(ctx context.Context, ins []ManualInput) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for i, in := range ins {
+		if err := createManual(ctx, tx, in); err != nil {
+			return &RowError{Row: i, Err: err}
+		}
+	}
+	return tx.Commit()
+}
+
+func createManual(ctx context.Context, tx txLike, in ManualInput) error {
 	ts := now()
-	_, err := s.db.ExecContext(ctx, `
+	_, err := tx.ExecContext(ctx, `
 INSERT INTO torrents (hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
 		in.Hash, in.Name, in.Size, strings.Join(in.Tags, ","), in.Category, in.Tracker, boolInt(in.PersonalRelease), in.Notes, ts, ts)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			return Torrent{}, ErrExists
+			return ErrExists
 		}
-		return Torrent{}, err
+		return err
 	}
-	return s.GetTorrent(ctx, in.Hash)
+	if in.HasArchive() {
+		if err := addArchive(ctx, tx, in.Hash, *in.Archive); err != nil {
+			return err
+		}
+		desc, err := describeArchive(ctx, tx, *in.Archive)
+		if err != nil {
+			return err
+		}
+		if err := resolveOpenAlerts(ctx, tx, in.Hash, desc); err != nil {
+			return err
+		}
+	}
+	if in.HasAdoption() {
+		if err := addAdoption(ctx, tx, in.Hash, *in.Adoption); err != nil {
+			return err
+		}
+		desc, err := describeAdoption(ctx, tx, *in.Adoption)
+		if err != nil {
+			return err
+		}
+		if err := resolveOpenAlerts(ctx, tx, in.Hash, desc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TorrentExists reports whether bookrr already knows the hash.
+func (s *Store) TorrentExists(ctx context.Context, hash string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM torrents WHERE hash = ?`, hash).Scan(&n)
+	return n > 0, err
 }
 
 // TorrentPatch holds user-editable fields; nil means "unchanged".
