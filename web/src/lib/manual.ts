@@ -13,6 +13,9 @@ export type ManualFields = {
   archive: ArchiveInput
 }
 
+/** Placeholder hash given by bookrr to a torrent added without its info hash. */
+export const isManualHash = (hash: string) => hash.startsWith("manual-")
+
 export function isValidHash(hash: string): boolean {
   return hash.trim() === "" || /^[0-9a-f]{40}$|^[0-9a-f]{64}$/i.test(hash.trim())
 }

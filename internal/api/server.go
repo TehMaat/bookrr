@@ -26,18 +26,20 @@ import (
 	"github.com/tehmaat/bookrr/internal/smart"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/syncer"
+	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
 type Server struct {
 	cfg     config.Config
 	store   *store.Store
 	syncer  *syncer.Syncer
+	hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
 	web     fs.FS
 	version string
 }
 
-func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, web fs.FS, version string) *Server {
-	return &Server{cfg: cfg, store: s, syncer: sy, web: web, version: version}
+func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, hashes *unit3d.Resolver, web fs.FS, version string) *Server {
+	return &Server{cfg: cfg, store: s, syncer: sy, hashes: hashes, web: web, version: version}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -52,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/torrents/{hash}", s.updateTorrent)
 	mux.HandleFunc("DELETE /api/torrents/{hash}", s.deleteTorrent)
 	mux.HandleFunc("DELETE /api/torrents/{hash}/locations/{clientId}", s.removeFromClient)
+	mux.HandleFunc("POST /api/torrents/{hash}/lookup-hash", s.lookupHash)
 	mux.HandleFunc("POST /api/torrents/{hash}/archives", s.addArchive)
 	mux.HandleFunc("PUT /api/archives/{id}", s.updateArchive)
 	mux.HandleFunc("DELETE /api/archives/{id}", s.deleteArchive)
@@ -206,6 +209,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"releaseTag":           s.cfg.ReleaseTag,
 		"syncInterval":         shortDuration(s.cfg.SyncInterval),
 		"webhookTokenRequired": s.cfg.WebhookToken != "",
+		"unit3d":               s.hashes != nil,
 	})
 }
 
@@ -264,7 +268,7 @@ func normalizeManual(in *store.ManualInput) error {
 	if in.Hash == "" {
 		b := make([]byte, 8)
 		rand.Read(b)
-		in.Hash = "manual-" + hex.EncodeToString(b)
+		in.Hash = store.ManualHashPrefix + hex.EncodeToString(b)
 	}
 	return nil
 }
@@ -283,7 +287,57 @@ func (s *Server) createTorrent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.findHashes(in.Hash)
 	writeJSON(w, http.StatusCreated, t)
+}
+
+// findHashes starts the background lookup on the tracker if one of the
+// new torrents was added without its info hash.
+func (s *Server) findHashes(hashes ...string) {
+	if s.hashes == nil {
+		return
+	}
+	for _, h := range hashes {
+		if store.IsManualHash(h) {
+			s.hashes.Wake()
+			return
+		}
+	}
+}
+
+// lookupHash looks up on the tracker, right now, the info hash of a torrent
+// added without one, and returns the torrent under its new hash.
+func (s *Server) lookupHash(w http.ResponseWriter, r *http.Request) {
+	if s.hashes == nil {
+		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato (BOOKRR_UNIT3D_URL)")
+		return
+	}
+	hash := r.PathValue("hash")
+	if !store.IsManualHash(hash) {
+		writeError(w, http.StatusBadRequest, "il torrent ha già il suo info hash")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	newHash, err := s.hashes.Resolve(ctx, hash)
+	if err != nil {
+		var rl *unit3d.RateLimitError
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			s.fail(w, err)
+		case unit3d.Final(err), errors.As(err, &rl):
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+		default:
+			writeError(w, http.StatusBadGateway, err.Error())
+		}
+		return
+	}
+	t, err := s.store.GetTorrent(r.Context(), newHash)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, t)
 }
 
 type importRow struct {
@@ -346,6 +400,11 @@ func (s *Server) importTorrents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("import torrent archiviati", "count", len(in.Items))
+	hashes := make([]string, len(in.Items))
+	for i, item := range in.Items {
+		hashes[i] = item.Hash
+	}
+	s.findHashes(hashes...)
 	writeJSON(w, http.StatusCreated, map[string]any{"rows": rows, "imported": len(in.Items)})
 }
 

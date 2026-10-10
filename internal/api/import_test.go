@@ -21,7 +21,7 @@ func newServer(t *testing.T) (*store.Store, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return st, New(config.Config{}, st, nil, fstest.MapFS{}, "test").Handler()
+	return st, New(config.Config{}, st, nil, nil, fstest.MapFS{}, "test").Handler()
 }
 
 func call(t *testing.T, h http.Handler, method, path string, body any, out any) int {

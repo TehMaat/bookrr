@@ -3,8 +3,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -16,6 +18,9 @@ type Config struct {
 	WebhookToken string
 	AuthUser     string
 	AuthPassword string
+	// UNIT3D tracker used to find the info hash of torrents added without one.
+	Unit3DURL    string
+	Unit3DAPIKey string
 }
 
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "bookrr.db") }
@@ -28,6 +33,8 @@ func Load() (Config, error) {
 		WebhookToken: os.Getenv("BOOKRR_WEBHOOK_TOKEN"),
 		AuthUser:     os.Getenv("BOOKRR_AUTH_USER"),
 		AuthPassword: os.Getenv("BOOKRR_AUTH_PASSWORD"),
+		Unit3DURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_URL")), "/"),
+		Unit3DAPIKey: strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_API_KEY")),
 	}
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)
@@ -40,6 +47,14 @@ func Load() (Config, error) {
 	c.SyncInterval = d
 	if (c.AuthUser == "") != (c.AuthPassword == "") {
 		return c, fmt.Errorf("BOOKRR_AUTH_USER e BOOKRR_AUTH_PASSWORD vanno impostati insieme")
+	}
+	if (c.Unit3DURL == "") != (c.Unit3DAPIKey == "") {
+		return c, fmt.Errorf("BOOKRR_UNIT3D_URL e BOOKRR_UNIT3D_API_KEY vanno impostati insieme")
+	}
+	if c.Unit3DURL != "" {
+		if u, err := url.Parse(c.Unit3DURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return c, fmt.Errorf("BOOKRR_UNIT3D_URL %q non valido (es. https://tracker.example)", c.Unit3DURL)
+		}
 	}
 	return c, nil
 }

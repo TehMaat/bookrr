@@ -11,9 +11,10 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { api, type ArchiveInput, type TorrentInput } from "@/lib/api"
 import { buildTorrentInput, isValidHash } from "@/lib/manual"
-import { useAction } from "@/lib/queries"
+import { useAction, useInfo } from "@/lib/queries"
 
 export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const info = useInfo()
   const [name, setName] = useState("")
   const [hash, setHash] = useState("")
   const [size, setSize] = useState("")
@@ -67,7 +68,11 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
                 id="t-hash"
                 value={hash}
                 onChange={(e) => setHash(e.target.value)}
-                placeholder="Opzionale: se lo inserisci, bookrr lo riconosce quando torna su un client"
+                placeholder={
+                  info.data?.unit3d
+                    ? "Opzionale: se lo lasci vuoto, bookrr lo cerca per nome sul tracker UNIT3D"
+                    : "Opzionale: se lo inserisci, bookrr lo riconosce quando torna su un client"
+                }
                 className="font-mono text-sm"
                 aria-invalid={!hashValid}
               />

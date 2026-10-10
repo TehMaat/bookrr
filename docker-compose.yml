@@ -21,3 +21,6 @@ services:
       # Login opzionale per l'interfaccia web
       # BOOKRR_AUTH_USER: admin
       # BOOKRR_AUTH_PASSWORD: cambiami
+      # Tracker UNIT3D dove cercare l'hash dei torrent aggiunti senza
+      # BOOKRR_UNIT3D_URL: https://tracker.example
+      # BOOKRR_UNIT3D_API_KEY: la-tua-api-key

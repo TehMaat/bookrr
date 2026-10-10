@@ -11,6 +11,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🔔 **Rimozioni delle Personal Release**: quando un torrent con tag `Personal Release` sparisce da tutti i client (rilevato dalla sincronizzazione o ricevuto via webhook) viene evidenziato e bookrr ti chiede **dove è stato spostato** (disco, adottato, eliminato, altro).
 - ✍️ **Dati manuali**: aggiungi torrent che non sono su nessun client, note, adozioni e archivi.
 - 📥 **Import degli archiviati** da CSV/Excel: ogni riga viene salvata esattamente come se l'avessi inserita con "Aggiungi".
+- 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
 Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro.
@@ -44,6 +45,7 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_RELEASE_TAG` | `Personal Release` | Tag qBittorrent che identifica le tue release (maiuscole/minuscole indifferenti). |
 | `BOOKRR_WEBHOOK_TOKEN` | — | Se impostato, il webhook richiede il token (`?token=…`, header `X-Bookrr-Token` o `Authorization: Bearer …`). |
 | `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` | — | Se impostati, l'interfaccia e le API richiedono login (HTTP Basic). |
+| `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza. |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
 | `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
 | `TZ` | — | Fuso orario dei log (es. `Europe/Rome`). |
@@ -146,6 +148,18 @@ In **Torrent → Importa** puoi caricare (o incollare) un file CSV con molti tor
 
 Prima dell'import ogni riga viene verificata (anche dal server: hash già presente, ripetuto nel file, …). L'import è tutto-o-niente: se una riga non va bene non viene scritto nulla. Il form e l'import usano lo stesso codice (`POST /api/torrents` e `POST /api/torrents/import` con gli stessi campi), quindi i dati salvati sono identici.
 
+### Hash automatico da UNIT3D
+
+Se imposti `BOOKRR_UNIT3D_URL` e `BOOKRR_UNIT3D_API_KEY`, i torrent aggiunti a mano o importati **senza hash** vengono cercati in background sul tracker:
+
+1. bookrr chiama `GET /api/torrents/filter?name=…` e sceglie il torrent con **lo stesso nome** (maiuscole, punti e underscore non contano); se più torrent hanno lo stesso nome usa la dimensione per scegliere, altrimenti non indovina;
+2. l'hash viene letto da `info_hash` o dal magnet link quando il tracker li fornisce, altrimenti bookrr scarica il file `.torrent` (con il link di download della tua API) e lo calcola;
+3. il torrent prende l'hash vero, con spostamenti, adozioni e note. Se bookrr conosce già quell'hash (per esempio perché il torrent è ancora su un client) i due vengono uniti in uno solo.
+
+La ricerca parte subito dopo l'import e poi ogni ora. UNIT3D permette 30 richieste API al minuto, quindi bookrr ne fa al massimo una ogni 2,5 secondi (una o due per torrent, circa 12–24 torrent al minuto): un import grande viene completato in background mentre continui a usare bookrr. I torrent non trovati (nome diverso, più risultati) mostrano il motivo nella scheda del torrent e vengono ricercati dopo 24 ore; dalla scheda puoi anche lanciare subito la ricerca (`POST /api/torrents/{hash}/lookup-hash`).
+
+> UNIT3D aggiunge il nome del tracker al file .torrent, quindi lo stesso contenuto ha un hash diverso su ogni tracker: bookrr usa quello del tracker configurato, che è lo stesso caricato nel tuo client.
+
 ## API
 
 Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/sync`, …). Vedi `internal/api/server.go`.
@@ -176,5 +190,6 @@ internal/qbit     client minimale per la Web API di qBittorrent
 internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
 internal/syncer   sincronizzazione periodica
+internal/unit3d   ricerca dell'hash sul tracker UNIT3D
 web/              frontend React + Vite + Tailwind + shadcn/ui
 ```

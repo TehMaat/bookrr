@@ -143,7 +143,12 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
 
       <AdopterFormDialog open={open} adopter={editing} onOpenChange={setOpen} />
       <AddTorrentsDialog adopter={adding} torrents={all} onClose={() => setAdding(null)} />
-      <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} />
+      <TorrentSheet
+        torrent={selectedTorrent}
+        onClose={() => setSelected(null)}
+        onResolve={onResolve}
+        onHashChange={setSelected}
+      />
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
