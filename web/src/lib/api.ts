@@ -137,6 +137,8 @@ export type TrackerCandidate = {
   detailsLink: string
   /** Share of words in common with the torrent name, 0-100. */
   score: number
+  /** Same release written differently: title, formats and group agree. */
+  match: boolean
 }
 
 export type Info = {

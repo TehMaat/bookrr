@@ -91,7 +91,13 @@ export function TrackerPickDialog({
                   <div className="min-w-0 flex-1">
                     <div className="font-medium break-all">{c.name}</div>
                     <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                      <Badge variant={c.score >= 50 ? "success" : "secondary"}>{c.score}% parole in comune</Badge>
+                      {c.match ? (
+                        <Badge variant="success">
+                          <Check /> Stessa release
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">{c.score}% parole in comune</Badge>
+                      )}
                       <span>{formatBytes(c.size)}</span>
                       {c.createdAt && <span>caricato il {formatDate(c.createdAt)}</span>}
                       {c.detailsLink && (

@@ -78,6 +78,8 @@ type Candidate struct {
 	DetailsLink string `json:"detailsLink"`
 	// Score is the share of words the two names have in common (0-100).
 	Score int `json:"score"`
+	// Match: same release written differently (title, formats, group).
+	Match bool `json:"match"`
 }
 
 type torrent struct {
@@ -124,9 +126,10 @@ func (c *Client) search(ctx context.Context, query string) ([]torrent, error) {
 
 // FindHash looks the name up on the tracker and returns the torrent with
 // exactly that name (size, if known, picks between equal names). A name
-// written differently ("AD.ASTRA.2019.REMUX…" for "Ad Astra 2019 … REMUX")
-// is accepted only when the tracker has a single torrent containing every
-// word of it.
+// written differently ("Criminal.Minds.S19…DDP5.1…HDR10.H.265-MaTiTa" for
+// "Criminal Minds S19 … DD+ 5.1 … HDR10+ H.265-MaTiTa") is accepted when
+// title, season or year, resolution, source, HDR, codecs, languages and
+// group all agree (see sameRelease).
 func (c *Client) FindHash(ctx context.Context, name string, size int64) (Match, error) {
 	queries := []string{name}
 	if words := strings.Join(uniq(tokens(name)), " "); words != "" && words != name {
@@ -178,6 +181,7 @@ func (c *Client) Candidates(ctx context.Context, name, query string, size int64)
 			out = append(out, Candidate{
 				ID: string(t.ID), Name: a.Name, Size: int64(a.Size), CreatedAt: a.CreatedAt,
 				DetailsLink: a.DetailsLink, Score: score(name, a.Name),
+				Match: normName(name) == normName(a.Name) || sameRelease(name, a.Name),
 			})
 		}
 		if len(out) > 0 {
@@ -185,6 +189,9 @@ func (c *Client) Candidates(ctx context.Context, name, query string, size int64)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Match != out[j].Match {
+			return out[i].Match
+		}
 		if out[i].Score != out[j].Score {
 			return out[i].Score > out[j].Score
 		}
@@ -237,9 +244,13 @@ func pick(ts []torrent, name string, size int64) (torrent, error) {
 			same = append(same, t)
 		}
 	}
-	if len(same) == 0 && len(ts) == 1 && containsWords(ts[0].Attributes.Name, name) &&
-		(size == 0 || sizeGap(int64(ts[0].Attributes.Size), size) <= 0.02) {
-		same = ts
+	if len(same) == 0 {
+		// Same release written differently: same title and formats, same group.
+		for _, t := range ts {
+			if sameRelease(name, t.Attributes.Name) && sizeGap(int64(t.Attributes.Size), size) <= 0.05 {
+				same = append(same, t)
+			}
+		}
 	}
 	if len(same) > 1 && size > 0 {
 		var sized []torrent
@@ -298,20 +309,6 @@ func wordSet(s string) map[string]bool {
 		set[w] = true
 	}
 	return set
-}
-
-// containsWords reports whether every word of name appears in candidate.
-func containsWords(candidate, name string) bool {
-	have, want := wordSet(candidate), wordSet(name)
-	if len(want) == 0 {
-		return false
-	}
-	for w := range want {
-		if !have[w] {
-			return false
-		}
-	}
-	return true
 }
 
 // score is the share of words the two names have in common (Jaccard, 0-100).

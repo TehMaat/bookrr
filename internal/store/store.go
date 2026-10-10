@@ -155,6 +155,10 @@ ALTER TABLE torrents ADD COLUMN tracker_url TEXT NOT NULL DEFAULT '';
 -- The tracker lookup got smarter: try again the torrents it missed.
 UPDATE torrents SET hash_lookup_at = NULL WHERE substr(hash, 1, 7) = 'manual-';
 `,
+	`
+-- Names are now compared by release (formats and group): try again.
+UPDATE torrents SET hash_lookup_at = NULL WHERE substr(hash, 1, 7) = 'manual-';
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {
