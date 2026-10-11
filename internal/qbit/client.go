@@ -183,3 +183,12 @@ func (c *Client) DeleteTorrent(ctx context.Context, hash string, deleteFiles boo
 		"deleteFiles": {fmt.Sprint(deleteFiles)},
 	})
 }
+
+// RemoveTags removes the tags from the torrents. qBittorrent succeeds even
+// for unknown hashes and for tags a torrent does not have.
+func (c *Client) RemoveTags(ctx context.Context, hashes, tags []string) error {
+	return c.post(ctx, "/api/v2/torrents/removeTags", url.Values{
+		"hashes": {strings.Join(hashes, "|")},
+		"tags":   {strings.Join(tags, ",")},
+	})
+}

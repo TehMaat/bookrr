@@ -70,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/releases", s.listReleases)
 	mux.HandleFunc("POST /api/releases/sync", s.syncReleases)
 	mux.HandleFunc("POST /api/releases/add", s.addReleases)
+	mux.HandleFunc("POST /api/releases/unflag", s.unflagReleases)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)

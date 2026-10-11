@@ -16,7 +16,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - ✍️ **Dati manuali**: aggiungi torrent che non sono su nessun client, note, adozioni e archivi.
 - 📥 **Import degli archiviati** da CSV/Excel: ogni riga viene salvata esattamente come se l'avessi inserita con "Aggiungi".
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
-- 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
+- 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -229,7 +229,9 @@ L'aggiornamento parte all'avvio, poi ogni `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 o
 
 In cima alla pagina sono evidenziate le **Personal Release di bookrr che non risultano tra i tuoi upload**: cancellate o sostituite sul tracker, caricate su un altro tracker o aggiunte senza hash (i torrent su un client che annunciano a un altro dominio non vengono elencati).
 
-API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`.
+Se non sono tue release, **togli il flag** a una (icona accanto al nome) o a tutte (**Togli il flag a tutte**): bookrr toglie il tag `Personal Release` anche dai torrent sui client qBittorrent (solo il tag: torrent e file restano dove sono) e non le segnala più quando spariscono. Se un client non risponde, i torrent che ha restano Personal Release e puoi riprovare.
+
+API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`, `POST /api/releases/unflag` con `{"hashes": ["…"]}` o `{"all": true}` (toglie il flag).
 
 ### Release archiviabili
 

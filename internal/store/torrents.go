@@ -557,3 +557,107 @@ func (s *Store) DeleteArchive(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+// TaggedLocation is a torrent on a client with the release tag, written as
+// it is on that client.
+type TaggedLocation struct {
+	Hash     string
+	ClientID int64
+	Tag      string
+}
+
+// ReleaseTagLocations returns the clients where the given torrents carry the
+// release tag.
+func (s *Store) ReleaseTagLocations(ctx context.Context, hashes []string, releaseTag string) ([]TaggedLocation, error) {
+	want := map[string]bool{}
+	for _, h := range hashes {
+		want[h] = true
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT hash, client_id, tags FROM locations ORDER BY client_id, hash`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []TaggedLocation{}
+	for rows.Next() {
+		var l TaggedLocation
+		var tags string
+		if err := rows.Scan(&l.Hash, &l.ClientID, &tags); err != nil {
+			return nil, err
+		}
+		if !want[l.Hash] {
+			continue
+		}
+		for _, t := range SplitTags(tags) {
+			if strings.EqualFold(t, releaseTag) {
+				l.Tag = t
+				out = append(out, l)
+				break
+			}
+		}
+	}
+	return out, rows.Err()
+}
+
+// UnflagPersonalReleases takes the given torrents out of the personal
+// releases: the release tag is dropped from their tags and from the
+// locations where it was removed on the client (done). A torrent still
+// tagged on another client keeps the flag, as the next sync would set it
+// again. It returns how many torrents lost the flag.
+func (s *Store) UnflagPersonalReleases(ctx context.Context, hashes []string, done []TaggedLocation, releaseTag string) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	for _, l := range done {
+		var tags string
+		err := tx.QueryRowContext(ctx, `SELECT tags FROM locations WHERE hash = ? AND client_id = ?`, l.Hash, l.ClientID).Scan(&tags)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE locations SET tags = ? WHERE hash = ? AND client_id = ?`,
+			withoutTag(tags, releaseTag), l.Hash, l.ClientID); err != nil {
+			return 0, err
+		}
+	}
+
+	ts, n := now(), 0
+	for _, h := range hashes {
+		var tags string
+		var personal bool
+		err := tx.QueryRowContext(ctx, `
+SELECT tags, personal_release FROM torrents t WHERE hash = ? AND NOT EXISTS (
+	SELECT 1 FROM locations l WHERE l.hash = t.hash
+	AND instr(',' || lower(l.tags) || ',', ',' || lower(?) || ',') > 0)`, h, releaseTag).Scan(&tags, &personal)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE torrents SET personal_release = 0, tags = ?, updated_at = ? WHERE hash = ?`,
+			withoutTag(tags, releaseTag), ts, h); err != nil {
+			return 0, err
+		}
+		if personal {
+			n++
+		}
+	}
+	return n, tx.Commit()
+}
+
+// withoutTag returns the tag list without tag, ignoring case.
+func withoutTag(raw, tag string) string {
+	out := []string{}
+	for _, t := range SplitTags(raw) {
+		if !strings.EqualFold(t, tag) {
+			out = append(out, t)
+		}
+	}
+	return strings.Join(out, ",")
+}

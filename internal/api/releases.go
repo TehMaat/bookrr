@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/tehmaat/bookrr/internal/store"
 )
@@ -38,20 +41,30 @@ func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
 	}
 	out["syncedAt"] = synced
 	if synced != nil && s.history != nil {
-		missing, err := s.store.PersonalReleasesNotOnTracker(ctx)
+		list, err := s.notOnTracker(ctx)
 		if err != nil {
 			s.fail(w, err)
 			return
 		}
-		list := []notOnTracker{}
-		for _, m := range missing {
-			if sameSite(m.Tracker, s.cfg.Unit3DURL) {
-				list = append(list, notOnTracker{Hash: m.Hash, Name: m.Name, Tracker: m.Tracker})
-			}
-		}
 		out["notOnTracker"] = list
 	}
 	writeJSON(w, 200, out)
+}
+
+// notOnTracker returns the personal releases of bookrr from this tracker
+// (or from no known tracker) that are not among the uploads.
+func (s *Server) notOnTracker(ctx context.Context) ([]notOnTracker, error) {
+	missing, err := s.store.PersonalReleasesNotOnTracker(ctx)
+	if err != nil {
+		return nil, err
+	}
+	list := []notOnTracker{}
+	for _, m := range missing {
+		if sameSite(m.Tracker, s.cfg.Unit3DURL) {
+			list = append(list, notOnTracker{Hash: m.Hash, Name: m.Name, Tracker: m.Tracker})
+		}
+	}
+	return list, nil
 }
 
 // sameSite reports whether a torrent's announce URL may belong to the
@@ -115,4 +128,88 @@ func (s *Server) addReleases(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("release del tracker aggiunte a bookrr", "count", added)
 	writeJSON(w, http.StatusCreated, map[string]int{"added": added})
+}
+
+// unflagReleases takes torrents out of the personal releases, removing the
+// release tag on the clients too: {"hashes": ["…"]}, or {"all": true} for
+// every personal release not among the uploads on the tracker. A client that
+// fails keeps its tag, and the flag, on the torrents it has.
+func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Hashes []string `json:"hashes"`
+		All    bool     `json:"all"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	ctx := r.Context()
+	if in.All {
+		in.Hashes = nil
+		if s.history != nil {
+			list, err := s.notOnTracker(ctx)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			for _, m := range list {
+				in.Hashes = append(in.Hashes, m.Hash)
+			}
+		}
+	}
+	if len(in.Hashes) == 0 {
+		writeError(w, http.StatusBadRequest, "nessun torrent indicato")
+		return
+	}
+
+	tag := s.cfg.ReleaseTag
+	locs, err := s.store.ReleaseTagLocations(ctx, in.Hashes, tag)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	byClient := map[int64][]store.TaggedLocation{}
+	order := []int64{}
+	for _, l := range locs {
+		if _, ok := byClient[l.ClientID]; !ok {
+			order = append(order, l.ClientID)
+		}
+		byClient[l.ClientID] = append(byClient[l.ClientID], l)
+	}
+	done, failed := []store.TaggedLocation{}, []string{}
+	for _, id := range order {
+		c, err := s.store.GetClient(ctx, id)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		hashes, tags, seen := []string{}, []string{}, map[string]bool{}
+		for _, l := range byClient[id] {
+			hashes = append(hashes, l.Hash)
+			if !seen[l.Tag] {
+				seen[l.Tag] = true
+				tags = append(tags, l.Tag)
+			}
+		}
+		qctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		err = s.syncer.Qbit(c).RemoveTags(qctx, hashes, tags)
+		cancel()
+		if err != nil {
+			slog.Warn("tag non rimosso dal client", "client", c.Name, "count", len(hashes), "err", err)
+			failed = append(failed, fmt.Sprintf("%s: %v", c.Name, err))
+			continue
+		}
+		done = append(done, byClient[id]...)
+	}
+
+	n, err := s.store.UnflagPersonalReleases(ctx, in.Hashes, done, tag)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	slog.Info("flag Personal Release tolto", "count", n, "fromClients", len(done))
+	if n == 0 && len(failed) > 0 {
+		writeError(w, http.StatusBadGateway, "tag non rimosso: "+strings.Join(failed, "; "))
+		return
+	}
+	writeJSON(w, 200, map[string]any{"unflagged": n, "errors": failed})
 }
