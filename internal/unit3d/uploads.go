@@ -32,6 +32,7 @@ type Upload struct {
 	PersonalRelease bool
 	CreatedAt       string // RFC 3339 when the tracker's format is understood
 	DetailsLink     string
+	MediaInfo       string // MediaInfo report, when the uploader gave one
 
 	t torrent // what is needed to compute the hash
 }
@@ -49,6 +50,7 @@ type uploadAttrs struct {
 	ImdbID          flexInt  `json:"imdb_id"`
 	TvdbID          flexInt  `json:"tvdb_id"`
 	PersonalRelease flexBool `json:"personal_release"`
+	MediaInfo       *string  `json:"media_info"`
 }
 
 // flexInt accepts a number, a numeric string ("12", "tt0111161"), null or "".
@@ -118,21 +120,37 @@ const maxUploadPages = 500
 // (the tracker shows them because the request comes from their uploader),
 // following the pages of the answer.
 func (c *Client) Uploads(ctx context.Context, username string) ([]Upload, error) {
+	return c.filter(ctx, url.Values{"uploader": {username}}, username)
+}
+
+// ByTmdb lists every torrent of the tracker with this TMDB id (a movie or
+// a series: TMDB numbers them separately, the caller tells them apart by
+// category), following the pages of the answer. username is the user the
+// API key belongs to (see filter).
+func (c *Client) ByTmdb(ctx context.Context, tmdbID int64, username string) ([]Upload, error) {
+	return c.filter(ctx, url.Values{"tmdbId": {strconv.FormatInt(tmdbID, 10)}}, username)
+}
+
+// filter reads every page of /api/torrents/filter with these parameters.
+func (c *Client) filter(ctx context.Context, params url.Values, username string) ([]Upload, error) {
 	// The tracker caches /filter answers for a few minutes by URL, without
 	// the token, for every user: a parameter it ignores, unique to this
 	// user, keeps us from getting someone else's answer, which lacks the
 	// anonymous uploads.
-	base := url.Values{"uploader": {username}, "perPage": {"100"}, "bookrr_user": {username}}
+	base := url.Values{"perPage": {"100"}, "bookrr_user": {username}}
+	for k, v := range params {
+		base[k] = v
+	}
 	q := base
 	var out []Upload
 	seen := map[string]bool{}
 	for page := 0; ; page++ {
 		if page >= maxUploadPages {
-			return nil, fmt.Errorf("troppe pagine di upload (oltre %d)", maxUploadPages)
+			return nil, fmt.Errorf("troppe pagine di torrent (oltre %d)", maxUploadPages)
 		}
 		key := q.Encode()
 		if seen[key] {
-			return nil, errors.New("il tracker ripete la stessa pagina di upload")
+			return nil, errors.New("il tracker ripete la stessa pagina di torrent")
 		}
 		seen[key] = true
 		var res struct {
@@ -224,7 +242,7 @@ func parseUpload(raw json.RawMessage) (Upload, error) {
 		Seeders: int64(x.Seeders), Leechers: int64(x.Leechers), TimesCompleted: int64(x.TimesCompleted),
 		TmdbID: int64(x.TmdbID), ImdbID: int64(x.ImdbID), TvdbID: int64(x.TvdbID),
 		PersonalRelease: bool(x.PersonalRelease), CreatedAt: normTime(a.CreatedAt), DetailsLink: a.DetailsLink,
-		t: t,
+		MediaInfo: deref(x.MediaInfo), t: t,
 	}, nil
 }
 

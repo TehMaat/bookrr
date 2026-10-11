@@ -17,6 +17,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 📥 **Import degli archiviati** da CSV/Excel: ogni riga viene salvata esattamente come se l'avessi inserita con "Aggiungi".
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
+- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Controllo ogni notte, stagioni da TMDB.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -66,6 +67,8 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` | — | Se impostati, l'interfaccia e le API richiedono login (HTTP Basic). |
 | `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza e per lo storico delle tue release. |
 | `BOOKRR_UNIT3D_RELEASES_INTERVAL` | `6h` | Ogni quanto rileggere i tuoi upload sul tracker per lo storico release (minimo `15m`). |
+| `BOOKRR_TMDB_API_KEY` | — | Chiave API (v3) o token di lettura (v4) di [TMDB](https://www.themoviedb.org/settings/api): con il tracker UNIT3D attiva il controllo delle **stagioni mancanti**. |
+| `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno delle stagioni mancanti (ora locale, `TZ`). |
 | `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
 | `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
@@ -231,6 +234,32 @@ In cima alla pagina sono evidenziate le **Personal Release di bookrr che non ris
 
 API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`.
 
+### Stagioni mancanti
+
+Con il tracker UNIT3D e `BOOKRR_TMDB_API_KEY` configurati, la scheda **Mancanti** dice, per ogni serie TV di cui hai caricato almeno una stagione, **quali stagioni mancano nella stessa qualità** e se sul tracker le hanno già caricate altri. Senza una delle due chiavi la funzione è disattivata e la pagina spiega cosa manca.
+
+Regole:
+
+- contano solo i **season pack** (`S03`, `Stagione 3`) e i **pack di più stagioni o della serie intera** (`S01-S05`, `S01-05`, `S01.S02.S03`, `Season 1-3`, `Stagioni 1 e 2`, `Complete`); gli **episodi singoli** (`S01E01`, `S01E01-E10`) si ignorano, tuoi e degli altri. Un pack `Complete` senza numeri di stagione vale per le stagioni già uscite quando è stato caricato;
+- **stessa qualità** = stesso tipo (WEB-DL, Remux, Encode… come lo indica il tracker) + stessa risoluzione + stesso insieme di formati HDR (DV, HDR, HLG) + stesse lingue audio. Quindi `2160p WEB-DL DV HDR ITA ENG` è diverso da `2160p WEB-DL DV HDR ITA` e da `2160p WEB-DL HDR ITA ENG`. HDR e lingue si leggono dal nome; se il nome non indica le lingue (o dice solo `MULTI`) si usano le tracce audio del *media info* del torrent;
+- le **stagioni della serie** vengono da TMDB (`GET /tv/{id}`): esclusi gli speciali (stagione 0) e le stagioni non ancora uscite. Se sul tracker la release non ha l'id TMDB, bookrr lo cerca dall'id TVDB (`GET /find/{id}`); se non ci riesce la serie compare tra le **non verificabili**;
+- sul tracker bookrr fa **una ricerca per serie** (`GET /api/torrents/filter?tmdbId=…`, seguendo tutte le pagine, con le stesse precauzioni dello storico: al massimo una richiesta ogni 2,5 secondi e il parametro che evita la cache condivisa). TMDB numera film e serie separatamente, quindi vengono considerati solo i torrent nelle categorie dei tuoi upload della serie. Il numero di stagione si ricava dal nome.
+
+Per ogni serie e ogni tua qualità la griglia mostra ogni stagione come:
+
+| Stato | Significato |
+|---|---|
+| **Mia** | l'hai caricata tu in questa qualità |
+| **C'è, di altri** | caricata da altri nella stessa qualità |
+| **Solo altra qualità** | sul tracker c'è, ma solo in altre qualità (elencate nel dettaglio) |
+| **Assente** | non c'è sul tracker in nessuna qualità |
+
+Cliccando una stagione si aprono i torrent trovati, con il link alla pagina sul tracker. La lista mostra per ogni serie il numero di stagioni mancanti (la somma sulle tue qualità), i link alla serie sul tracker e su TMDB; si può cercare per nome, filtrare per qualità (risoluzione e tipo) e mostrare **solo le serie con mancanti**.
+
+Il controllo gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti.
+
+API: `GET /api/missing/series`, `POST /api/missing/check` (controlla ora).
+
 ### Release archiviabili
 
 Una tua release che è ancora su almeno un client è **archiviabile** quando altri la stanno già seminando: puoi toglierla dai client e archiviarla (o lasciarla agli adottatori). Il numero di seeder del tracker comprende anche te, una volta per ogni client che la semina, quindi:
@@ -255,7 +284,7 @@ API: `GET`/`PUT /api/settings` con `archiveMinSeeders`, `archiveMinCompleted`, `
 
 ## API
 
-Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/releases`, `/api/sync`, …). Vedi `internal/api/server.go`.
+Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/releases`, `/api/missing`, `/api/sync`, …). Vedi `internal/api/server.go`.
 
 ## Sviluppo
 
@@ -286,7 +315,9 @@ internal/qbit     client minimale per la Web API di qBittorrent
 internal/s3       client S3 minimale in sola lettura (ListObjectsV2, firma SigV4)
 internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
+internal/gaps     controllo delle stagioni mancanti delle serie caricate
 internal/syncer   sincronizzazione periodica
-internal/unit3d   tracker UNIT3D: ricerca dell'hash e storico delle release
+internal/tmdb     client minimale per The Movie Database
+internal/unit3d   tracker UNIT3D: ricerca dell'hash, storico delle release, qualità
 web/              frontend React + Vite + Tailwind + shadcn/ui
 ```

@@ -226,6 +226,20 @@ CREATE INDEX tracker_releases_hash ON tracker_releases(hash);
 -- archived (see archivable.go); NULL when it is not.
 ALTER TABLE tracker_releases ADD COLUMN archivable_since TEXT;
 `,
+	`
+-- Results of the checks for what is missing from a collection of the
+-- user's uploads: the seasons of a series (kind "series"), later the
+-- movies of a saga. One row per collection, the grid as JSON.
+CREATE TABLE gap_groups (
+	kind TEXT NOT NULL,
+	key TEXT NOT NULL,
+	title TEXT NOT NULL DEFAULT '',
+	missing INTEGER NOT NULL DEFAULT 0,
+	data TEXT NOT NULL DEFAULT '{}',
+	checked_at TEXT NOT NULL,
+	PRIMARY KEY (kind, key)
+);
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

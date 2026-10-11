@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
+import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, Server } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -7,6 +7,7 @@ import { AlertsPage } from "@/components/alerts-page"
 import { ClientsPage } from "@/components/clients-page"
 import { DisksPage } from "@/components/disks-page"
 import { Header } from "@/components/header"
+import { MissingPage } from "@/components/missing-page"
 import { ReleasesPage } from "@/components/releases-page"
 import { ResolveDialog } from "@/components/resolve-dialog"
 import { TorrentsPage } from "@/components/torrents-page"
@@ -17,7 +18,7 @@ import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
 import { useTheme } from "@/lib/theme"
 
-const tabs = ["torrents", "releases", "alerts", "disks", "adopters", "clients"] as const
+const tabs = ["torrents", "releases", "missing", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
 
 type Route = { tab: Tab; diskId: number | null }
@@ -62,6 +63,9 @@ export default function App() {
             <TabsTrigger value="releases">
               <CloudUpload /> Release
             </TabsTrigger>
+            <TabsTrigger value="missing">
+              <Puzzle /> Mancanti
+            </TabsTrigger>
             <TabsTrigger value="alerts">
               <BellRing /> Segnalazioni
               {openCount > 0 && (
@@ -85,6 +89,9 @@ export default function App() {
           </TabsContent>
           <TabsContent value="releases">
             <ReleasesPage onResolve={resolveOne} />
+          </TabsContent>
+          <TabsContent value="missing">
+            <MissingPage />
           </TabsContent>
           <TabsContent value="alerts">
             <AlertsPage onResolve={setResolving} />

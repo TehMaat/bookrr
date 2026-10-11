@@ -29,3 +29,8 @@ services:
       # BOOKRR_UNIT3D_API_KEY: la-tua-api-key
       # Ogni quanto rileggere i tuoi upload sul tracker (min 15m)
       # BOOKRR_UNIT3D_RELEASES_INTERVAL: 6h
+      # Chiave API TMDB (v3) o token di lettura (v4): con il tracker UNIT3D
+      # attiva il controllo delle stagioni mancanti (scheda Mancanti)
+      # BOOKRR_TMDB_API_KEY: la-tua-chiave-tmdb
+      # Ora del controllo notturno delle stagioni mancanti (ora locale)
+      # BOOKRR_MISSING_CHECK_AT: "04:00"
