@@ -1,4 +1,4 @@
-import { BookCheck, Laptop, Moon, RefreshCw, Sun } from "lucide-react"
+import { Laptop, Moon, RefreshCw, Sun } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -27,9 +27,7 @@ export function Header() {
     <header className="bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
         <div className="flex items-center gap-2 font-semibold">
-          <div className="bg-violet-600 text-white flex size-8 items-center justify-center rounded-lg">
-            <BookCheck className="size-5" />
-          </div>
+          <img src="/favicon.svg" alt="" className="size-8" />
           <span className="text-lg">bookrr</span>
           {info.data && (
             <Tooltip>

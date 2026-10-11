@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, BookCheck, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
+import { BellRing, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -92,7 +92,7 @@ export default function App() {
       </main>
       <ResolveDialog alerts={resolving} onClose={() => setResolving([])} />
       <footer className="text-muted-foreground flex items-center justify-center gap-1.5 py-6 text-xs">
-        <BookCheck className="size-3.5" /> bookrr
+        <img src="/favicon.svg" alt="" className="size-4" /> bookrr
       </footer>
     </div>
   )

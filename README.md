@@ -1,3 +1,5 @@
+<p align="center"><img src="web/public/favicon.svg" alt="Logo di bookrr" width="128"></p>
+
 # bookrr
 
 Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su quale disco d'archivio, chi li ha adottati) e **cosa è sparito** dai client.
