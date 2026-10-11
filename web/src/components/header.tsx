@@ -1,4 +1,4 @@
-import { Laptop, Moon, RefreshCw, Sun } from "lucide-react"
+import { Check, Laptop, Moon, Palette, RefreshCw, Sun } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -7,9 +7,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { accents, logoUrl } from "@/lib/accent"
 import { api } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { useAction, useInfo, useSyncState } from "@/lib/queries"
@@ -17,7 +19,7 @@ import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
 export function Header() {
-  const { setTheme } = useTheme()
+  const { setTheme, accent, setAccent } = useTheme()
   const info = useInfo()
   const sync = useSyncState()
   const syncNow = useAction(() => api.syncNow())
@@ -27,12 +29,12 @@ export function Header() {
     <header className="bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
         <div className="flex items-center gap-2 font-semibold">
-          <img src="/favicon.svg" alt="" className="size-8" />
+          <img src={logoUrl(accent)} alt="" className="size-8" />
           <span className="text-lg">bookrr</span>
           {info.data && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="violet" className="font-mono">
+                <Badge variant="brand" className="font-mono">
                   {info.data.version}
                 </Badge>
               </TooltipTrigger>
@@ -60,6 +62,29 @@ export function Header() {
             <RefreshCw className={cn(running && "animate-spin")} />
             <span className="hidden sm:inline">Sincronizza</span>
           </Button>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="Colore">
+                    <Palette />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Colore</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Colore della spada</DropdownMenuLabel>
+              {accents.map((a) => (
+                <DropdownMenuItem key={a.id} onClick={() => setAccent(a.id)}>
+                  <img src={logoUrl(a)} alt="" className="size-5" />
+                  <span>{a.label}</span>
+                  <span className="text-muted-foreground text-xs">{a.saber}</span>
+                  {a.id === accent.id && <Check className="ml-auto" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Tema">

@@ -13,18 +13,13 @@
     </filter>
   </defs>
   <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <!-- anello del sigillo -->
   <circle cx="32" cy="33" r="21" fill="none" stroke="#c4b5fd" stroke-width="1.5" opacity=".45"/>
-  <!-- lama di luce che sorge dal dorso del libro -->
   <path d="M32 7V40" stroke="#c4b5fd" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
-  <path d="M32 7V40" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-  <!-- pagine del testo sacro, aperte come ali -->
+  <path d="M32 7V40" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
   <path d="M30.5 38C25 33 17 30 6 22C8 33 9 42 13 47C19 47 25 49 30.5 54Z" fill="url(#page)"/>
   <path d="M33.5 38C39 33 47 30 58 22C56 33 55 42 51 47C45 47 39 49 33.5 54Z" fill="url(#page)"/>
-  <!-- elsa: il dorso del libro -->
   <rect x="30.5" y="38" width="3" height="17" rx="1" fill="#d4d4d8"/>
   <path d="M30.5 43h3M30.5 46h3M30.5 49h3" stroke="#52525b" stroke-width="1"/>
-  <!-- righe di scrittura antica -->
   <g stroke="#7c3aed" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="5 2.2 2 2.2 3.5 2.2" fill="none" opacity=".6">
     <path d="M11 32C17 35 22 37 27 40.5"/>
     <path d="M12.5 38C18 40 22 41.5 27 45"/>
