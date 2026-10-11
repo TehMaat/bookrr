@@ -266,6 +266,92 @@ export type Releases = {
   notOnTracker: { hash: string; name: string; tracker: string }[]
 }
 
+/** How a season stands in one of the user's qualities. */
+export type GapState = "mine" | "available" | "other_quality" | "absent"
+
+/** Quality of a release: type, resolution, HDR formats and audio languages. */
+export type Quality = {
+  key: string
+  /** "2160p WEB-DL DV HDR ITA ENG" */
+  label: string
+  type: string
+  resolution: string
+  hdr: string[]
+  langs: string[]
+}
+
+/** A torrent on the tracker. */
+export type GapRef = { id: number; name: string; url: string; quality: string; mine: boolean }
+
+export type GapCell = {
+  /** Number of the season. */
+  unit: number
+  state: GapState
+  /** In this quality for mine/available, in the other qualities for other_quality. */
+  torrents: GapRef[]
+  /** Labels of the qualities found, for other_quality. */
+  qualities: string[]
+}
+
+export type GapRow = {
+  quality: Quality
+  cells: GapCell[]
+  missing: number
+  available: number
+  otherQuality: number
+  absent: number
+}
+
+export type GapUnit = { number: number; name: string; airDate: string; episodes: number }
+
+/** A series the user uploaded at least a season pack of, with its seasons in each of their qualities. */
+export type SeriesGap = {
+  kind: "series"
+  key: string
+  title: string
+  year: string
+  tmdbId: number
+  tvdbId: number
+  /** unverifiable: no TMDB id, or unknown to TMDB. */
+  status: "ok" | "unverifiable"
+  note: string
+  /** The series on the tracker. */
+  searchUrl: string
+  units: GapUnit[]
+  rows: GapRow[]
+  /** The user's uploads of the series. */
+  mine: GapRef[]
+  missing: number
+  available: number
+  otherQuality: number
+  absent: number
+  checkedAt: string
+}
+
+export type MissingCheckState = {
+  running: boolean
+  lastRunAt: string | null
+  lastResult: string
+  lastError: string
+  nextRunAt: string | null
+  /** Series checked so far in the running check, out of total. */
+  done: number
+  total: number
+}
+
+export type MissingSeries = {
+  /** A UNIT3D tracker and a TMDB key are configured. */
+  enabled: boolean
+  /** Why it is off, when it is. */
+  disabledReason: string
+  state: MissingCheckState | null
+  /** End of the last complete check. */
+  checkedAt: string | null
+  /** Time of the nightly check, "04:00". */
+  checkAt: string
+  series: SeriesGap[]
+}
+
 export type Info = {
   version: string
   releaseTag: string
@@ -413,6 +499,10 @@ export const api = {
       "/api/releases/unflag",
       hashes === "all" ? { all: true } : { hashes }
     ),
+
+  missingSeries: () => request<MissingSeries>("GET", "/api/missing/series"),
+  /** Starts the check of the missing seasons now, in the background. */
+  checkMissing: () => request<MissingCheckState>("POST", "/api/missing/check"),
 
   alerts: (open = true) => request<Alert[]>("GET", `/api/alerts?open=${open ? 1 : 0}`),
   resolveAlert: (id: number, r: ResolveInput) => request<void>("POST", `/api/alerts/${id}/resolve`, r),

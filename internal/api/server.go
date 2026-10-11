@@ -23,6 +23,7 @@ import (
 
 	"github.com/tehmaat/bookrr/internal/bucket"
 	"github.com/tehmaat/bookrr/internal/config"
+	"github.com/tehmaat/bookrr/internal/gaps"
 	"github.com/tehmaat/bookrr/internal/qbit"
 	"github.com/tehmaat/bookrr/internal/smart"
 	"github.com/tehmaat/bookrr/internal/store"
@@ -37,12 +38,13 @@ type Server struct {
 	buckets *bucket.Scanner
 	hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
 	history *unit3d.History  // nil when no UNIT3D tracker is configured
+	missing *gaps.Checker    // nil without UNIT3D tracker or TMDB key
 	web     fs.FS
 	version string
 }
 
-func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, web fs.FS, version string) *Server {
-	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, history: history, web: web, version: version}
+func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, missing *gaps.Checker, web fs.FS, version string) *Server {
+	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, history: history, missing: missing, web: web, version: version}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -71,6 +73,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/releases/sync", s.syncReleases)
 	mux.HandleFunc("POST /api/releases/add", s.addReleases)
 	mux.HandleFunc("POST /api/releases/unflag", s.unflagReleases)
+	mux.HandleFunc("GET /api/missing/series", s.missingSeries)
+	mux.HandleFunc("POST /api/missing/check", s.checkMissing)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
