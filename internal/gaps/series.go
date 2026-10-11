@@ -96,7 +96,7 @@ func (c *Checker) checkSeries(ctx context.Context) (string, error) {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	c.update(func(s *State) { s.Total = len(ids) })
+	c.progress("series", len(ids))
 	var groups []*Group
 	for i, id := range ids {
 		g, err := c.series(ctx, id, byTmdb[id])

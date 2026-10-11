@@ -159,7 +159,7 @@ func TestCheckSeries(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Check(ctx)
-	if s := c.State(); s.LastError != "" || s.Running || s.Done != 2 || s.Total != 2 {
+	if s := c.State(); s.LastError != "" || s.Running || s.Phase != "" || !strings.HasPrefix(s.LastResult, "3 serie, ") {
 		t.Fatalf("state %+v", s)
 	}
 	stored, err := st.GapGroups(ctx, KindSeries)

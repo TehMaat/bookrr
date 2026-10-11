@@ -39,6 +39,13 @@ func TestMissingSeriesDisabled(t *testing.T) {
 		if tc.cfg.MissingCheckAt != 0 && out.CheckAt != "04:00" {
 			t.Errorf("check at %q", out.CheckAt)
 		}
+		var sagas struct {
+			Enabled bool  `json:"enabled"`
+			Sagas   []any `json:"sagas"`
+		}
+		if code := call(t, h, "GET", "/api/missing/sagas", nil, &sagas); code != http.StatusOK || sagas.Enabled || sagas.Sagas == nil {
+			t.Errorf("%+v: sagas code %d, %+v", tc.cfg, code, sagas)
+		}
 		if code := call(t, h, "POST", "/api/missing/check", nil, nil); code != http.StatusBadRequest {
 			t.Errorf("check while disabled: %d", code)
 		}

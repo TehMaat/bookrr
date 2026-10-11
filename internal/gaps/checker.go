@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,9 +42,11 @@ type State struct {
 	LastResult string  `json:"lastResult"`
 	LastError  string  `json:"lastError"`
 	NextRunAt  *string `json:"nextRunAt"`
-	// Progress of the running check: collections done out of the total.
-	Done  int `json:"done"`
-	Total int `json:"total"`
+	// Progress of the running check: what it is reading ("series",
+	// "movies", "sagas") and how many of them are done out of the total.
+	Phase string `json:"phase"`
+	Done  int    `json:"done"`
+	Total int    `json:"total"`
 }
 
 // New makes a checker that runs every day at hh:mm local time (at is in
@@ -88,7 +91,11 @@ func (c *Checker) nextRun(t time.Time) time.Time {
 // more than a day old (bookrr was off at night).
 func (c *Checker) Run(ctx context.Context) {
 	next := c.nextRun(c.now())
-	if last, err := c.store.GapsCheckedAt(ctx, KindSeries); err == nil {
+	for _, kind := range []string{KindSeries, KindSaga} {
+		last, err := c.store.GapsCheckedAt(ctx, kind)
+		if err != nil {
+			continue
+		}
 		t, perr := time.Parse(time.RFC3339, deref(last))
 		if last == nil || perr != nil || c.now().Sub(t) > 26*time.Hour {
 			if soon := c.now().Add(c.StartDelay); soon.Before(next) {
@@ -117,21 +124,38 @@ func (c *Checker) Run(ctx context.Context) {
 func (c *Checker) Check(ctx context.Context) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.update(func(s *State) { s.Running, s.LastError, s.Done, s.Total = true, "", 0, 0 })
-	res, err := c.checkSeries(ctx)
+	c.update(func(s *State) { s.Running, s.LastError, s.Phase, s.Done, s.Total = true, "", "", 0, 0 })
+	// Each check keeps its last results if it fails, the other goes on.
+	var results, errs []string
+	for _, ch := range []struct {
+		name string
+		run  func(context.Context) (string, error)
+	}{{"stagioni mancanti", c.checkSeries}, {"film mancanti delle saghe", c.checkSagas}} {
+		res, err := ch.run(ctx)
+		if res != "" {
+			results = append(results, res)
+		}
+		switch {
+		case err != nil && ctx.Err() == nil:
+			slog.Warn("controllo "+ch.name, "err", err)
+			errs = append(errs, err.Error())
+		case err == nil:
+			slog.Info("controllo "+ch.name, "result", res)
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
 	ts := c.now().UTC().Format(time.RFC3339)
 	c.update(func(s *State) {
-		s.Running, s.LastRunAt, s.LastResult = false, &ts, res
-		if err != nil {
-			s.LastError = err.Error()
-		}
+		s.Running, s.LastRunAt, s.LastResult, s.Phase = false, &ts, strings.Join(results, " · "), ""
+		s.LastError = strings.Join(errs, "; ")
 	})
-	switch {
-	case err != nil && ctx.Err() == nil:
-		slog.Warn("controllo stagioni mancanti", "err", err)
-	case err == nil:
-		slog.Info("controllo stagioni mancanti", "result", res)
-	}
+}
+
+// progress starts a phase of the check with total things to read.
+func (c *Checker) progress(phase string, total int) {
+	c.update(func(s *State) { s.Phase, s.Done, s.Total = phase, 0, total })
 }
 
 // user is the name the tracker's API key belongs to, asked once.

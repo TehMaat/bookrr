@@ -25,9 +25,10 @@ type Config struct {
 	Unit3DAPIKey string
 	// How often the user's uploads on the UNIT3D tracker are read.
 	Unit3DReleasesInterval time.Duration
-	// The Movie Database key, for the seasons of the series uploaded.
+	// The Movie Database key, for the seasons of the series and the films
+	// of the sagas uploaded.
 	TMDBAPIKey string
-	// Time of the nightly check of the missing seasons, in minutes after
+	// Time of the nightly check of the missing seasons and films, in minutes after
 	// midnight (local time).
 	MissingCheckAt int
 }

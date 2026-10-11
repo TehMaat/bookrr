@@ -162,6 +162,14 @@ func ParsePack(name string) (Pack, bool) {
 	return Pack{Seasons: r.pack.seasons, Complete: r.pack.complete}, true
 }
 
+// Episodic reports whether a release name speaks of seasons or episodes
+// ("S01", "S01E02", "Season 2"): it is not a film. "Complete" alone is
+// not enough, full discs say it too.
+func Episodic(name string) bool {
+	r := parseRelease(name)
+	return r.season != "" || len(r.pack.seasons) > 0 || r.pack.episode
+}
+
 // Title is the title a release name starts with, in lower case
 // ("Criminal.Minds.S19.2160p…" → "criminal minds").
 func Title(name string) string { return parseRelease(name).title }

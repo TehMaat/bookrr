@@ -87,7 +87,7 @@ func main() {
 	}()
 
 	slog.Info("bookrr avviato", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
-		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasons", missing != nil)
+		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasonsAndSagas", missing != nil)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server", "err", err)
 		os.Exit(1)
