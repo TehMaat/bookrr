@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { BellRing, BookCheck, CloudUpload, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
+import { BellRing, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -12,8 +13,10 @@ import { ResolveDialog } from "@/components/resolve-dialog"
 import { TorrentsPage } from "@/components/torrents-page"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { logoUrl } from "@/lib/accent"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
+import { useTheme } from "@/lib/theme"
 
 const tabs = ["torrents", "releases", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
@@ -33,6 +36,7 @@ export default function App() {
   const [resolving, setResolving] = useState<Alert[]>([])
   const resolveOne = (a: Alert) => setResolving([a])
   const alerts = useAlerts(true)
+  const { accent } = useTheme()
   const openCount = alerts.data?.length ?? 0
 
   useEffect(() => {
@@ -99,7 +103,7 @@ export default function App() {
       </main>
       <ResolveDialog alerts={resolving} onClose={() => setResolving([])} />
       <footer className="text-muted-foreground flex items-center justify-center gap-1.5 py-6 text-xs">
-        <BookCheck className="size-3.5" /> bookrr
+        <img src={logoUrl(accent)} alt="" className="size-4" /> bookrr
       </footer>
     </div>
   )
