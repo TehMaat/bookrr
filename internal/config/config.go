@@ -23,6 +23,8 @@ type Config struct {
 	// UNIT3D tracker used to find the info hash of torrents added without one.
 	Unit3DURL    string
 	Unit3DAPIKey string
+	// How often the user's uploads on the UNIT3D tracker are read.
+	Unit3DReleasesInterval time.Duration
 }
 
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "bookrr.db") }
@@ -52,6 +54,11 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("BOOKRR_S3_SCAN_INTERVAL %q non valido: %w", interval, err)
 	}
 	c.S3ScanInterval = max(d, time.Minute)
+	interval = env("BOOKRR_UNIT3D_RELEASES_INTERVAL", "6h")
+	if d, err = time.ParseDuration(interval); err != nil {
+		return c, fmt.Errorf("BOOKRR_UNIT3D_RELEASES_INTERVAL %q non valido: %w", interval, err)
+	}
+	c.Unit3DReleasesInterval = max(d, 15*time.Minute)
 	if (c.AuthUser == "") != (c.AuthPassword == "") {
 		return c, fmt.Errorf("BOOKRR_AUTH_USER e BOOKRR_AUTH_PASSWORD vanno impostati insieme")
 	}

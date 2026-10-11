@@ -36,12 +36,13 @@ type Server struct {
 	syncer  *syncer.Syncer
 	buckets *bucket.Scanner
 	hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
+	history *unit3d.History  // nil when no UNIT3D tracker is configured
 	web     fs.FS
 	version string
 }
 
-func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, web fs.FS, version string) *Server {
-	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, web: web, version: version}
+func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, web fs.FS, version string) *Server {
+	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, history: history, web: web, version: version}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -65,6 +66,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/archives/{id}", s.deleteArchive)
 	mux.HandleFunc("POST /api/torrents/{hash}/adoptions", s.addAdoption)
 	mux.HandleFunc("DELETE /api/adoptions/{id}", s.deleteAdoption)
+
+	mux.HandleFunc("GET /api/releases", s.listReleases)
+	mux.HandleFunc("POST /api/releases/sync", s.syncReleases)
+	mux.HandleFunc("POST /api/releases/add", s.addReleases)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
@@ -223,6 +228,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"s3ScanInterval":       shortDuration(s.cfg.S3ScanInterval),
 		"webhookTokenRequired": s.cfg.WebhookToken != "",
 		"unit3d":               s.hashes != nil,
+		"releasesInterval":     shortDuration(s.cfg.Unit3DReleasesInterval),
 	})
 }
 
