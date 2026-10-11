@@ -489,6 +489,16 @@ export const api = {
   /** Adds the given uploads to bookrr as personal releases; with all, every unknown one. */
   addReleases: (ids: number[] | "all") =>
     request<{ added: number }>("POST", "/api/releases/add", ids === "all" ? { all: true } : { ids }),
+  /**
+   * Takes torrents out of the personal releases, removing the tag on the clients too; with all, every one not among
+   * the uploads. errors lists the clients where the tag could not be removed.
+   */
+  unflagReleases: (hashes: string[] | "all") =>
+    request<{ unflagged: number; errors: string[] }>(
+      "POST",
+      "/api/releases/unflag",
+      hashes === "all" ? { all: true } : { hashes }
+    ),
 
   missingSeries: () => request<MissingSeries>("GET", "/api/missing/series"),
   /** Starts the check of the missing seasons now, in the background. */

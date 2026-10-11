@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Server,
+  TagX,
   TriangleAlert,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -36,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -105,9 +106,11 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [addingAll, setAddingAll] = useState(false)
+  const [unflaggingAll, setUnflaggingAll] = useState(false)
 
   const syncNow = useAction(() => api.syncReleases())
   const add = useAction((ids: number[] | "all") => api.addReleases(ids))
+  const unflag = useAction((hashes: string[] | "all") => api.unflagReleases(hashes))
 
   const data = releases.data
   const all = useMemo(() => data?.releases ?? [], [data])
@@ -185,6 +188,13 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         setSelected(r.hash)
       },
     })
+
+  const tag = info.data?.releaseTag ?? "Personal Release"
+  const unflagDone = (r: { unflagged: number; errors: string[] }) => {
+    const what = r.unflagged === 1 ? "1 torrent non è più" : `${r.unflagged} torrent non sono più`
+    if (r.errors.length === 0) toast.success(`${what} ${tag}`)
+    else toast.warning(`${what} ${tag}`, { description: `Tag non rimosso da: ${r.errors.join("; ")}` })
+  }
 
   const stats: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
     { key: "all", label: "Totale", icon: Layers },
@@ -280,19 +290,25 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TriangleAlert className="size-4 text-amber-600" />
-              {info.data?.releaseTag ?? "Personal Release"} non trovate tra i tuoi upload ({data.notOnTracker.length})
+              {tag} non trovate tra i tuoi upload ({data.notOnTracker.length})
             </CardTitle>
             <CardDescription>
-              Torrent di bookrr con il flag Personal Release il cui hash non è tra i tuoi upload sul tracker: cancellati o
-              sostituiti, caricati altrove, o aggiunti senza hash.
+              Torrent di bookrr con il flag {tag} il cui hash non è tra i tuoi upload sul tracker: cancellati o sostituiti,
+              caricati altrove, o aggiunti senza hash. Se non sono tue release, togli il flag: il tag viene tolto anche su
+              qBittorrent.
             </CardDescription>
+            <CardAction>
+              <Button variant="outline" size="sm" disabled={unflag.isPending} onClick={() => setUnflaggingAll(true)}>
+                <TagX /> Togli il flag a tutte
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent>
             <ul className="max-h-56 divide-y overflow-y-auto rounded-lg border">
               {data.notOnTracker.map((m) => {
                 const t = allTorrents.find((t) => t.hash === m.hash)
                 return (
-                  <li key={m.hash} className="flex items-center gap-2 py-1 pr-2 pl-3">
+                  <li key={m.hash} className="flex items-center gap-2 py-0.5 pr-1 pl-3">
                     <button
                       type="button"
                       className="min-w-0 flex-1 truncate text-left text-sm hover:underline"
@@ -307,6 +323,20 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       </Badge>
                     )}
                     {t && <StatusBadge status={t.status} />}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Togli il flag ${tag}`}
+                          disabled={unflag.isPending}
+                          onClick={() => unflag.mutate([m.hash], { onSuccess: unflagDone })}
+                        >
+                          <TagX />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Togli il flag {tag}, anche da qBittorrent</TooltipContent>
+                    </Tooltip>
                   </li>
                 )
               })}
@@ -501,6 +531,21 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       </Card>
 
       <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} onHashChange={setSelected} />
+      <AlertDialog open={unflaggingAll} onOpenChange={setUnflaggingAll}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Togliere il flag {tag} a {data?.notOnTracker.length} torrent?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Non saranno più considerate tue release: bookrr non le segnala più quando spariscono dai client. Sui client
+              qBittorrent viene tolto solo il tag «{tag}»: torrent e file restano dove sono.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={() => unflag.mutate("all", { onSuccess: unflagDone })}>Togli il flag</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={addingAll} onOpenChange={setAddingAll}>
         <AlertDialogContent>
           <AlertDialogHeader>
