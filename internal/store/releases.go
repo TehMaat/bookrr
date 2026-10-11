@@ -197,9 +197,15 @@ func (s *Store) SetTrackerReleaseHashError(ctx context.Context, id int64, msg st
 }
 
 // LinkTrackerReleases gives the torrents of bookrr that match an upload by
-// hash what only the tracker knows: the .torrent file and the page link.
+// hash what only the tracker knows: the .torrent file, the page link and,
+// for torrents added by hand without it, the size.
 func (s *Store) LinkTrackerReleases(ctx context.Context) error {
 	ts := now()
+	if _, err := s.db.ExecContext(ctx, `
+UPDATE torrents SET size = (SELECT MAX(r.size) FROM tracker_releases r WHERE r.hash = torrents.hash)
+WHERE size = 0 AND EXISTS (SELECT 1 FROM tracker_releases r WHERE r.hash = torrents.hash AND r.size > 0)`); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `
 INSERT OR IGNORE INTO torrent_files (hash, data, created_at)
 SELECT r.hash, r.torrent_file, ? FROM tracker_releases r JOIN torrents t ON t.hash = r.hash

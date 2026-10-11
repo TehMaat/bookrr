@@ -70,7 +70,7 @@ func TestTrackerReleaseStatus(t *testing.T) {
 	}
 	add("adopted", ManualInput{Adoption: &AdoptionInput{AdopterID: adopter.ID}})
 	add("nowhere", ManualInput{})
-	ups := []TrackerUpload{{ID: 1, Name: "A"}, {ID: 2, Name: "B"}, {ID: 3, Name: "C"}, {ID: 4, Name: "D"}}
+	ups := []TrackerUpload{{ID: 1, Name: "A"}, {ID: 2, Name: "B", Size: 77}, {ID: 3, Name: "C"}, {ID: 4, Name: "D"}}
 	if n, err := s.SaveTrackerReleases(ctx, ups); err != nil || n != 4 {
 		t.Fatalf("saved %d %v", n, err)
 	}
@@ -94,6 +94,9 @@ func TestTrackerReleaseStatus(t *testing.T) {
 		if r.Status != want[r.ID] {
 			t.Errorf("release %d: status %s, want %s", r.ID, r.Status, want[r.ID])
 		}
+	}
+	if tr, _ := s.GetTorrent(ctx, "nowhere"); tr.Size != 77 {
+		t.Fatalf("a torrent added without size gets the tracker's: %+v", tr)
 	}
 	if r, _ := s.GetTrackerRelease(ctx, 4); r.HashError != "HTTP 404" || r.HasTorrentFile {
 		t.Fatalf("release without hash: %+v", r)

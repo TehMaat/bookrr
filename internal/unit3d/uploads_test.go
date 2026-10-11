@@ -261,6 +261,9 @@ func TestHistorySync(t *testing.T) {
 	if err != nil || len(tr.Archives) != 1 || !tr.HasTorrentFile || !strings.HasSuffix(tr.TrackerURL, "/torrents/2") {
 		t.Fatalf("linked torrent: %+v %v", tr, err)
 	}
+	if tr, _ := st.GetTorrent(ctx, gone); tr.Size != 0 {
+		t.Fatalf("a torrent not on the tracker keeps its size: %+v", tr)
+	}
 	if tr, _ := st.GetTorrent(ctx, onClient); !tr.HasTorrentFile || tr.TrackerURL == "" {
 		t.Fatalf("the torrent on the client must get the .torrent and the link: %+v", tr)
 	}

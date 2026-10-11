@@ -178,6 +178,62 @@ export type TrackerCandidate = {
   match: boolean
 }
 
+/** Status of an upload on the tracker: the status of the linked torrent, or "untracked" when bookrr doesn't know it. */
+export type ReleaseStatus = TorrentStatus | "untracked"
+
+/** One of the user's uploads on the UNIT3D tracker. */
+export type TrackerRelease = {
+  id: number
+  name: string
+  category: string
+  type: string
+  typeId: number
+  resolution: string
+  resolutionId: number
+  size: number
+  seeders: number
+  leechers: number
+  timesCompleted: number
+  tmdbId: number
+  imdbId: number
+  tvdbId: number
+  personalRelease: boolean
+  createdAt: string
+  detailsLink: string
+  /** Info hash computed from the .torrent; empty until it is downloaded. */
+  hash: string
+  hashError: string
+  hasTorrentFile: boolean
+  seenAt: string
+  /** No longer among the uploads on the tracker (deleted or replaced). */
+  removedAt: string | null
+  updatedAt: string
+  /** Hash of the linked torrent of bookrr, empty if none. */
+  torrentHash: string
+  status: ReleaseStatus
+}
+
+export type ReleasesState = {
+  running: boolean
+  lastRunAt: string | null
+  lastResult: string
+  lastError: string
+  nextRunAt: string | null
+  username: string
+  pending: number
+}
+
+export type Releases = {
+  /** A UNIT3D tracker is configured. */
+  enabled: boolean
+  state: ReleasesState | null
+  /** Last time the uploads were read in full. */
+  syncedAt: string | null
+  releases: TrackerRelease[]
+  /** Personal releases of bookrr missing from the uploads on the tracker. */
+  notOnTracker: { hash: string; name: string; tracker: string }[]
+}
+
 export type Info = {
   version: string
   releaseTag: string
@@ -186,6 +242,8 @@ export type Info = {
   webhookTokenRequired: boolean
   /** A UNIT3D tracker is configured to find missing info hashes. */
   unit3d: boolean
+  /** How often the uploads on the tracker are read. */
+  releasesInterval: string
 }
 
 /** Options changed from the web UI. */
@@ -300,6 +358,13 @@ export const api = {
   deleteArchive: (id: number) => request<void>("DELETE", `/api/archives/${id}`),
   addAdoption: (hash: string, a: AdoptionInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/adoptions`, a),
   deleteAdoption: (id: number) => request<void>("DELETE", `/api/adoptions/${id}`),
+
+  releases: () => request<Releases>("GET", "/api/releases"),
+  /** Starts reading the uploads on the tracker now, in the background. */
+  syncReleases: () => request<ReleasesState>("POST", "/api/releases/sync"),
+  /** Adds the given uploads to bookrr as personal releases; with all, every unknown one. */
+  addReleases: (ids: number[] | "all") =>
+    request<{ added: number }>("POST", "/api/releases/add", ids === "all" ? { all: true } : { ids }),
 
   alerts: (open = true) => request<Alert[]>("GET", `/api/alerts?open=${open ? 1 : 0}`),
   resolveAlert: (id: number, r: ResolveInput) => request<void>("POST", `/api/alerts/${id}/resolve`, r),
