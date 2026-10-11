@@ -69,6 +69,9 @@ type Torrent struct {
 	OpenAlert       *Alert     `json:"openAlert"`
 	Duplicate       bool       `json:"duplicate"`
 	Status          string     `json:"status"`
+	// How the upload with this hash on the tracker stands against the
+	// archive rule; nil when it is not on a client or not an upload.
+	Archivable *Archivability `json:"archivable"`
 }
 
 // Status values exposed to the UI.
@@ -211,10 +214,30 @@ FROM locations l JOIN clients c ON c.id = l.client_id`+lwhere+` ORDER BY c.name 
 		}
 	}
 
+	releases, err := s.liveReleases(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	rule, err := s.archiveRule(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock()
 	for i := range out {
 		out[i].finalize()
+		if r, ok := releases[out[i].Hash]; ok {
+			out[i].Archivable = assessArchivable(r, locationsSeedLocs(out[i].Locations), rule, now)
+		}
 	}
 	return out, nil
+}
+
+func locationsSeedLocs(ls []Location) []seedLoc {
+	out := make([]seedLoc, len(ls))
+	for i, l := range ls {
+		out[i] = seedLoc{state: l.State, progress: l.Progress}
+	}
+	return out
 }
 
 func (s *Store) listArchives(ctx context.Context, hash string) ([]Archive, error) {
@@ -444,8 +467,10 @@ FROM locations WHERE hash = ?`, clientID, clientID, hash).Scan(&here, &elsewhere
 // has been deleted there. The torrent is still on another client, so no
 // alert is needed.
 func (s *Store) RemoveLocation(ctx context.Context, hash string, clientID int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM locations WHERE hash = ? AND client_id = ?`, hash, clientID)
-	return err
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM locations WHERE hash = ? AND client_id = ?`, hash, clientID); err != nil {
+		return err
+	}
+	return s.RefreshArchivable(ctx)
 }
 
 type ArchiveInput struct {

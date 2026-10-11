@@ -1,9 +1,10 @@
-import { CircleHelp, Copy, HandHeart, HardDrive, Server, Star, TriangleAlert } from "lucide-react"
+import { Archive, CircleHelp, Copy, HandHeart, HardDrive, Server, Star, TriangleAlert } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Torrent, TorrentStatus } from "@/lib/api"
+import type { Archivability, Torrent, TorrentStatus } from "@/lib/api"
 import { formatDate, formatState, isErrorState } from "@/lib/format"
+import { cn } from "@/lib/utils"
 
 export const statusLabels: Record<TorrentStatus, string> = {
   client: "Su client",
@@ -121,4 +122,70 @@ export function WhereBadges({ t }: { t: Torrent }) {
       {empty && <span className="text-muted-foreground text-xs">—</span>}
     </div>
   )
+}
+
+/** Color of the archivable uploads, in badges and in the filters. */
+export const archivableTone = "text-teal-600 dark:text-teal-400"
+
+/** "da oggi", "da 1 giorno", "da 12 giorni". */
+export function sinceDays(days: number) {
+  return days === 0 ? "da oggi" : days === 1 ? "da 1 giorno" : `da ${days} giorni`
+}
+
+const daysRule = (d: number) => (d === 0 ? "subito" : d === 1 ? "da almeno 1 giorno" : `da almeno ${d} giorni di fila`)
+
+/** The numbers behind the assessment: seeders on the tracker, mine, others, completed and the rule. */
+export function ArchivableNumbers({ a }: { a: Archivability }) {
+  const rows: [string, React.ReactNode][] = [
+    ["Seeder sul tracker", a.seeders],
+    ["Tuoi client in seed", a.mine],
+    ["Altri seeder", <span className={cn(a.others >= a.rule.minOthers && "font-semibold")}>{a.others}</span>],
+    ["Completati", <span className={cn(a.timesCompleted >= a.rule.minCompleted && "font-semibold")}>{a.timesCompleted}</span>],
+    ["Dati del tracker", formatDate(a.trackerAt)],
+  ]
+  if (a.since) rows.push(["Condizioni rispettate dal", formatDate(a.since)])
+  return (
+    <div className="grid gap-1">
+      <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="opacity-80">{k}</dt>
+            <dd className="text-right tabular-nums">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="opacity-80">
+        Regola: altri seeder ≥ {a.rule.minOthers}, completati ≥ {a.rule.minCompleted}, {daysRule(a.rule.days)}.
+      </p>
+    </div>
+  )
+}
+
+/** Shown only for archivable uploads: "Sì · da 3 giorni", with the numbers in the tooltip. */
+export function ArchivableBadge({ a, label = "Sì" }: { a: Archivability | null; label?: string }) {
+  if (!a?.archivable) return null
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className="border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300">
+          <Archive /> {label} · {sinceDays(a.days)}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="mb-1 font-medium">Altri la seminano: puoi toglierla dai client e archiviarla.</p>
+        <ArchivableNumbers a={a} />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** One line on where an upload stands: archivable, waiting for the days, or why not. */
+export function archivableSummary(a: Archivability): string {
+  if (a.archivable) return `Archiviabile ${sinceDays(a.days)}: altri la seminano, puoi toglierla dai client.`
+  if (a.met) return `Condizioni rispettate dal ${formatDate(a.since)}: archiviabile dal ${formatDate(a.readyAt)} se restano tali.`
+  const missing = [
+    a.others < a.rule.minOthers && `altri seeder ${a.others} su ${a.rule.minOthers}`,
+    a.timesCompleted < a.rule.minCompleted && `completati ${a.timesCompleted} su ${a.rule.minCompleted}`,
+  ].filter(Boolean)
+  return `Non ancora archiviabile: ${missing.join(", ")}.`
 }

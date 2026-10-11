@@ -157,6 +157,10 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// The clients seeding the uploads changed: so did who else seeds them.
+	if err := s.store.RefreshArchivable(ctx); err != nil {
+		return "", err
+	}
 	result := fmt.Sprintf("%d client sincronizzati, %d con errori, %d torrent, %d nuove segnalazioni", ok, failed, total, alerts)
 	slog.Info("sync completato", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts)
 	return result, nil

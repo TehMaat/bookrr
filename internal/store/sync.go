@@ -295,5 +295,8 @@ ON CONFLICT(hash) DO NOTHING`, w.Hash, name, w.Size, w.Tags, w.Category, ts, ts)
 	if err != nil {
 		return false, err
 	}
-	return created, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return created, s.RefreshArchivable(ctx)
 }

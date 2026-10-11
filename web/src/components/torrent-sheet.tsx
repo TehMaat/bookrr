@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import {
+  Archive,
   Check,
   Copy,
   Download,
@@ -19,7 +20,13 @@ import { toast } from "sonner"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
-import { DuplicateBadge, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
+import {
+  ArchivableNumbers,
+  archivableSummary,
+  DuplicateBadge,
+  PersonalBadge,
+  StatusBadge,
+} from "@/components/torrent-badges"
 import { TrackerPickDialog } from "@/components/tracker-pick-dialog"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -53,6 +60,7 @@ import {
 import { formatBytes, formatDate, formatState, formatUnix, isDownloading, isErrorState } from "@/lib/format"
 import { isManualHash } from "@/lib/manual"
 import { useAction, useInfo } from "@/lib/queries"
+import { cn } from "@/lib/utils"
 
 function Section({ title, icon: Icon, children, action }: { title: string; icon?: React.ElementType; children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -261,6 +269,20 @@ export function TorrentSheet({
             <Field label="Visto la prima volta">{formatDate(t.firstSeenAt)}</Field>
             <Field label="Ultima volta su client">{formatDate(t.lastSeenAt)}</Field>
           </div>
+
+          {t.archivable && (
+            <>
+              <Separator />
+              <Section title="Archiviabile" icon={Archive}>
+                <p className={cn("text-sm", t.archivable.archivable && "font-medium text-teal-700 dark:text-teal-300")}>
+                  {archivableSummary(t.archivable)}
+                </p>
+                <div className="text-muted-foreground rounded-lg border p-3 text-xs">
+                  <ArchivableNumbers a={t.archivable} />
+                </div>
+              </Section>
+            </>
+          )}
 
           <Separator />
 

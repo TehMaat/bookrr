@@ -94,6 +94,12 @@ func (h *History) Sync(ctx context.Context) {
 	defer h.mu.Unlock()
 	h.update(func(s *HistoryState) { s.Running = true; s.LastError = "" })
 	res, err := h.sync(ctx)
+	// Even a partial round may have refreshed the counters of the uploads.
+	if ctx.Err() == nil {
+		if aerr := h.store.RefreshArchivable(ctx); aerr != nil && err == nil {
+			err = fmt.Errorf("release archiviabili: %w", aerr)
+		}
+	}
 	ts := time.Now().UTC().Format(time.RFC3339)
 	h.update(func(s *HistoryState) {
 		s.Running, s.Pending, s.LastRunAt, s.LastResult = false, 0, &ts, res

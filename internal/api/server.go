@@ -748,8 +748,13 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, st)
 }
 
+// saveSettings changes the options sent; the ones left out keep their value.
 func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
-	var st store.Settings
+	st, err := s.store.GetSettings(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	if !decode(w, r, &st) {
 		return
 	}
@@ -760,6 +765,10 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	st.PublicURL = u
 	st, err = s.store.SaveSettings(r.Context(), st)
+	if errors.Is(err, store.ErrInvalidSettings) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		s.fail(w, err)
 		return

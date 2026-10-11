@@ -16,6 +16,8 @@ var ErrNotFound = errors.New("non trovato")
 
 type Store struct {
 	db *sql.DB
+	// clock is the current time, replaced by the tests.
+	clock func() time.Time
 }
 
 func Open(path string) (*Store, error) {
@@ -26,7 +28,7 @@ func Open(path string) (*Store, error) {
 	}
 	// A single connection keeps SQLite writes serialized and pragmas consistent.
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
+	s := &Store{db: db, clock: time.Now}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -218,6 +220,11 @@ CREATE TABLE tracker_releases (
 	updated_at TEXT NOT NULL
 );
 CREATE INDEX tracker_releases_hash ON tracker_releases(hash);
+`,
+	`
+-- Since when an upload still on a client is seeded enough by others to be
+-- archived (see archivable.go); NULL when it is not.
+ALTER TABLE tracker_releases ADD COLUMN archivable_since TEXT;
 `,
 }
 

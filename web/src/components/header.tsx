@@ -1,6 +1,8 @@
-import { Check, Laptop, Moon, Palette, RefreshCw, Sun } from "lucide-react"
+import { useState } from "react"
+import { Check, Laptop, Moon, Palette, RefreshCw, Settings, Sun } from "lucide-react"
 import { toast } from "sonner"
 
+import { SettingsDialog } from "@/components/settings-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -24,6 +26,7 @@ export function Header() {
   const sync = useSyncState()
   const syncNow = useAction(() => api.syncNow())
   const running = sync.data?.running || syncNow.isPending
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <header className="bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
@@ -62,6 +65,14 @@ export function Header() {
             <RefreshCw className={cn(running && "animate-spin")} />
             <span className="hidden sm:inline">Sincronizza</span>
           </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Impostazioni" onClick={() => setSettingsOpen(true)}>
+                <Settings />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Impostazioni</TooltipContent>
+          </Tooltip>
           <DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -106,6 +117,7 @@ export function Header() {
           </DropdownMenu>
         </div>
       </div>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </header>
   )
 }

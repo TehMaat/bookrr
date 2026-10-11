@@ -58,6 +58,8 @@ type TrackerRelease struct {
 	TorrentHash string `json:"torrentHash"`
 	// Status of the linked torrent, or ReleaseUntracked.
 	Status string `json:"status"`
+	// How it stands against the archive rule; nil when it is on no client.
+	Archivable *Archivability `json:"archivable"`
 }
 
 // ReleaseUntracked is the status of an upload bookrr knows no torrent for.
@@ -269,7 +271,7 @@ SELECT hash, name, size FROM torrents WHERE substr(hash, 1, length(?)) = ? ORDER
 
 const releaseCols = `r.id, r.name, r.category, r.type, r.type_id, r.resolution, r.resolution_id, r.size, r.seeders, r.leechers,
 	r.times_completed, r.tmdb_id, r.imdb_id, r.tvdb_id, r.personal_release, r.created_at, r.details_link, r.hash, r.hash_error,
-	r.torrent_file IS NOT NULL, r.seen_at, r.removed_at, r.updated_at, COALESCE(t.hash, ''),
+	r.torrent_file IS NOT NULL, r.seen_at, r.removed_at, r.updated_at, r.archivable_since, COALESCE(t.hash, ''),
 	CASE
 		WHEN t.hash IS NULL THEN '` + ReleaseUntracked + `'
 		WHEN EXISTS (SELECT 1 FROM locations l WHERE l.hash = t.hash) THEN '` + StatusClient + `'
@@ -304,20 +306,44 @@ ORDER BY r.created_at DESC, r.id DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []TrackerRelease{}
+	var since []*string
 	for rows.Next() {
 		var r TrackerRelease
-		var removed sql.NullString
+		var removed, archivable sql.NullString
 		if err := rows.Scan(&r.ID, &r.Name, &r.Category, &r.Type, &r.TypeID, &r.Resolution, &r.ResolutionID, &r.Size,
 			&r.Seeders, &r.Leechers, &r.TimesCompleted, &r.TmdbID, &r.ImdbID, &r.TvdbID, &r.PersonalRelease, &r.CreatedAt,
-			&r.DetailsLink, &r.Hash, &r.HashError, &r.HasTorrentFile, &r.SeenAt, &removed, &r.UpdatedAt, &r.TorrentHash, &r.Status); err != nil {
+			&r.DetailsLink, &r.Hash, &r.HashError, &r.HasTorrentFile, &r.SeenAt, &removed, &r.UpdatedAt, &archivable,
+			&r.TorrentHash, &r.Status); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		r.RemovedAt = nullStr(removed)
 		out = append(out, r)
+		since = append(since, nullStr(archivable))
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	locs, err := s.seedLocations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rule, err := s.archiveRule(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock()
+	for i, r := range out {
+		if r.TorrentHash == "" {
+			continue
+		}
+		c := releaseCounters{id: r.ID, hash: r.Hash, seeders: r.Seeders, completed: r.TimesCompleted, seenAt: r.SeenAt,
+			removed: r.RemovedAt != nil, since: since[i]}
+		out[i].Archivable = assessArchivable(c, locs[r.TorrentHash], rule, now)
+	}
+	return out, nil
 }
 
 var ErrNoReleaseHash = errors.New("l'hash di questa release non è ancora stato calcolato: riprova dopo il prossimo aggiornamento")
