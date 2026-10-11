@@ -2,6 +2,7 @@ package unit3d
 
 import (
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -12,7 +13,8 @@ import (
 type release struct {
 	title      string // words before the first year, season or format
 	year       string
-	season     string // "s19", "s01e02"
+	season     string // "s19", "s01e02", "s1-s5"
+	pack       pack   // the seasons of a season or series pack
 	resolution string
 	source     string // remux, bluray, webdl, webrip, hdtv
 	service    string // dsnp, nf, amzn…
@@ -53,7 +55,13 @@ type rule struct {
 }
 
 var (
-	seasonRe     = regexp.MustCompile(pre + `s(\d{1,2})(?:e(\d{1,3}))?` + `(?:$|[^a-z0-9])`)
+	seasonRe = regexp.MustCompile(pre + `s(\d{1,2})(?:e(\d{1,3}))?` + `(?:$|[^a-z0-9])`)
+	// "S01-S05", "S01-05", "S1 - S3"; never followed by an episode.
+	seasonRangeRe = regexp.MustCompile(pre + `s(\d{1,2})(?:[ .]?[-–][ .]?s?(\d{1,2}))?` + `(?:$|[^a-z0-9])`)
+	// "Season 2", "Seasons 1-3", "Stagione 1", "Stagioni 1 a 4", "Stagioni 1 e 2".
+	seasonWordRe = regexp.MustCompile(pre + `(?:seasons?|stagion[ei])[ .]?(\d{1,2})(?:[ .]?(?:[-–]|to|a|e|and)[ .]?(\d{1,2}))?` + `(?:$|[^a-z0-9])`)
+	episodeRe    = regexp.MustCompile(pre + `s\d{1,2}[ .]?e\d{1,3}`)
+	completeRe   = rx(`complete|completa|completo|integrale`)
 	yearInNameRe = regexp.MustCompile(pre + `((?:19|20)\d\d)(?:$|[^a-z0-9])`)
 	resolutionRe = regexp.MustCompile(pre + `(2160|1080|720|576|480)[pi]` + `(?:$|[^a-z0-9])`)
 	fourKRe      = rx(`4k|uhd`)
@@ -151,6 +159,10 @@ func parseRelease(name string) release {
 		}
 		mark([]int{0, 0, m[2] - 1}) // the "s" before the number
 	}
+	r.pack = parsePack(s, mark)
+	if !r.pack.episode && len(r.pack.seasons) > 1 {
+		r.season = r.pack.String()
+	}
 	// A year at the very start is part of the title ("2012", "1917").
 	for _, m := range findAll(yearInNameRe, s) {
 		if m[2] > 0 {
@@ -207,6 +219,79 @@ func parseRelease(name string) release {
 		r.title = strings.Join(tokens(s[:first]), " ")
 	}
 	return r
+}
+
+// pack is what a name says about the seasons it holds.
+type pack struct {
+	seasons  []int // in order, without repeats
+	complete bool  // "Complete" without season numbers: the whole series
+	episode  bool  // one or a few episodes, not whole seasons
+}
+
+// isPack reports whether the name is a season pack or a pack of several
+// seasons (or the whole series): what counts when looking for missing seasons.
+func (p pack) isPack() bool { return !p.episode && (len(p.seasons) > 0 || p.complete) }
+
+// String is "s1", "s1-s5" for a range, "s1+s3" otherwise; "" for no seasons.
+func (p pack) String() string {
+	if len(p.seasons) == 0 {
+		return ""
+	}
+	first, last := p.seasons[0], p.seasons[len(p.seasons)-1]
+	if last-first == len(p.seasons)-1 {
+		if first == last {
+			return "s" + strconv.Itoa(first)
+		}
+		return "s" + strconv.Itoa(first) + "-s" + strconv.Itoa(last)
+	}
+	parts := make([]string, len(p.seasons))
+	for i, n := range p.seasons {
+		parts[i] = "s" + strconv.Itoa(n)
+	}
+	return strings.Join(parts, "+")
+}
+
+// maxPackSeasons keeps a typo ("S01-S99") from becoming a huge pack.
+const maxPackSeasons = 60
+
+// parsePack reads the seasons of a lowercase name: "S03", "S01-S05",
+// "S01.S02.S03", "Season 1-3", "Stagioni 1 e 2", or "Complete" alone for
+// the whole series. Any "SxxEyy" makes it an episode (or a few), not a pack.
+func parsePack(s string, mark func([]int)) pack {
+	var p pack
+	if episodeRe.MatchString(s) {
+		p.episode = true
+		return p
+	}
+	seen := map[int]bool{}
+	add := func(m []int) {
+		from, _ := strconv.Atoi(s[m[2]:m[3]])
+		to := from
+		if m[4] >= 0 {
+			to, _ = strconv.Atoi(s[m[4]:m[5]])
+		}
+		if to < from || to-from > maxPackSeasons {
+			to = from
+		}
+		for n := from; n <= to; n++ {
+			if !seen[n] {
+				seen[n] = true
+				p.seasons = append(p.seasons, n)
+			}
+		}
+		mark(m)
+	}
+	for _, re := range []*regexp.Regexp{seasonRangeRe, seasonWordRe} {
+		for _, m := range findAll(re, s) {
+			add(m)
+		}
+	}
+	sort.Ints(p.seasons)
+	if m := completeRe.FindStringSubmatchIndex(s); m != nil {
+		mark(m)
+		p.complete = len(p.seasons) == 0
+	}
+	return p
 }
 
 // sameRelease reports whether a file name and a tracker title describe the

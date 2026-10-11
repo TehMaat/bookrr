@@ -25,6 +25,11 @@ type Config struct {
 	Unit3DAPIKey string
 	// How often the user's uploads on the UNIT3D tracker are read.
 	Unit3DReleasesInterval time.Duration
+	// The Movie Database key, for the seasons of the series uploaded.
+	TMDBAPIKey string
+	// Time of the nightly check of the missing seasons, in minutes after
+	// midnight (local time).
+	MissingCheckAt int
 }
 
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "bookrr.db") }
@@ -39,6 +44,7 @@ func Load() (Config, error) {
 		AuthPassword: os.Getenv("BOOKRR_AUTH_PASSWORD"),
 		Unit3DURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_URL")), "/"),
 		Unit3DAPIKey: strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_API_KEY")),
+		TMDBAPIKey:   strings.TrimSpace(os.Getenv("BOOKRR_TMDB_API_KEY")),
 	}
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)
@@ -59,6 +65,12 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("BOOKRR_UNIT3D_RELEASES_INTERVAL %q non valido: %w", interval, err)
 	}
 	c.Unit3DReleasesInterval = max(d, 15*time.Minute)
+	at := env("BOOKRR_MISSING_CHECK_AT", "04:00")
+	t, err := time.Parse("15:04", at)
+	if err != nil {
+		return c, fmt.Errorf("BOOKRR_MISSING_CHECK_AT %q non valido (es. 04:00)", at)
+	}
+	c.MissingCheckAt = t.Hour()*60 + t.Minute()
 	if (c.AuthUser == "") != (c.AuthPassword == "") {
 		return c, fmt.Errorf("BOOKRR_AUTH_USER e BOOKRR_AUTH_PASSWORD vanno impostati insieme")
 	}

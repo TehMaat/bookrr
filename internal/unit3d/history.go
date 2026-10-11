@@ -119,12 +119,12 @@ func (h *History) sync(ctx context.Context) (string, error) {
 	name := h.State().Username
 	if name == "" {
 		var err error
-		if name, err = withRetry(ctx, func() (string, error) { return h.client.Username(ctx) }); err != nil {
+		if name, err = WithRetry(ctx, func() (string, error) { return h.client.Username(ctx) }); err != nil {
 			return "", fmt.Errorf("nome utente sul tracker: %w", err)
 		}
 		h.update(func(s *HistoryState) { s.Username = name })
 	}
-	uploads, err := withRetry(ctx, func() ([]Upload, error) { return h.client.Uploads(ctx, name) })
+	uploads, err := WithRetry(ctx, func() ([]Upload, error) { return h.client.Uploads(ctx, name) })
 	if err != nil {
 		return "", fmt.Errorf("elenco degli upload: %w", err)
 	}
@@ -188,7 +188,7 @@ func (h *History) fetchHashes(ctx context.Context, byID map[int64]Upload) (hashe
 			hash string
 			file []byte
 		}
-		r, err := withRetry(ctx, func() (result, error) {
+		r, err := WithRetry(ctx, func() (result, error) {
 			hash, file, err := h.client.UploadHash(ctx, u)
 			return result{hash, file}, err
 		})
@@ -289,15 +289,15 @@ func matchRelease(name string, size int64, cs []store.ReleaseCandidate) (store.R
 	return same[0], true
 }
 
-// withRetry waits and tries again while the tracker asks to slow down.
-func withRetry[T any](ctx context.Context, f func() (T, error)) (T, error) {
+// WithRetry waits and tries again while the tracker asks to slow down.
+func WithRetry[T any](ctx context.Context, f func() (T, error)) (T, error) {
 	for {
 		v, err := f()
 		var rl *RateLimitError
 		if !errors.As(err, &rl) {
 			return v, err
 		}
-		slog.Warn("storico release: limite del tracker", "attesa", rl.RetryAfter)
+		slog.Warn("tracker UNIT3D: limite di richieste", "attesa", rl.RetryAfter)
 		if !sleep(ctx, rl.RetryAfter) {
 			return v, ctx.Err()
 		}
