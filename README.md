@@ -18,7 +18,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
-- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Controllo ogni notte, stagioni da TMDB.
+- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. Controllo ogni notte, stagioni e saghe da TMDB.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -68,8 +68,8 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` | — | Se impostati, l'interfaccia e le API richiedono login (HTTP Basic). |
 | `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza e per lo storico delle tue release. |
 | `BOOKRR_UNIT3D_RELEASES_INTERVAL` | `6h` | Ogni quanto rileggere i tuoi upload sul tracker per lo storico release (minimo `15m`). |
-| `BOOKRR_TMDB_API_KEY` | — | Chiave API (v3) o token di lettura (v4) di [TMDB](https://www.themoviedb.org/settings/api): con il tracker UNIT3D attiva il controllo delle **stagioni mancanti**. |
-| `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno delle stagioni mancanti (ora locale, `TZ`). |
+| `BOOKRR_TMDB_API_KEY` | — | Chiave API (v3) o token di lettura (v4) di [TMDB](https://www.themoviedb.org/settings/api): con il tracker UNIT3D attiva il controllo delle **stagioni mancanti** e dei **film mancanti delle saghe**. |
+| `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno delle stagioni e dei film mancanti (ora locale, `TZ`). |
 | `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
 | `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
@@ -237,9 +237,9 @@ Se non sono tue release, **togli il flag** a una (icona accanto al nome) o a tut
 
 API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`, `POST /api/releases/unflag` con `{"hashes": ["…"]}` o `{"all": true}` (toglie il flag).
 
-### Stagioni mancanti
+### Stagioni mancanti e saghe
 
-Con il tracker UNIT3D e `BOOKRR_TMDB_API_KEY` configurati, la scheda **Mancanti** dice, per ogni serie TV di cui hai caricato almeno una stagione, **quali stagioni mancano nella stessa qualità** e se sul tracker le hanno già caricate altri. Senza una delle due chiavi la funzione è disattivata e la pagina spiega cosa manca.
+Con il tracker UNIT3D e `BOOKRR_TMDB_API_KEY` configurati, la scheda **Mancanti** dice, nella sottoscheda **Serie TV**, per ogni serie TV di cui hai caricato almeno una stagione, **quali stagioni mancano nella stessa qualità** e se sul tracker le hanno già caricate altri; nella sottoscheda **Saghe** lo stesso per i **film delle saghe** (vedi [Saghe di film](#saghe-di-film)). Senza una delle due chiavi la funzione è disattivata e la pagina spiega cosa manca.
 
 Regole:
 
@@ -259,9 +259,22 @@ Per ogni serie e ogni tua qualità la griglia mostra ogni stagione come:
 
 Cliccando una stagione si aprono i torrent trovati, con il link alla pagina sul tracker. La lista mostra per ogni serie il numero di stagioni mancanti (la somma sulle tue qualità), i link alla serie sul tracker e su TMDB; si può cercare per nome, filtrare per qualità (risoluzione e tipo) e mostrare **solo le serie con mancanti**.
 
-Il controllo gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti.
+#### Saghe di film
 
-API: `GET /api/missing/series`, `POST /api/missing/check` (controlla ora).
+Per ogni film che hai caricato e che su TMDB fa parte di una **saga** (una *collection*: «Il Signore degli Anelli - La collezione»), la sottoscheda **Saghe** mostra gli altri film della saga nella stessa qualità, con gli stessi quattro stati delle stagioni. Regole:
+
+- contano solo le release della **categoria film** (una categoria del tracker che contiene `Movie` o `Film`; senza categoria, un nome senza stagioni né episodi e senza id TVDB): l'id TMDB di un film non è quello di una serie;
+- la saga del film viene da TMDB (`GET /movie/{id}`, campo `belongs_to_collection`); i film senza saga non compaiono. Se sul tracker la release non ha l'id TMDB, bookrr lo cerca dall'id IMDb (`GET /find/tt…`); se non ci riesce il film compare tra i **non verificabili**;
+- i **film della saga** vengono da TMDB (`GET /collection/{id}`), in ordine di uscita, **esclusi quelli non ancora usciti** (o senza data), tranne quelli che hai caricato tu;
+- sul tracker bookrr fa **una ricerca per saga** (`GET /api/torrents/filter?collectionId=…`, seguendo tutte le pagine, con le stesse precauzioni delle serie). Se non restituisce nulla, o restituisce torrent di film che non sono della saga (un tracker che non conosce il filtro), cerca **film per film** (`tmdbId=…`). Valgono solo i torrent nelle categorie film; **stessa qualità** ha la stessa definizione delle serie.
+
+Nelle celle il titolo del film è scritto senza la parte comune a tutta la saga («La compagnia dell'anello (2001)»); cliccando si aprono i torrent trovati e il link al film su TMDB. Si può cercare per nome della saga o di un film.
+
+#### Quando gira
+
+Il controllo, serie e saghe insieme, gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti (se fallisce solo una delle due parti, l'altra viene comunque aggiornata).
+
+API: `GET /api/missing/series`, `GET /api/missing/sagas`, `POST /api/missing/check` (controlla ora, serie e saghe).
 
 ### Release archiviabili
 
@@ -318,7 +331,7 @@ internal/qbit     client minimale per la Web API di qBittorrent
 internal/s3       client S3 minimale in sola lettura (ListObjectsV2, firma SigV4)
 internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
-internal/gaps     controllo delle stagioni mancanti delle serie caricate
+internal/gaps     controllo delle stagioni mancanti delle serie e dei film mancanti delle saghe
 internal/syncer   sincronizzazione periodica
 internal/tmdb     client minimale per The Movie Database
 internal/unit3d   tracker UNIT3D: ricerca dell'hash, storico delle release, qualità
