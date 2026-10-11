@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node -e \"require('fs').writeFileSync('dist/.gitkeep','')\"",
-    "lint": "tsc -b --noEmit"
+    "lint": "tsc -b --noEmit",
+    "logos": "node scripts/logos.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",

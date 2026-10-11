@@ -1,3 +1,5 @@
+<p align="center"><img src="web/public/favicon.svg" alt="Logo di bookrr" width="128"></p>
+
 # bookrr
 
 Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su quale disco d'archivio, chi li ha adottati) e **cosa è sparito** dai client.
@@ -16,7 +18,16 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
-Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro.
+Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro e **colore a scelta** (icona 🎨 in alto a destra): il logo, l'icona della scheda e il colore dei pulsanti seguono il colore della spada laser che scegli. La scelta viene ricordata dal browser.
+
+<p align="center">
+  <img src="docs/logo/bookrr-viola.svg" alt="Viola" width="56">
+  <img src="docs/logo/bookrr-blu.svg" alt="Blu" width="56">
+  <img src="docs/logo/bookrr-verde.svg" alt="Verde" width="56">
+  <img src="docs/logo/bookrr-giallo.svg" alt="Giallo" width="56">
+  <img src="docs/logo/bookrr-rosso.svg" alt="Rosso" width="56">
+  <img src="docs/logo/bookrr-darksaber.svg" alt="Nero" width="56">
+</p>
 
 ## Installazione con Docker Compose
 
@@ -220,6 +231,8 @@ cd web && npm run build && cd .. && go build -o bookrr ./cmd/bookrr
 
 go test ./...
 ```
+
+Il logo e i suoi colori sono definiti in `web/src/lib/accent.ts`; dopo averli cambiati, `cd web && npm run logos` rigenera `docs/logo/` e `web/public/favicon.svg`.
 
 Struttura:
 
