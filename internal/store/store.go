@@ -190,6 +190,35 @@ CREATE TABLE bucket_entries (
 	PRIMARY KEY (disk_id, path)
 );
 `,
+	`
+-- The user's uploads on the UNIT3D tracker, linked to torrents by hash.
+CREATE TABLE tracker_releases (
+	id INTEGER PRIMARY KEY, -- id of the torrent on the tracker
+	name TEXT NOT NULL,
+	category TEXT NOT NULL DEFAULT '',
+	type TEXT NOT NULL DEFAULT '',
+	type_id INTEGER NOT NULL DEFAULT 0,
+	resolution TEXT NOT NULL DEFAULT '',
+	resolution_id INTEGER NOT NULL DEFAULT 0,
+	size INTEGER NOT NULL DEFAULT 0,
+	seeders INTEGER NOT NULL DEFAULT 0,
+	leechers INTEGER NOT NULL DEFAULT 0,
+	times_completed INTEGER NOT NULL DEFAULT 0,
+	tmdb_id INTEGER NOT NULL DEFAULT 0,
+	imdb_id INTEGER NOT NULL DEFAULT 0,
+	tvdb_id INTEGER NOT NULL DEFAULT 0,
+	personal_release INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT '',
+	details_link TEXT NOT NULL DEFAULT '',
+	hash TEXT NOT NULL DEFAULT '',
+	hash_error TEXT NOT NULL DEFAULT '',
+	torrent_file BLOB,
+	seen_at TEXT NOT NULL,
+	removed_at TEXT,
+	updated_at TEXT NOT NULL
+);
+CREATE INDEX tracker_releases_hash ON tracker_releases(hash);
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

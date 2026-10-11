@@ -57,14 +57,19 @@ func main() {
 	go buckets.Run(ctx)
 
 	var hashes *unit3d.Resolver
+	var releases *unit3d.History
 	if cfg.Unit3DURL != "" {
-		hashes = unit3d.NewResolver(st, unit3d.New(cfg.Unit3DURL, cfg.Unit3DAPIKey))
+		// One client for both, so together they respect the tracker's rate limit.
+		tracker := unit3d.New(cfg.Unit3DURL, cfg.Unit3DAPIKey)
+		hashes = unit3d.NewResolver(st, tracker)
 		go hashes.Run(ctx)
+		releases = unit3d.NewHistory(st, tracker, cfg.Unit3DReleasesInterval)
+		go releases.Run(ctx)
 	}
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           api.New(cfg, st, sy, buckets, hashes, web.FS(), version).Handler(),
+		Handler:           api.New(cfg, st, sy, buckets, hashes, releases, web.FS(), version).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
@@ -75,7 +80,7 @@ func main() {
 	}()
 
 	slog.Info("bookrr avviato", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
-		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL)
+		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server", "err", err)
 		os.Exit(1)

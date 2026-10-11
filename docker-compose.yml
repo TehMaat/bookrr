@@ -24,5 +24,8 @@ services:
       # BOOKRR_AUTH_USER: admin
       # BOOKRR_AUTH_PASSWORD: cambiami
       # Tracker UNIT3D dove cercare l'hash dei torrent aggiunti senza
+      # e da cui leggere lo storico dei tuoi upload (scheda Release)
       # BOOKRR_UNIT3D_URL: https://tracker.example
       # BOOKRR_UNIT3D_API_KEY: la-tua-api-key
+      # Ogni quanto rileggere i tuoi upload sul tracker (min 15m)
+      # BOOKRR_UNIT3D_RELEASES_INTERVAL: 6h

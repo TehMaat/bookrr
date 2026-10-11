@@ -13,6 +13,7 @@ export const keys = {
   info: ["info"] as const,
   sync: ["sync"] as const,
   settings: ["settings"] as const,
+  releases: ["releases"] as const,
 }
 
 export const useTorrents = () => useQuery({ queryKey: keys.torrents, queryFn: api.torrents, refetchInterval: 30_000 })
@@ -25,6 +26,13 @@ export const useAdopters = () => useQuery({ queryKey: keys.adopters, queryFn: ap
 export const useClients = () => useQuery({ queryKey: keys.clients, queryFn: api.clients, refetchInterval: 30_000 })
 export const useInfo = () => useQuery({ queryKey: keys.info, queryFn: api.info, staleTime: Infinity })
 export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: api.settings })
+export const useReleases = () =>
+  useQuery({
+    queryKey: keys.releases,
+    queryFn: api.releases,
+    // Poll quickly while the tracker is being read.
+    refetchInterval: (q) => (q.state.data?.state?.running ? 3_000 : 30_000),
+  })
 export const useSyncState = () => useQuery({ queryKey: keys.sync, queryFn: api.syncState, refetchInterval: 5_000 })
 
 /** Invalidates every query: data in bookrr is small and highly interrelated. */
