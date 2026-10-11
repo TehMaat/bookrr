@@ -47,6 +47,34 @@ export type Alert = {
 
 export type TorrentStatus = "client" | "missing" | "archived" | "adopted" | "unknown"
 
+/** Thresholds of the archive rule, from the settings. */
+export type ArchiveRule = { minOthers: number; minCompleted: number; days: number }
+
+/** How an upload still on a client stands against the archive rule. */
+export type Archivability = {
+  releaseId: number
+  /** Seeders on the tracker, the user included. */
+  seeders: number
+  /** Clients of bookrr seeding it complete. */
+  mine: number
+  /** seeders − mine, never below zero. */
+  others: number
+  timesCompleted: number
+  /** Last time the tracker gave these numbers. */
+  trackerAt: string
+  /** The thresholds are met now. */
+  met: boolean
+  /** Since when they are met without a break. */
+  since: string | null
+  /** Whole days since `since`. */
+  days: number
+  /** Met for at least the days of the rule: it can be taken off the clients. */
+  archivable: boolean
+  /** When it becomes archivable if the thresholds stay met. */
+  readyAt: string | null
+  rule: ArchiveRule
+}
+
 export type Torrent = {
   hash: string
   name: string
@@ -73,6 +101,8 @@ export type Torrent = {
   openAlert: Alert | null
   duplicate: boolean
   status: TorrentStatus
+  /** Null when it is not one of the user's uploads still on a client. */
+  archivable: Archivability | null
 }
 
 export type Disk = {
@@ -211,6 +241,8 @@ export type TrackerRelease = {
   /** Hash of the linked torrent of bookrr, empty if none. */
   torrentHash: string
   status: ReleaseStatus
+  /** Null when the linked torrent is on no client. */
+  archivable: Archivability | null
 }
 
 export type ReleasesState = {
@@ -250,6 +282,12 @@ export type Info = {
 export type Settings = {
   /** Address of bookrr from other devices, used in the disk QR codes; empty = the browser's address. */
   publicUrl: string
+  /** An upload is archivable with at least this many other seeders… */
+  archiveMinSeeders: number
+  /** …and completed downloads… */
+  archiveMinCompleted: number
+  /** …for this many days in a row (0 = at once). */
+  archiveDays: number
 }
 
 export type SyncState = {
@@ -404,7 +442,8 @@ export const api = {
     request<{ ok: boolean; error?: string; version?: string; torrents?: number }>("POST", "/api/clients/test", c),
 
   settings: () => request<Settings>("GET", "/api/settings"),
-  saveSettings: (st: Settings) => request<Settings>("PUT", "/api/settings", st),
+  /** Options left out keep their value. */
+  saveSettings: (st: Partial<Settings>) => request<Settings>("PUT", "/api/settings", st),
 
   syncState: () => request<SyncState>("GET", "/api/sync"),
   syncNow: () => request<{ result: string }>("POST", "/api/sync"),

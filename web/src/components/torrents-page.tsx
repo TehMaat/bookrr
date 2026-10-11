@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   ChevronLeft,
@@ -20,7 +21,14 @@ import {
 
 import { ImportDialog } from "@/components/import-dialog"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
-import { DuplicateBadge, PersonalBadge, StatusBadge, WhereBadges } from "@/components/torrent-badges"
+import {
+  ArchivableBadge,
+  archivableTone,
+  DuplicateBadge,
+  PersonalBadge,
+  StatusBadge,
+  WhereBadges,
+} from "@/components/torrent-badges"
 import { Badge } from "@/components/ui/badge"
 import { TorrentFormDialog } from "@/components/torrent-form-dialog"
 import { TorrentSheet } from "@/components/torrent-sheet"
@@ -45,7 +53,7 @@ import { formatBytes, formatState, formatUnix, isDownloading } from "@/lib/forma
 import { useAdopters, useClients, useDisks, useInfo, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
-type Filter = "all" | "client" | "duplicate" | "missing" | "archived" | "adopted" | "unknown"
+type Filter = "all" | "client" | "duplicate" | "missing" | "archived" | "adopted" | "unknown" | "archivable"
 type SortKey = "name" | "size" | "status"
 
 const PAGE_SIZE = 50
@@ -62,6 +70,8 @@ function matches(t: Torrent, f: Filter) {
       return t.adoptions.length > 0
     case "archived":
       return t.archives.length > 0
+    case "archivable":
+      return !!t.archivable?.archivable
     default:
       return t.status === f
   }
@@ -140,7 +150,16 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const scoped = useMemo(() => (onlyPersonal ? all.filter((t) => t.personalRelease) : all), [all, onlyPersonal])
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { all: 0, client: 0, duplicate: 0, missing: 0, archived: 0, adopted: 0, unknown: 0 }
+    const c: Record<Filter, number> = {
+      all: 0,
+      client: 0,
+      duplicate: 0,
+      missing: 0,
+      archived: 0,
+      adopted: 0,
+      unknown: 0,
+      archivable: 0,
+    }
     for (const t of scoped) for (const f of Object.keys(c) as Filter[]) if (matches(t, f)) c[f]++
     return c
   }, [scoped])
@@ -185,7 +204,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const visible = rows.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
   const totalSize = rows.reduce((s, t) => s + t.size, 0)
   const showDownload = filter === "duplicate"
-  const cols = showDownload ? 5 : 4
+  const cols = showDownload ? 6 : 5
   const selectedTorrent = selected ? (all.find((t) => t.hash === selected) ?? null) : null
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -207,11 +226,12 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     { key: "archived", label: "Archiviati", icon: HardDrive, tone: "text-violet-600 dark:text-violet-400" },
     { key: "adopted", label: "Adottati", icon: HandHeart, tone: "text-emerald-600 dark:text-emerald-400" },
     { key: "unknown", label: "Posizione ignota", icon: CircleHelp },
+    { key: "archivable", label: "Archiviabili", icon: Archive, tone: archivableTone },
   ]
 
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
         {stats.map((s) => (
           <button
             key={s.key}
@@ -316,6 +336,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               </TableHead>
               <TableHead>Dove si trova</TableHead>
               {showDownload && <TableHead>In download</TableHead>}
+              <TableHead className="hidden md:table-cell">Archiviabile</TableHead>
               <TableHead>
                 <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
                   Stato <SortIcon k="status" />
@@ -381,6 +402,9 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                     <DownloadCell t={t} />
                   </TableCell>
                 )}
+                <TableCell className="hidden md:table-cell">
+                  <ArchivableBadge a={t.archivable} />
+                </TableCell>
                 <TableCell>
                   {t.openAlert ? (
                     <Button

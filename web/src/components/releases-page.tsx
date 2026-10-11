@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   CheckCheck,
@@ -20,7 +21,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { PersonalBadge, StatusBadge } from "@/components/torrent-badges"
+import { ArchivableBadge, archivableTone, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -47,7 +48,7 @@ import { formatBytes, formatDate, formatRelative } from "@/lib/format"
 import { useAction, useInfo, useReleases, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
-type Filter = "all" | ReleaseStatus | "removed"
+type Filter = "all" | ReleaseStatus | "removed" | "archivable"
 type SortKey = "date" | "name" | "seeders" | "completed"
 
 const PAGE_SIZE = 50
@@ -55,6 +56,7 @@ const PAGE_SIZE = 50
 function matches(r: TrackerRelease, f: Filter) {
   if (f === "all") return true
   if (f === "removed") return r.removedAt !== null
+  if (f === "archivable") return !!r.archivable?.archivable
   return r.status === f
 }
 
@@ -124,6 +126,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       unknown: 0,
       untracked: 0,
       removed: 0,
+      archivable: 0,
     }
     for (const r of scoped) for (const f of Object.keys(c) as Filter[]) if (matches(r, f)) c[f]++
     return c
@@ -192,6 +195,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     { key: "unknown", label: "Posizione ignota", icon: CircleHelp },
     { key: "untracked", label: "Sconosciute", icon: FileWarning, tone: "text-amber-600 dark:text-amber-400" },
     { key: "removed", label: "Rimosse", icon: CloudOff, tone: "text-destructive" },
+    { key: "archivable", label: "Archiviabili", icon: Archive, tone: archivableTone },
   ]
 
   if (releases.isLoading) return <Skeleton className="h-48 w-full" />
@@ -311,7 +315,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
         {stats.map((s) => (
           <button
             key={s.key}
@@ -442,8 +446,9 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                     <Peers r={r} />
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <ReleaseStatusBadge status={r.status} />
+                      <ArchivableBadge a={r.archivable} label="Archiviabile" />
                       {r.status === "untracked" && (
                         <Button
                           size="sm"
