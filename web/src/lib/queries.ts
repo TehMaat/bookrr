@@ -15,6 +15,7 @@ export const keys = {
   settings: ["settings"] as const,
   releases: ["releases"] as const,
   missingSeries: ["missing-series"] as const,
+  missingSagas: ["missing-sagas"] as const,
 }
 
 export const useTorrents = () => useQuery({ queryKey: keys.torrents, queryFn: api.torrents, refetchInterval: 30_000 })
@@ -38,6 +39,12 @@ export const useMissingSeries = () =>
   useQuery({
     queryKey: keys.missingSeries,
     queryFn: api.missingSeries,
+    refetchInterval: (q) => (q.state.data?.state?.running ? 3_000 : 60_000),
+  })
+export const useMissingSagas = () =>
+  useQuery({
+    queryKey: keys.missingSagas,
+    queryFn: api.missingSagas,
     refetchInterval: (q) => (q.state.data?.state?.running ? 3_000 : 60_000),
   })
 export const useSyncState = () => useQuery({ queryKey: keys.sync, queryFn: api.syncState, refetchInterval: 5_000 })
