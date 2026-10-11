@@ -14,6 +14,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - ✍️ **Dati manuali**: aggiungi torrent che non sono su nessun client, note, adozioni e archivi.
 - 📥 **Import degli archiviati** da CSV/Excel: ogni riga viene salvata esattamente come se l'avessi inserita con "Aggiungi".
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
+- 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
 Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro.
@@ -39,7 +40,7 @@ docker compose up -d --build
 
 ### Versioni
 
-La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.6.0` blocca una versione precisa, `:0.6` riceve solo le correzioni della 0.6, `:latest` segue sempre `main`.
+La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.7.0` blocca una versione precisa, `:0.7` riceve solo le correzioni della 0.7, `:latest` segue sempre `main`.
 
 ### Configurazione
 
@@ -51,7 +52,8 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_RELEASE_TAG` | `Personal Release` | Tag qBittorrent che identifica le tue release (maiuscole/minuscole indifferenti). |
 | `BOOKRR_WEBHOOK_TOKEN` | — | Se impostato, il webhook richiede il token (`?token=…`, header `X-Bookrr-Token` o `Authorization: Bearer …`). |
 | `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` | — | Se impostati, l'interfaccia e le API richiedono login (HTTP Basic). |
-| `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza. |
+| `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza e per lo storico delle tue release. |
+| `BOOKRR_UNIT3D_RELEASES_INTERVAL` | `6h` | Ogni quanto rileggere i tuoi upload sul tracker per lo storico release (minimo `15m`). |
 | `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
 | `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
@@ -200,9 +202,26 @@ I **tag** dei torrent che non sono su un client si cambiano dalla scheda, in *Da
 
 > UNIT3D aggiunge il nome del tracker al file .torrent, quindi lo stesso contenuto ha un hash diverso su ogni tracker: bookrr usa quello del tracker configurato, che è lo stesso caricato nel tuo client.
 
+### Storico release
+
+Con il tracker UNIT3D configurato, la scheda **Release** mostra **tutti i torrent che hai caricato** (non solo quelli con il flag Personal Release del tracker, e anche quelli anonimi), dal più recente: nome, tipo (WEB-DL, Remux, Encode…), risoluzione, data di caricamento, seeder, leecher e completati, link alla pagina sul tracker e lo **stato** del torrent di bookrr collegato: *su client*, *da localizzare*, *archiviato*, *adottato*, *posizione ignota*, oppure **sconosciuta** se bookrr non conosce nessun torrent con quell'hash. Puoi cercare e filtrare per stato; cliccando una release collegata si apre la scheda del torrent.
+
+Come funziona:
+
+1. bookrr chiede al tracker il tuo nome utente (`GET /api/user`) e poi i tuoi upload (`GET /api/torrents/filter?uploader=…`, seguendo tutte le pagine). Il tracker tiene in cache queste risposte per qualche minuto, condivise tra gli utenti: bookrr aggiunge alla richiesta un parametro con il tuo nome (ignorato dal tracker) per non ricevere la risposta preparata per qualcun altro, che non conterrebbe i tuoi upload anonimi;
+2. l'API non fornisce l'info hash: bookrr scarica il file `.torrent` di ogni release **una sola volta** (l'hash non cambia), ne calcola l'hash e lo conserva. Il primo giro con molti upload richiede qualche minuto (al massimo una richiesta ogni 2,5 secondi, condivise con la ricerca degli hash);
+3. ogni release è collegata al torrent di bookrr con **lo stesso hash**, che riceve anche il file `.torrent`, il link alla pagina sul tracker e, se mancava, la dimensione. I torrent aggiunti **senza hash** vengono confrontati per nome con le tue release (stesse regole della ricerca automatica, vedi sopra) e, se ne corrisponde una sola, prendono il suo hash;
+4. a ogni giro seeder, leecher e completati vengono aggiornati; le release che non compaiono più tra i tuoi upload restano nello storico, segnate come **rimosse**.
+
+L'aggiornamento parte all'avvio, poi ogni `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 ore) e con **Aggiorna ora**. Le release **sconosciute** non vengono aggiunte da sole: con **Aggiungi a bookrr** (o **Aggiungi tutte**) diventano torrent con hash, nome, dimensione, file `.torrent` e flag Personal Release, e dalla loro scheda indichi dove si trovano.
+
+In cima alla pagina sono evidenziate le **Personal Release di bookrr che non risultano tra i tuoi upload**: cancellate o sostituite sul tracker, caricate su un altro tracker o aggiunte senza hash (i torrent su un client che annunciano a un altro dominio non vengono elencati).
+
+API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`.
+
 ## API
 
-Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/sync`, …). Vedi `internal/api/server.go`.
+Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/releases`, `/api/sync`, …). Vedi `internal/api/server.go`.
 
 ## Sviluppo
 
@@ -232,6 +251,6 @@ internal/s3       client S3 minimale in sola lettura (ListObjectsV2, firma SigV4
 internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
 internal/syncer   sincronizzazione periodica
-internal/unit3d   ricerca dell'hash sul tracker UNIT3D
+internal/unit3d   tracker UNIT3D: ricerca dell'hash e storico delle release
 web/              frontend React + Vite + Tailwind + shadcn/ui
 ```
