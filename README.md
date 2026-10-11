@@ -51,7 +51,7 @@ docker compose up -d --build
 
 ### Versioni
 
-La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.7.0` blocca una versione precisa, `:0.7` riceve solo le correzioni della 0.7, `:latest` segue sempre `main`.
+La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubblicata anche come immagine: `ghcr.io/tehmaat/bookrr:0.8.0` blocca una versione precisa, `:0.8` riceve solo le correzioni della 0.8, `:latest` segue sempre `main`.
 
 ### Configurazione
 
