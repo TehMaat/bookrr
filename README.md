@@ -17,6 +17,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 📥 **Import degli archiviati** da CSV/Excel: ogni riga viene salvata esattamente come se l'avessi inserita con "Aggiungi".
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
+- 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
 Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro e **colore a scelta** (icona 🎨 in alto a destra): il logo, l'icona della scheda e il colore dei pulsanti seguono il colore della spada laser che scegli. La scelta viene ricordata dal browser.
@@ -229,6 +230,28 @@ L'aggiornamento parte all'avvio, poi ogni `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 o
 In cima alla pagina sono evidenziate le **Personal Release di bookrr che non risultano tra i tuoi upload**: cancellate o sostituite sul tracker, caricate su un altro tracker o aggiunte senza hash (i torrent su un client che annunciano a un altro dominio non vengono elencati).
 
 API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`.
+
+### Release archiviabili
+
+Una tua release che è ancora su almeno un client è **archiviabile** quando altri la stanno già seminando: puoi toglierla dai client e archiviarla (o lasciarla agli adottatori). Il numero di seeder del tracker comprende anche te, una volta per ogni client che la semina, quindi:
+
+> **altri seeder** = seeder del tracker − tuoi client in bookrr che la hanno **completa (100%)** e **in seed**
+
+Contano come in seed gli stati *In seed*, *In seed (fermo)* e *Seed forzato*; un client in pausa, fermato, in coda, in verifica o con la copia incompleta non conta (non viene annunciato al tracker come seeder). Se il tracker è indietro rispetto ai client gli altri seeder non scendono mai sotto zero.
+
+La release è archiviabile quando **altri seeder ≥ soglia** e **completati ≥ soglia** da almeno **N giorni consecutivi**. bookrr ricorda da quando le due soglie sono rispettate (*archiviabile dal*) e azzera la data appena smettono di esserlo: il conteggio dei giorni riparte da capo. La condizione viene rivalutata a ogni sincronizzazione dei client, a ogni giro dello storico release, a ogni rimozione da un client e quando cambi le soglie. Le release già archiviate o adottate (su nessun client) e quelle rimosse dal tracker non vengono valutate.
+
+Le soglie si scelgono dall'icona **Impostazioni** (ingranaggio) in alto:
+
+| Impostazione | Predefinito | Significato |
+|---|---|---|
+| Altri seeder (min.) | `1` | seeder diversi dai tuoi client |
+| Completati (min.) | `1` | download completati sul tracker |
+| Giorni di fila (min.) | `0` | da quanto devono valere le due soglie; `0` = subito |
+
+Nella lista **Torrent** la colonna **Archiviabile** mostra *Sì · da N giorni* (vuota altrimenti) con, nel tooltip, seeder totali, tuoi, altri, completati, regola e data dell'ultimo aggiornamento dal tracker; la casella **Archiviabili** filtra la lista. La stessa informazione è nella scheda del torrent (anche quando le soglie sono rispettate ma mancano ancora dei giorni, o perché non lo è) e nella pagina **Release**, con il suo filtro. Non ci sono notifiche.
+
+API: `GET`/`PUT /api/settings` con `archiveMinSeeders`, `archiveMinCompleted`, `archiveDays` (le opzioni non inviate restano invariate); ogni torrent e ogni release hanno il campo `archivable` (`null` se non su un client).
 
 ## API
 
