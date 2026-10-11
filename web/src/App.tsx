@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, BookCheck, CloudUpload, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
-import { BellRing, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
+import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Server } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
