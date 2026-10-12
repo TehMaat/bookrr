@@ -131,8 +131,21 @@ func (c *Client) ByTmdb(ctx context.Context, tmdbID int64, username string) ([]U
 	return c.filter(ctx, url.Values{"tmdbId": {strconv.FormatInt(tmdbID, 10)}}, username)
 }
 
+// ByCollection lists every torrent of the tracker of the films of a TMDB
+// saga (collection), following the pages of the answer. check sees each
+// page as it comes and stops the search with its error: a tracker that
+// does not know the filter answers with every torrent it has.
+func (c *Client) ByCollection(ctx context.Context, collectionID int64, username string, check func([]Upload) error) ([]Upload, error) {
+	return c.filterChecked(ctx, url.Values{"collectionId": {strconv.FormatInt(collectionID, 10)}}, username, check)
+}
+
 // filter reads every page of /api/torrents/filter with these parameters.
 func (c *Client) filter(ctx context.Context, params url.Values, username string) ([]Upload, error) {
+	return c.filterChecked(ctx, params, username, nil)
+}
+
+// filterChecked is filter, with check (if any) called on every page.
+func (c *Client) filterChecked(ctx context.Context, params url.Values, username string, check func([]Upload) error) ([]Upload, error) {
 	// The tracker caches /filter answers for a few minutes by URL, without
 	// the token, for every user: a parameter it ignores, unique to this
 	// user, keeps us from getting someone else's answer, which lacks the
@@ -168,13 +181,20 @@ func (c *Client) filter(ctx context.Context, params url.Values, username string)
 		if err := c.getJSON(ctx, c.base+"/api/torrents/filter?"+key, &res); err != nil {
 			return nil, err
 		}
+		page := make([]Upload, 0, len(res.Data))
 		for _, raw := range res.Data {
 			u, err := parseUpload(raw)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, u)
+			page = append(page, u)
 		}
+		if check != nil {
+			if err := check(page); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, page...)
 		next := nextPage(base, deref(res.Meta.NextCursor, res.NextCursor), deref(res.Links.Next, res.NextPageURL))
 		if next == nil || len(res.Data) == 0 {
 			return out, nil

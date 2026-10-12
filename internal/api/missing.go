@@ -8,7 +8,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/gaps"
 )
 
-// missingDisabled says why the check of the missing seasons is off, "" if on.
+// missingDisabled says why the check of the missing seasons and films is off, "" if on.
 func (s *Server) missingDisabled() string {
 	switch {
 	case s.missing != nil:
@@ -26,23 +26,36 @@ func (s *Server) missingDisabled() string {
 // season pack of, the grid of its seasons in each of their qualities, as
 // stored by the last check.
 func (s *Server) missingSeries(w http.ResponseWriter, r *http.Request) {
+	s.missingGroups(w, r, gaps.KindSeries, "series")
+}
+
+// missingSagas returns, for every saga the user uploaded at least a film
+// of, the grid of its films in each of their qualities, as stored by the
+// last check.
+func (s *Server) missingSagas(w http.ResponseWriter, r *http.Request) {
+	s.missingGroups(w, r, gaps.KindSaga, "sagas")
+}
+
+// missingGroups answers with the stored results of a kind of check, as
+// field, with the state of the checker.
+func (s *Server) missingGroups(w http.ResponseWriter, r *http.Request, kind, field string) {
 	ctx := r.Context()
-	groups, err := s.store.GapGroups(ctx, gaps.KindSeries)
+	groups, err := s.store.GapGroups(ctx, kind)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	checked, err := s.store.GapsCheckedAt(ctx, gaps.KindSeries)
+	checked, err := s.store.GapsCheckedAt(ctx, kind)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	series := make([]json.RawMessage, len(groups))
+	list := make([]json.RawMessage, len(groups))
 	for i, g := range groups {
-		series[i] = g.Data
+		list[i] = g.Data
 	}
 	out := map[string]any{"enabled": s.missing != nil, "disabledReason": s.missingDisabled(), "state": nil,
-		"checkedAt": checked, "checkAt": minutesClock(s.cfg.MissingCheckAt), "series": series}
+		"checkedAt": checked, "checkAt": minutesClock(s.cfg.MissingCheckAt), field: list}
 	if s.missing != nil {
 		out["state"] = s.missing.State()
 	}

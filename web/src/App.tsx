@@ -7,7 +7,7 @@ import { AlertsPage } from "@/components/alerts-page"
 import { ClientsPage } from "@/components/clients-page"
 import { DisksPage } from "@/components/disks-page"
 import { Header } from "@/components/header"
-import { MissingPage } from "@/components/missing-page"
+import { MissingPage, type MissingView } from "@/components/missing-page"
 import { ReleasesPage } from "@/components/releases-page"
 import { ResolveDialog } from "@/components/resolve-dialog"
 import { TorrentsPage } from "@/components/torrents-page"
@@ -21,18 +21,22 @@ import { useTheme } from "@/lib/theme"
 const tabs = ["torrents", "releases", "missing", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
 
-type Route = { tab: Tab; diskId: number | null }
+type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
 
-/** "#disks" or "#disks/3" (the torrents archived on disk 3, the target of its QR code). */
+/**
+ * "#disks" or "#disks/3" (the torrents archived on disk 3, the target of its QR code);
+ * "#missing" (the series) or "#missing/sagas".
+ */
 function routeFromHash(): Route {
   const [h, id] = window.location.hash.replace("#", "").split("/")
   const tab = (tabs as readonly string[]).includes(h) ? (h as Tab) : "torrents"
   const diskId = tab === "disks" && /^\d+$/.test(id ?? "") ? Number(id) : null
-  return { tab, diskId }
+  const missingView = tab === "missing" && id === "sagas" ? "sagas" : "series"
+  return { tab, diskId, missingView }
 }
 
 export default function App() {
-  const [{ tab, diskId }, setRoute] = useState<Route>(routeFromHash)
+  const [{ tab, diskId, missingView }, setRoute] = useState<Route>(routeFromHash)
   const [resolving, setResolving] = useState<Alert[]>([])
   const resolveOne = (a: Alert) => setResolving([a])
   const alerts = useAlerts(true)
@@ -91,7 +95,7 @@ export default function App() {
             <ReleasesPage onResolve={resolveOne} />
           </TabsContent>
           <TabsContent value="missing">
-            <MissingPage />
+            <MissingPage view={missingView} onView={(v) => go(v === "sagas" ? "missing/sagas" : "missing")} />
           </TabsContent>
           <TabsContent value="alerts">
             <AlertsPage onResolve={setResolving} />

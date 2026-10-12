@@ -266,7 +266,7 @@ export type Releases = {
   notOnTracker: { hash: string; name: string; tracker: string }[]
 }
 
-/** How a season stands in one of the user's qualities. */
+/** How a season, or a film of a saga, stands in one of the user's qualities. */
 export type GapState = "mine" | "available" | "other_quality" | "absent"
 
 /** Quality of a release: type, resolution, HDR formats and audio languages. */
@@ -284,7 +284,7 @@ export type Quality = {
 export type GapRef = { id: number; name: string; url: string; quality: string; mine: boolean }
 
 export type GapCell = {
-  /** Number of the season. */
+  /** Number of the season, or of the film in the saga (GapUnit.number). */
   unit: number
   state: GapState
   /** In this quality for mine/available, in the other qualities for other_quality. */
@@ -302,24 +302,31 @@ export type GapRow = {
   absent: number
 }
 
-export type GapUnit = { number: number; name: string; airDate: string; episodes: number }
+/** A season of a series, or a film of a saga (numbered in order of release, with its TMDB id). */
+export type GapUnit = { number: number; name: string; airDate: string; episodes: number; tmdbId?: number }
 
-/** A series the user uploaded at least a season pack of, with its seasons in each of their qualities. */
-export type SeriesGap = {
-  kind: "series"
+export type GapKind = "series" | "saga"
+
+/**
+ * A series the user uploaded at least a season pack of, with its seasons in each of their qualities,
+ * or a saga the user uploaded at least a film of, with its films.
+ */
+export type GapGroup = {
+  kind: GapKind
   key: string
   title: string
   year: string
+  /** Of the series, or of the saga (TMDB collection). */
   tmdbId: number
   tvdbId: number
   /** unverifiable: no TMDB id, or unknown to TMDB. */
   status: "ok" | "unverifiable"
   note: string
-  /** The series on the tracker. */
+  /** The series or the saga on the tracker. */
   searchUrl: string
   units: GapUnit[]
   rows: GapRow[]
-  /** The user's uploads of the series. */
+  /** The user's uploads of the series or the saga. */
   mine: GapRef[]
   missing: number
   available: number
@@ -334,12 +341,14 @@ export type MissingCheckState = {
   lastResult: string
   lastError: string
   nextRunAt: string | null
-  /** Series checked so far in the running check, out of total. */
+  /** What the running check is reading: series, then films, then sagas. */
+  phase: "" | "series" | "movies" | "sagas"
+  /** Read so far in this phase, out of total. */
   done: number
   total: number
 }
 
-export type MissingSeries = {
+type MissingCheck = {
   /** A UNIT3D tracker and a TMDB key are configured. */
   enabled: boolean
   /** Why it is off, when it is. */
@@ -349,8 +358,10 @@ export type MissingSeries = {
   checkedAt: string | null
   /** Time of the nightly check, "04:00". */
   checkAt: string
-  series: SeriesGap[]
 }
+
+export type MissingSeries = MissingCheck & { series: GapGroup[] }
+export type MissingSagas = MissingCheck & { sagas: GapGroup[] }
 
 export type Info = {
   version: string
@@ -501,7 +512,8 @@ export const api = {
     ),
 
   missingSeries: () => request<MissingSeries>("GET", "/api/missing/series"),
-  /** Starts the check of the missing seasons now, in the background. */
+  missingSagas: () => request<MissingSagas>("GET", "/api/missing/sagas"),
+  /** Starts the check of the missing seasons and films now, in the background. */
   checkMissing: () => request<MissingCheckState>("POST", "/api/missing/check"),
 
   alerts: (open = true) => request<Alert[]>("GET", `/api/alerts?open=${open ? 1 : 0}`),
