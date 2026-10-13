@@ -1,6 +1,19 @@
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { CircleCheck, TriangleAlert, X } from "lucide-react"
 
+import {
+  ActiveFilters,
+  ColumnFilter,
+  dateMatch,
+  isActive,
+  noRange,
+  OptionsFilter,
+  optionsMatch,
+  RangeFilter,
+  TextFilter,
+  textMatch,
+  useColumnFilters,
+} from "@/components/column-filter"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -12,14 +25,39 @@ import { formatDate } from "@/lib/format"
 import { useAlerts } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
+const sourceLabels: Record<Alert["source"], string> = { sync: "sync", webhook: "webhook", s3: "bucket" }
+
+const noFilters = {
+  torrent: "",
+  event: [] as string[],
+  date: noRange,
+  outcome: [] as string[],
+  resolution: "",
+}
+
 export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) {
   const [show, setShow] = useState<"open" | "all">("open")
   const alerts = useAlerts(show === "open")
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const lastClicked = useRef<number | null>(null)
+  const columns = useColumnFilters(noFilters)
+  const cf = columns.filters
 
-  // Only open alerts can be selected; resolved ones drop out on the next refetch.
-  const selectable = (alerts.data ?? []).filter((a) => !a.resolvedAt)
+  const rows = useMemo(
+    () =>
+      (alerts.data ?? []).filter(
+        (a) =>
+          textMatch(cf.torrent, a.torrentName, a.hash) &&
+          optionsMatch(cf.event, a.source) &&
+          dateMatch(a.createdAt, cf.date) &&
+          optionsMatch(cf.outcome, a.resolvedAt ? "resolved" : "open") &&
+          textMatch(cf.resolution, a.resolution)
+      ),
+    [alerts.data, cf]
+  )
+
+  // Only open alerts, among the ones shown, can be selected; resolved ones drop out on the next refetch.
+  const selectable = rows.filter((a) => !a.resolvedAt)
   const selected = selectable.filter((a) => checked.has(a.id))
   const allSelected = selectable.length > 0 && selected.length === selectable.length
 
@@ -82,10 +120,60 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                   onChange={toggleAll}
                 />
               </TableHead>
-              <TableHead className="w-full">Torrent</TableHead>
-              <TableHead>Evento</TableHead>
-              <TableHead>Quando</TableHead>
-              <TableHead>Esito</TableHead>
+              <TableHead className="w-full">
+                <div className="flex items-center gap-1">
+                  Torrent
+                  <ColumnFilter label="Torrent" active={isActive(cf.torrent)} onClear={() => columns.clear("torrent")}>
+                    <TextFilter value={cf.torrent} onChange={(v) => columns.set("torrent", v)} placeholder="Nome o hash…" />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="flex items-center gap-1">
+                  Evento
+                  <ColumnFilter label="Evento" active={isActive(cf.event)} onClear={() => columns.clear("event")}>
+                    <OptionsFilter
+                      title="Rilevato da"
+                      options={(Object.keys(sourceLabels) as Alert["source"][]).map((s) => ({ value: s, label: sourceLabels[s] }))}
+                      value={cf.event}
+                      onChange={(v) => columns.set("event", v)}
+                    />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="flex items-center gap-1">
+                  Quando
+                  <ColumnFilter label="Quando" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
+                    <RangeFilter type="date" value={cf.date} onChange={(v) => columns.set("date", v)} />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="flex items-center gap-1">
+                  Esito
+                  <ColumnFilter
+                    label="Esito"
+                    align="end"
+                    active={isActive(cf.outcome) || isActive(cf.resolution)}
+                    onClear={() => columns.clear("outcome", "resolution")}
+                  >
+                    <OptionsFilter
+                      options={[
+                        { value: "open", label: "Da gestire" },
+                        { value: "resolved", label: "Gestite" },
+                      ]}
+                      value={cf.outcome}
+                      onChange={(v) => columns.set("outcome", v)}
+                    />
+                    <TextFilter
+                      value={cf.resolution}
+                      onChange={(v) => columns.set("resolution", v)}
+                      placeholder="Esito contiene (es. un disco)…"
+                    />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -93,6 +181,13 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
               <TableRow>
                 <TableCell colSpan={5}>
                   <Skeleton className="h-6 w-full" />
+                </TableCell>
+              </TableRow>
+            )}
+            {alerts.data && alerts.data.length > 0 && rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
+                  Nessuna segnalazione corrisponde ai filtri.
                 </TableCell>
               </TableRow>
             )}
@@ -104,7 +199,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                 </TableCell>
               </TableRow>
             )}
-            {alerts.data?.map((a) => (
+            {rows.map((a) => (
               <TableRow
                 key={a.id}
                 data-state={checked.has(a.id) && !a.resolvedAt ? "selected" : undefined}
@@ -131,7 +226,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     {a.message}
-                    <Badge variant="outline">{a.source === "s3" ? "bucket" : a.source === "webhook" ? "webhook" : "sync"}</Badge>
+                    <Badge variant="outline">{sourceLabels[a.source]}</Badge>
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(a.createdAt)}</TableCell>
@@ -152,6 +247,12 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
             ))}
           </TableBody>
         </Table>
+        {columns.active > 0 && (
+          <div className="text-muted-foreground flex items-center gap-2 border-t px-4 py-2 text-xs">
+            <span>{rows.length === 1 ? "1 segnalazione" : `${rows.length} segnalazioni`}</span>
+            <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
+          </div>
+        )}
       </Card>
     </div>
   )

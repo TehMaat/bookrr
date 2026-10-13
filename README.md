@@ -4,7 +4,7 @@
 
 Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su quale disco d'archivio, chi li ha adottati) e **cosa è sparito** dai client.
 
-- 📋 **Elenco unico** di tutti i torrent letti da uno o più client qBittorrent, con ricerca e filtri.
+- 📋 **Elenco unico** di tutti i torrent letti da uno o più client qBittorrent, con ricerca e **filtri su ogni colonna** (icona a imbuto accanto al titolo: testo, intervalli di dimensione, date e numeri, scelta di client/dischi/adottatori e stati); lo stesso nelle tabelle Release e Segnalazioni.
 - 🖥️ **Su quale client** si trova ogni torrent (percorso, stato, ratio).
 - 🧬 **Duplicati**: segnala lo stesso torrent (stesso hash) caricato su più client e su quali è ancora **in download**; quando è completato ovunque puoi **toglierlo da uno dei client** (con o senza i file) direttamente da bookrr.
 - 💽 **Archivi offline**: dischi con nome, tipo, **numero di serie**, modello, capacità e posizione fisica; per ogni torrent registri lo **spostamento** su un disco/cartella.
@@ -220,7 +220,7 @@ I **tag** dei torrent che non sono su un client si cambiano dalla scheda, in *Da
 
 ### Storico release
 
-Con il tracker UNIT3D configurato, la scheda **Release** mostra **tutti i torrent che hai caricato** (non solo quelli con il flag Personal Release del tracker, e anche quelli anonimi), dal più recente: nome, tipo (WEB-DL, Remux, Encode…), risoluzione, data di caricamento, seeder, leecher e completati, link alla pagina sul tracker e lo **stato** del torrent di bookrr collegato: *su client*, *da localizzare*, *archiviato*, *adottato*, *posizione ignota*, oppure **sconosciuta** se bookrr non conosce nessun torrent con quell'hash. Puoi cercare e filtrare per stato; cliccando una release collegata si apre la scheda del torrent.
+Con il tracker UNIT3D configurato, la scheda **Release** mostra **tutti i torrent che hai caricato** (non solo quelli con il flag Personal Release del tracker, e anche quelli anonimi), dal più recente: nome, tipo (WEB-DL, Remux, Encode…), risoluzione, data di caricamento, seeder, leecher e completati, link alla pagina sul tracker e lo **stato** del torrent di bookrr collegato: *su client*, *da localizzare*, *archiviato*, *adottato*, *posizione ignota*, oppure **sconosciuta** se bookrr non conosce nessun torrent con quell'hash. Puoi cercare, filtrare per stato e filtrare ogni colonna (nome, tipo e risoluzione, data di caricamento, seeder e completati, stato); cliccando una release collegata si apre la scheda del torrent.
 
 Come funziona:
 

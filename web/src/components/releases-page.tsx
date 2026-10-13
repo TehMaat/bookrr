@@ -22,6 +22,21 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  ActiveFilters,
+  ColumnFilter,
+  dateMatch,
+  isActive,
+  noRange,
+  OptionsFilter,
+  optionsMatch,
+  parseCount,
+  RangeFilter,
+  rangeMatch,
+  TextFilter,
+  textMatch,
+  useColumnFilters,
+} from "@/components/column-filter"
 import { ArchivableBadge, archivableTone, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -53,6 +68,23 @@ type Filter = "all" | ReleaseStatus | "removed" | "archivable"
 type SortKey = "date" | "name" | "seeders" | "completed"
 
 const PAGE_SIZE = 50
+
+const noFilters = {
+  name: "",
+  type: [] as string[],
+  resolution: [] as string[],
+  date: noRange,
+  seeders: noRange,
+  completed: noRange,
+  status: [] as string[],
+}
+
+const releaseStatuses: ReleaseStatus[] = ["client", "missing", "archived", "adopted", "unknown", "untracked"]
+
+/** The distinct non-empty values, sorted. */
+function distinct(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "it", { numeric: true }))
+}
 
 function matches(r: TrackerRelease, f: Filter) {
   if (f === "all") return true
@@ -107,6 +139,8 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [addingAll, setAddingAll] = useState(false)
   const [unflaggingAll, setUnflaggingAll] = useState(false)
+  const columns = useColumnFilters(noFilters, () => setPage(0))
+  const cf = columns.filters
 
   const syncNow = useAction(() => api.syncReleases())
   const add = useAction((ids: number[] | "all") => api.addReleases(ids))
@@ -118,6 +152,8 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const state = data?.state
   const running = !!state?.running || syncNow.isPending
   const addable = all.filter((r) => r.status === "untracked" && r.hash)
+  const types = useMemo(() => distinct(all.map((r) => r.type)), [all])
+  const resolutions = useMemo(() => distinct(all.map((r) => r.resolution)), [all])
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = {
@@ -139,6 +175,14 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     const q = query.trim().toLowerCase()
     const out = scoped.filter((r) => {
       if (!matches(r, filter)) return false
+      if (!textMatch(cf.name, r.name, r.category, r.hash, String(r.id))) return false
+      if (!optionsMatch(cf.type, r.type)) return false
+      if (!optionsMatch(cf.resolution, r.resolution)) return false
+      if (!dateMatch(r.createdAt, cf.date)) return false
+      if (!rangeMatch(r.seeders, cf.seeders, parseCount)) return false
+      if (!rangeMatch(r.timesCompleted, cf.completed, parseCount)) return false
+      const flags = [r.status, ...(r.archivable?.archivable ? ["archivable"] : []), ...(r.removedAt ? ["removed"] : [])]
+      if (!optionsMatch(cf.status, ...flags)) return false
       if (!q) return true
       return (
         r.name.toLowerCase().includes(q) ||
@@ -159,7 +203,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       return c * dir
     })
     return out
-  }, [scoped, filter, query, sort])
+  }, [scoped, filter, cf, query, sort])
 
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
@@ -397,15 +441,47 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-full">
-                <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
-                  Nome <SortIcon k="name" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
+                    Nome <SortIcon k="name" />
+                  </button>
+                  <ColumnFilter label="Nome" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
+                    <TextFilter value={cf.name} onChange={(v) => columns.set("name", v)} placeholder="Nome, categoria, hash, ID…" />
+                  </ColumnFilter>
+                </div>
               </TableHead>
-              <TableHead className="hidden md:table-cell">Tipo</TableHead>
+              <TableHead className="hidden md:table-cell">
+                <div className="flex items-center gap-1">
+                  Tipo
+                  <ColumnFilter
+                    label="Tipo"
+                    active={isActive(cf.type) || isActive(cf.resolution)}
+                    onClear={() => columns.clear("type", "resolution")}
+                  >
+                    <OptionsFilter
+                      title="Tipo"
+                      options={types.map((t) => ({ value: t, label: t }))}
+                      value={cf.type}
+                      onChange={(v) => columns.set("type", v)}
+                    />
+                    <OptionsFilter
+                      title="Risoluzione"
+                      options={resolutions.map((t) => ({ value: t, label: t }))}
+                      value={cf.resolution}
+                      onChange={(v) => columns.set("resolution", v)}
+                    />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
               <TableHead className="hidden lg:table-cell">
-                <button className="flex items-center gap-1" onClick={() => toggleSort("date")}>
-                  Caricata <SortIcon k="date" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("date")}>
+                    Caricata <SortIcon k="date" />
+                  </button>
+                  <ColumnFilter label="Caricata" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
+                    <RangeFilter type="date" value={cf.date} onChange={(v) => columns.set("date", v)} />
+                  </ColumnFilter>
+                </div>
               </TableHead>
               <TableHead className="hidden sm:table-cell">
                 <span className="flex items-center gap-2">
@@ -416,9 +492,51 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   <button className="flex items-center gap-1" onClick={() => toggleSort("completed")}>
                     Completati <SortIcon k="completed" />
                   </button>
+                  <ColumnFilter
+                    label="Seed / Completati"
+                    active={isActive(cf.seeders) || isActive(cf.completed)}
+                    onClear={() => columns.clear("seeders", "completed")}
+                  >
+                    <RangeFilter title="Seeder" value={cf.seeders} onChange={(v) => columns.set("seeders", v)} parse={parseCount} />
+                    <RangeFilter
+                      title="Completati"
+                      value={cf.completed}
+                      onChange={(v) => columns.set("completed", v)}
+                      parse={parseCount}
+                    />
+                  </ColumnFilter>
                 </span>
               </TableHead>
-              <TableHead>Stato</TableHead>
+              <TableHead>
+                <div className="flex items-center gap-1">
+                  Stato
+                  <ColumnFilter label="Stato" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
+                    <OptionsFilter
+                      options={[
+                        ...releaseStatuses.map((st) => ({ value: st, label: <ReleaseStatusBadge status={st} /> })),
+                        {
+                          value: "archivable",
+                          label: (
+                            <Badge variant="outline" className="border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300">
+                              <Archive /> Archiviabile
+                            </Badge>
+                          ),
+                        },
+                        {
+                          value: "removed",
+                          label: (
+                            <Badge variant="destructive">
+                              <CloudOff /> Rimossa
+                            </Badge>
+                          ),
+                        },
+                      ]}
+                      value={cf.status}
+                      onChange={(v) => columns.set("status", v)}
+                    />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
               <TableHead className="w-0" />
             </TableRow>
           </TableHeader>
@@ -514,6 +632,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <span>
             {rows.length} release · {formatBytes(rows.reduce((s, r) => s + r.size, 0))}
           </span>
+          <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           {pages > 1 && (
             <div className="ml-auto flex items-center gap-1">
               <Button variant="ghost" size="icon-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>

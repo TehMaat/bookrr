@@ -19,6 +19,20 @@ import {
   Upload,
 } from "lucide-react"
 
+import {
+  ActiveFilters,
+  ColumnFilter,
+  isActive,
+  noRange,
+  OptionsFilter,
+  optionsMatch,
+  parseSize,
+  RangeFilter,
+  rangeMatch,
+  TextFilter,
+  textMatch,
+  useColumnFilters,
+} from "@/components/column-filter"
 import { ImportDialog } from "@/components/import-dialog"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import {
@@ -27,6 +41,7 @@ import {
   DuplicateBadge,
   PersonalBadge,
   StatusBadge,
+  statusLabels,
   WhereBadges,
 } from "@/components/torrent-badges"
 import { Badge } from "@/components/ui/badge"
@@ -43,12 +58,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Alert, Location, Torrent } from "@/lib/api"
+import type { Alert, Location, Torrent, TorrentStatus } from "@/lib/api"
 import { formatBytes, formatState, formatUnix, isDownloading } from "@/lib/format"
 import { useAdopters, useClients, useDisks, useInfo, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
@@ -59,6 +73,26 @@ type SortKey = "name" | "size" | "status"
 const PAGE_SIZE = 50
 
 const statusOrder = { missing: 0, unknown: 1, client: 2, archived: 3, adopted: 4 }
+
+/** One filter per column; "where" holds "c:<client>", "d:<disk>", "a:<adopter>" or "none". */
+const noFilters = {
+  name: "",
+  size: noRange,
+  where: [] as string[],
+  download: [] as string[],
+  archivable: [] as string[],
+  status: [] as string[],
+}
+
+/** The values a torrent has for the "Dove si trova" filter. */
+function places(t: Torrent) {
+  const out = [
+    ...t.locations.map((l) => `c:${l.clientId}`),
+    ...t.archives.map((a) => `d:${a.diskId}`),
+    ...t.adoptions.map((a) => `a:${a.adopterId}`),
+  ]
+  return out.length > 0 ? out : ["none"]
+}
 
 function matches(t: Torrent, f: Filter) {
   switch (f) {
@@ -136,15 +170,14 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const info = useInfo()
   const [filter, setFilter] = useState<Filter>("all")
   const [query, setQuery] = useState("")
-  const [client, setClient] = useState("all")
-  const [disk, setDisk] = useState("all")
-  const [adopter, setAdopter] = useState("all")
   const [onlyPersonal, setOnlyPersonal] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "name", desc: false })
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
+  const columns = useColumnFilters(noFilters, () => setPage(0))
+  const cf = columns.filters
 
   const all = useMemo(() => torrents.data ?? [], [torrents.data])
   const scoped = useMemo(() => (onlyPersonal ? all.filter((t) => t.personalRelease) : all), [all, onlyPersonal])
@@ -168,9 +201,12 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     const q = query.trim().toLowerCase()
     const out = scoped.filter((t) => {
       if (!matches(t, filter)) return false
-      if (client !== "all" && !t.locations.some((l) => String(l.clientId) === client)) return false
-      if (disk !== "all" && !t.archives.some((a) => String(a.diskId) === disk)) return false
-      if (adopter !== "all" && !t.adoptions.some((a) => String(a.adopterId) === adopter)) return false
+      if (!textMatch(cf.name, t.name, t.hash, t.category, t.notes, ...t.tags)) return false
+      if (!rangeMatch(t.size, cf.size, parseSize)) return false
+      if (!optionsMatch(cf.where, ...places(t))) return false
+      if (!optionsMatch(cf.download, t.locations.some(isDownloading) ? "yes" : "no")) return false
+      if (!optionsMatch(cf.archivable, t.archivable?.archivable ? "yes" : "no")) return false
+      if (!optionsMatch(cf.status, t.status, ...(t.openAlert ? ["alert"] : []))) return false
       if (!q) return true
       return (
         t.name.toLowerCase().includes(q) ||
@@ -197,7 +233,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       return c * dir
     })
     return out
-  }, [scoped, filter, client, disk, adopter, query, sort])
+  }, [scoped, filter, cf, query, sort])
 
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
@@ -236,7 +272,12 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <button
             key={s.key}
             type="button"
-            onClick={() => reset(setFilter)(filter === s.key && s.key !== "all" ? "all" : s.key)}
+            onClick={() => {
+              const next = filter === s.key && s.key !== "all" ? "all" : s.key
+              // The "In download" column, and so its filter, exists only among the duplicates.
+              if (next !== "duplicate" && isActive(cf.download)) columns.clear("download")
+              reset(setFilter)(next)
+            }}
             className="text-left"
           >
             <Card
@@ -267,45 +308,6 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             className="pl-8"
           />
         </div>
-        <Select value={client} onValueChange={reset(setClient)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tutti i client</SelectItem>
-            {clients.data?.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={disk} onValueChange={reset(setDisk)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tutti i dischi</SelectItem>
-            {disks.data?.map((d) => (
-              <SelectItem key={d.id} value={String(d.id)}>
-                {d.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={adopter} onValueChange={reset(setAdopter)}>
-          <SelectTrigger className="w-[190px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tutti gli adottatori</SelectItem>
-            {adopters.data?.map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <div className="flex items-center gap-2 px-1">
           <Switch id="only-personal" checked={onlyPersonal} onCheckedChange={reset(setOnlyPersonal)} />
           <Label htmlFor="only-personal" className="whitespace-nowrap">
@@ -325,22 +327,121 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-full">
-                <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
-                  Nome <SortIcon k="name" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
+                    Nome <SortIcon k="name" />
+                  </button>
+                  <ColumnFilter label="Nome" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
+                    <TextFilter
+                      value={cf.name}
+                      onChange={(v) => columns.set("name", v)}
+                      placeholder="Nome, hash, categoria, tag, note…"
+                    />
+                  </ColumnFilter>
+                </div>
               </TableHead>
               <TableHead className="text-right">
-                <button className="ml-auto flex items-center gap-1" onClick={() => toggleSort("size")}>
-                  Dimensione <SortIcon k="size" />
-                </button>
+                <div className="flex items-center justify-end gap-1">
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("size")}>
+                    Dimensione <SortIcon k="size" />
+                  </button>
+                  <ColumnFilter label="Dimensione" active={isActive(cf.size)} onClear={() => columns.clear("size")}>
+                    <RangeFilter
+                      value={cf.size}
+                      onChange={(v) => columns.set("size", v)}
+                      parse={parseSize}
+                      placeholders={["es. 1 GB", "es. 50 GB"]}
+                    />
+                  </ColumnFilter>
+                </div>
               </TableHead>
-              <TableHead>Dove si trova</TableHead>
-              {showDownload && <TableHead>In download</TableHead>}
-              <TableHead className="hidden md:table-cell">Archiviabile</TableHead>
               <TableHead>
-                <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
-                  Stato <SortIcon k="status" />
-                </button>
+                <div className="flex items-center gap-1">
+                  Dove si trova
+                  <ColumnFilter label="Dove si trova" active={isActive(cf.where)} onClear={() => columns.clear("where")}>
+                    {(
+                      [
+                        ["Client", (clients.data ?? []).map((c) => ({ value: `c:${c.id}`, label: <><Server /> {c.name}</> }))],
+                        ["Dischi", (disks.data ?? []).map((d) => ({ value: `d:${d.id}`, label: <><HardDrive /> {d.label}</> }))],
+                        ["Adottatori", (adopters.data ?? []).map((a) => ({ value: `a:${a.id}`, label: <><HandHeart /> {a.name}</> }))],
+                      ] as const
+                    )
+                      .filter(([, options]) => options.length > 0)
+                      .map(([title, options]) => (
+                        <OptionsFilter
+                          key={title}
+                          title={title}
+                          options={options}
+                          value={cf.where}
+                          onChange={(v) => columns.set("where", v)}
+                        />
+                      ))}
+                    <OptionsFilter
+                      options={[{ value: "none", label: "Da nessuna parte" }]}
+                      value={cf.where}
+                      onChange={(v) => columns.set("where", v)}
+                    />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
+              {showDownload && (
+                <TableHead>
+                  <div className="flex items-center gap-1">
+                    In download
+                    <ColumnFilter label="In download" active={isActive(cf.download)} onClear={() => columns.clear("download")}>
+                      <OptionsFilter
+                        options={[
+                          { value: "yes", label: <><Download /> In download su almeno un client</> },
+                          { value: "no", label: "Completato ovunque" },
+                        ]}
+                        value={cf.download}
+                        onChange={(v) => columns.set("download", v)}
+                      />
+                    </ColumnFilter>
+                  </div>
+                </TableHead>
+              )}
+              <TableHead className="hidden md:table-cell">
+                <div className="flex items-center gap-1">
+                  Archiviabile
+                  <ColumnFilter label="Archiviabile" active={isActive(cf.archivable)} onClear={() => columns.clear("archivable")}>
+                    <OptionsFilter
+                      options={[
+                        { value: "yes", label: <><Archive className={archivableTone} /> Archiviabile</> },
+                        { value: "no", label: "Non archiviabile" },
+                      ]}
+                      value={cf.archivable}
+                      onChange={(v) => columns.set("archivable", v)}
+                    />
+                  </ColumnFilter>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="flex items-center gap-1">
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
+                    Stato <SortIcon k="status" />
+                  </button>
+                  <ColumnFilter label="Stato" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
+                    <OptionsFilter
+                      options={[
+                        ...(Object.keys(statusLabels) as TorrentStatus[]).map((st) => ({
+                          value: st,
+                          label: <StatusBadge status={st} />,
+                        })),
+                        {
+                          value: "alert",
+                          label: (
+                            <Badge variant="warning">
+                              <TriangleAlert /> Dove è finito?
+                            </Badge>
+                          ),
+                        },
+                      ]}
+                      value={cf.status}
+                      onChange={(v) => columns.set("status", v)}
+                    />
+                  </ColumnFilter>
+                </div>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -430,6 +531,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <span>
             {rows.length} torrent · {formatBytes(totalSize)}
           </span>
+          <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           {pages > 1 && (
             <div className="ml-auto flex items-center gap-1">
               <Button variant="ghost" size="icon-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>
