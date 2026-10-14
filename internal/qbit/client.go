@@ -72,10 +72,14 @@ func (c *Client) login(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	// Older qBittorrent answers 200 "Ok." / 200 "Fails."; newer releases
+	// answer 204 No Content on success and 401 on wrong credentials.
 	switch {
 	case resp.StatusCode == http.StatusForbidden:
 		return errors.New("IP bannato da qBittorrent per troppi tentativi falliti")
-	case resp.StatusCode != http.StatusOK:
+	case resp.StatusCode == http.StatusUnauthorized:
+		return ErrAuth
+	case !success(resp.StatusCode):
 		return fmt.Errorf("login: HTTP %d", resp.StatusCode)
 	case strings.TrimSpace(string(body)) == "Fails.":
 		return ErrAuth
@@ -83,6 +87,8 @@ func (c *Client) login(ctx context.Context) error {
 	c.loggedIn = true
 	return nil
 }
+
+func success(status int) bool { return status >= 200 && status < 300 }
 
 // get performs an authenticated GET, logging in when needed.
 func (c *Client) get(ctx context.Context, path string, out any) error {
@@ -168,7 +174,7 @@ func (c *Client) post(ctx context.Context, path string, form url.Values) error {
 			}
 			continue
 		}
-		if resp.StatusCode != http.StatusOK {
+		if !success(resp.StatusCode) {
 			return fmt.Errorf("%s: HTTP %d", path, resp.StatusCode)
 		}
 		return nil
