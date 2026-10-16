@@ -240,6 +240,26 @@ CREATE TABLE gap_groups (
 	PRIMARY KEY (kind, key)
 );
 `,
+	`
+-- The user's choices on the results of the gaps checks, kept across
+-- checks: a collection or one of its qualities hidden ("hide"), marked
+-- complete ("complete", value: the parts out then), a torrent of others
+-- accepted for a part ("accept"), a part ignored ("ignore"), a minimum
+-- quality of its own ("threshold", value: JSON). quality is the key of
+-- the quality row, '' for the whole collection or every row; unit is the
+-- part (TMDB id of a film, number of a season), 0 for none.
+CREATE TABLE gap_marks (
+	kind TEXT NOT NULL,
+	group_key TEXT NOT NULL,
+	action TEXT NOT NULL,
+	quality TEXT NOT NULL DEFAULT '',
+	unit INTEGER NOT NULL DEFAULT 0,
+	torrent INTEGER NOT NULL DEFAULT 0,
+	value TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (kind, group_key, action, quality, unit)
+);
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

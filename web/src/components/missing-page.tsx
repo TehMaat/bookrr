@@ -1,18 +1,28 @@
 import { useMemo, useState } from "react"
 import {
+  ArrowDown,
   Check,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
   Clapperboard,
   CloudOff,
+  Eye,
+  EyeOff,
   ExternalLink,
+  Gauge,
+  Grid3x3,
   Layers,
+  List,
+  MoreHorizontal,
   RefreshCw,
   Search,
   Shuffle,
+  ThumbsUp,
   TriangleAlert,
   Tv,
+  Undo2,
   Users,
   X,
 } from "lucide-react"
@@ -22,7 +32,21 @@ import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -32,14 +56,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   api,
-  type GapCell,
   type GapGroup,
   type GapKind,
+  type GapMarkInput,
+  type GapMarkState,
+  type GapPartState,
+  type GapPrefs,
   type GapRef,
   type GapRow,
   type GapState,
+  type GapThreshold,
   type GapUnit,
+  type GapVersion,
   type MissingCheckState,
+  type Quality,
 } from "@/lib/api"
 import { formatDate, formatRelative } from "@/lib/format"
 import { useAction, useMissingSagas, useMissingSeries } from "@/lib/queries"
@@ -49,11 +79,21 @@ const PAGE_SIZE = 30
 
 export type MissingView = "series" | "sagas"
 
+/**
+ * How a series or a saga is shown: one cell per season or film with its best version against the
+ * minimum quality ("parts"), or one row per quality the user uploaded it in ("grid").
+ */
+type Layout = "parts" | "grid"
+
 /** What changes between the series and the sagas. */
 type KindText = {
   icon: React.ElementType
   /** Plural noun of the stat card and the pager: "Serie", "Saghe". */
   noun: string
+  /** Singular noun in the menus: "serie", "saga". */
+  one: string
+  /** Name of the view by part: "Per stagione", "Per film". */
+  byPart: string
   search: string
   tmdbUrl: (id: number) => string
   units: (n: number) => string
@@ -72,13 +112,15 @@ const kinds: Record<GapKind, KindText> = {
   series: {
     icon: Tv,
     noun: "Serie",
+    one: "serie",
+    byPart: "Per stagione",
     search: "Cerca una serie…",
     tmdbUrl: (id) => `https://www.themoviedb.org/tv/${id}`,
     units: (n) => (n === 1 ? "stagione uscita" : "stagioni uscite"),
     mine: (n) => (n === 1 ? "tuo upload" : "tuoi upload"),
     cellLabel: (u) => `S${String(u.number).padStart(2, "0")}`,
     intro:
-      "Per ogni serie di cui hai caricato almeno un season pack: le stagioni che mancano nella stessa qualità (tipo, risoluzione, HDR e lingue audio) e se sul tracker le hanno caricate altri. Gli episodi singoli non contano.",
+      "Per ogni serie di cui hai caricato almeno un season pack: le stagioni che mancano e se sul tracker le hanno caricate altri. Per stagione: la versione migliore di ogni stagione, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità (tipo, risoluzione, HDR e lingue audio) in cui l'hai caricata. Gli episodi singoli non contano.",
     empty: "Nessuna serie tra i tuoi upload: servono season pack (S01, S01-S05, Complete).",
     checking: "Sto controllando le tue serie…",
     noMatch: "Nessuna serie corrisponde ai filtri.",
@@ -89,6 +131,8 @@ const kinds: Record<GapKind, KindText> = {
   saga: {
     icon: Clapperboard,
     noun: "Saghe",
+    one: "saga",
+    byPart: "Per film",
     search: "Cerca una saga o un film…",
     tmdbUrl: (id) => `https://www.themoviedb.org/collection/${id}`,
     units: (n) => (n === 1 ? "film uscito" : "film usciti"),
@@ -98,7 +142,7 @@ const kinds: Record<GapKind, KindText> = {
       return u.airDate ? `${name} (${u.airDate.slice(0, 4)})` : name
     },
     intro:
-      "Per ogni film che hai caricato e che su TMDB appartiene a una saga: gli altri film della saga che mancano nella stessa qualità (tipo, risoluzione, HDR e lingue audio) e se sul tracker li hanno caricati altri. I film non ancora usciti non contano.",
+      "Per ogni film che hai caricato e che su TMDB appartiene a una saga: gli altri film della saga che mancano e se sul tracker li hanno caricati altri. Per film: la versione migliore di ogni film, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità (tipo, risoluzione, HDR e lingue audio) in cui hai caricato la saga. I film non ancora usciti non contano.",
     empty: "Nessuno dei tuoi film appartiene a una saga su TMDB.",
     checking: "Sto controllando i tuoi film…",
     noMatch: "Nessuna saga corrisponde ai filtri.",
@@ -115,31 +159,85 @@ const phases: Record<MissingCheckState["phase"], string> = {
   sagas: "saghe",
 }
 
-const states: Record<GapState, { label: string; hint: string; icon: React.ElementType; className: string }> = {
-  mine: {
-    label: "Mia",
-    hint: "Caricata da te in questa qualità",
-    icon: Check,
-    className: "border-transparent bg-primary text-primary-foreground",
-  },
+type Look = { label: string; hint: string; icon: React.ElementType; className: string }
+
+const looks = {
+  mine: "border-transparent bg-primary text-primary-foreground",
+  available: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  other: "border-dashed border-amber-500/60 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+  absent: "border-destructive/40 text-destructive bg-transparent",
+}
+
+/** States of a cell of the view by quality. */
+const states: Record<GapState, Look> = {
+  mine: { label: "Mia", hint: "Caricata da te in questa qualità", icon: Check, className: looks.mine },
   available: {
     label: "C'è, di altri",
     hint: "Caricata da altri nella stessa qualità",
     icon: Users,
-    className: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    className: looks.available,
   },
   other_quality: {
     label: "Solo altra qualità",
     hint: "Sul tracker c'è, ma solo in altre qualità",
     icon: Shuffle,
-    className: "border-dashed border-amber-500/60 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+    className: looks.other,
   },
-  absent: {
-    label: "Assente",
-    hint: "Non c'è sul tracker in nessuna qualità",
-    icon: X,
-    className: "border-destructive/40 text-destructive bg-transparent",
+  absent: { label: "Assente", hint: "Non c'è sul tracker in nessuna qualità", icon: X, className: looks.absent },
+}
+
+/** States of a cell of the view by part. */
+const partStates: Record<GapPartState, Look> = {
+  mine: { label: "Tua", hint: "Caricata da te, almeno nella qualità minima", icon: Check, className: looks.mine },
+  available: {
+    label: "C'è, di altri",
+    hint: "Caricata da altri, almeno nella qualità minima",
+    icon: Users,
+    className: looks.available,
   },
+  below: {
+    label: "Sotto la soglia",
+    hint: "Sul tracker c'è, ma solo sotto la qualità minima",
+    icon: ArrowDown,
+    className: looks.other,
+  },
+  absent: { label: "Assente", hint: "Non c'è sul tracker in nessuna qualità", icon: X, className: looks.absent },
+}
+
+/** The user's choices, shown over the state. */
+const marks: Record<Exclude<GapMarkState, "">, Look> = {
+  accepted: {
+    label: "Va bene così",
+    hint: "Hai accettato una release di altri: non conta come mancante",
+    icon: ThumbsUp,
+    className: "border-sky-500/50 bg-sky-500/10 text-sky-800 dark:text-sky-200",
+  },
+  ignored: {
+    label: "Ignorata",
+    hint: "L'hai ignorata: non conta come mancante",
+    icon: EyeOff,
+    className: "border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground",
+  },
+  complete: {
+    label: "Segnata completa",
+    hint: "Hai segnato completa la collezione: non conta come mancante",
+    icon: CheckCheck,
+    className: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  },
+}
+
+const ANY = "any"
+
+const noPrefs: GapPrefs = { type: "", resolution: "", lang: "", othersCount: false }
+
+/** "Remux · 1080p · ITA", or "qualsiasi". */
+function thresholdLabel(t: GapThreshold) {
+  return [t.type, t.resolution, t.lang].filter(Boolean).join(" · ") || "qualsiasi"
+}
+
+/** "2160p Remux DV HDR": the quality without the languages, for the cells. */
+function shortQuality(q: Quality) {
+  return [q.resolution, q.type, ...q.hdr].filter(Boolean).join(" ")
 }
 
 /**
@@ -172,56 +270,89 @@ function totals(rows: GapRow[]): Totals {
   return t
 }
 
-function Legend() {
+/** Whether a group is shown by part: the layout asks for it and the group comes from a recent check. */
+function byPart(s: GapGroup, layout: Layout) {
+  return layout === "parts" && s.parts !== null
+}
+
+/** What is missing in a group, in the layout. */
+function missingIn(s: GapGroup, layout: Layout) {
+  return byPart(s, layout) ? s.partTotals.missing : totals(s.rows.filter((r) => !r.hidden)).missing
+}
+
+const layoutKey = (kind: GapKind) => `bookrr.missing.layout.${kind}`
+
+/** The layout of each tab, remembered by the browser; by part unless chosen otherwise. */
+function useLayouts() {
+  const read = (kind: GapKind): Layout => {
+    try {
+      return localStorage.getItem(layoutKey(kind)) === "grid" ? "grid" : "parts"
+    } catch {
+      return "parts"
+    }
+  }
+  const [layouts, setLayouts] = useState<Record<GapKind, Layout>>(() => ({ series: read("series"), saga: read("saga") }))
+  const set = (kind: GapKind, l: Layout) => {
+    setLayouts((v) => ({ ...v, [kind]: l }))
+    try {
+      localStorage.setItem(layoutKey(kind), l)
+    } catch {
+      /* not remembered */
+    }
+  }
+  return [layouts, set] as const
+}
+
+function Legend({ layout }: { layout: Layout }) {
+  const all = [...Object.values(layout === "parts" ? partStates : states), ...Object.values(marks)]
   return (
     <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-      {(Object.keys(states) as GapState[]).map((s) => {
-        const st = states[s]
-        return (
-          <span key={s} className="flex items-center gap-1.5" title={st.hint}>
-            <span className={cn("flex size-4 items-center justify-center rounded border", st.className)}>
-              <st.icon className="size-3" />
-            </span>
-            {st.label}
+      {all.map((st) => (
+        <span key={st.label} className="flex items-center gap-1.5" title={st.hint}>
+          <span className={cn("flex size-4 items-center justify-center rounded border", st.className)}>
+            <st.icon className="size-3" />
           </span>
-        )
-      })}
+          {st.label}
+        </span>
+      ))}
     </div>
   )
 }
 
-function UnitCell({
+/** A cell of either layout: a season or a film, how it stands, and the quality shown when there is one. */
+function CellButton({
   kind,
-  cell,
+  look,
+  label,
+  quality,
   unit,
-  prefix,
+  hint,
   onOpen,
 }: {
   kind: GapKind
-  cell: GapCell
+  look: Look
+  label: string
+  quality?: string
   unit: GapUnit
-  prefix: number
+  hint?: React.ReactNode
   onOpen: () => void
 }) {
-  const st = states[cell.state]
-  const label = kinds[kind].cellLabel(unit, prefix)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           onClick={onOpen}
-          disabled={cell.state === "absent"}
           className={cn(
-            "flex h-8 min-w-12 items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-medium tabular-nums transition-opacity",
-            kind === "saga" && "max-w-64 min-w-0 px-2",
-            st.className,
-            cell.state !== "absent" && "hover:opacity-80"
+            "flex h-8 min-w-12 items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-medium tabular-nums transition-opacity hover:opacity-80",
+            kind === "saga" && "max-w-80 min-w-0 px-2",
+            look.className
           )}
-          aria-label={`${unit.name}: ${st.label}`}
+          aria-label={`${unit.name}: ${look.label}`}
         >
-          <st.icon className="size-3 shrink-0" />
+          <look.icon className="size-3 shrink-0" />
           <span className="truncate">{label}</span>
+          {quality && <span className="shrink-0 font-normal opacity-75">· {quality}</span>}
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">
@@ -229,34 +360,70 @@ function UnitCell({
           {unit.name}
           {unit.airDate && <span className="font-normal opacity-80"> · {formatDate(unit.airDate)}</span>}
         </div>
-        <div>{st.hint}</div>
-        {cell.state === "other_quality" && <div className="opacity-80">{cell.qualities.join(", ")}</div>}
-        {cell.torrents.length > 0 && <div className="opacity-80">Clic per i link al tracker</div>}
+        <div>{look.hint}</div>
+        {hint && <div className="opacity-80">{hint}</div>}
+        <div className="opacity-80">Clic per i link al tracker e le scelte</div>
       </TooltipContent>
     </Tooltip>
   )
 }
 
-type Opened = { group: GapGroup; row: GapRow; cell: GapCell; unit: GapUnit }
+/** A cell opened: a part of a group, in a quality row or in the view by part (row null). */
+type Opened = { group: string; unit: number; row: string | null }
 
-function TorrentLinks({ refs }: { refs: GapRef[] }) {
+/** Changes to the choices of the user on a kind of check. */
+type MarkFn = (input: GapMarkInput, remove?: boolean) => void
+
+function TorrentLinks({
+  refs,
+  accepted,
+  onAccept,
+  onUnaccept,
+}: {
+  refs: (GapRef | GapVersion)[]
+  accepted: number
+  onAccept?: (id: number) => void
+  onUnaccept?: () => void
+}) {
+  if (refs.length === 0) return <p className="text-muted-foreground text-sm">Nessun torrent sul tracker.</p>
   return (
-    <ul className="divide-y rounded-lg border">
+    <ul className="max-h-80 divide-y overflow-y-auto rounded-lg border">
       {refs.map((r) => (
         <li key={r.id} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm" title={r.name}>
               {r.name}
             </div>
-            <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
               {r.quality}
               {r.mine && (
                 <Badge variant="brand" className="px-1.5 py-0">
                   tua
                 </Badge>
               )}
+              {"meets" in r && !r.meets && (
+                <Badge variant="warning" className="px-1.5 py-0">
+                  sotto la soglia
+                </Badge>
+              )}
+              {r.id === accepted && (
+                <Badge variant="info" className="px-1.5 py-0">
+                  <ThumbsUp /> accettata
+                </Badge>
+              )}
             </div>
           </div>
+          {!r.mine &&
+            onAccept &&
+            (r.id === accepted ? (
+              <Button variant="ghost" size="sm" onClick={onUnaccept}>
+                <Undo2 /> Annulla
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => onAccept(r.id)}>
+                <ThumbsUp /> Va bene questa
+              </Button>
+            ))}
           {r.url && (
             <Button variant="ghost" size="icon-sm" asChild>
               <a href={r.url} target="_blank" rel="noreferrer" aria-label="Apri sul tracker">
@@ -270,10 +437,131 @@ function TorrentLinks({ refs }: { refs: GapRef[] }) {
   )
 }
 
-function GroupCard({ s, rows, onOpen }: { s: GapGroup; rows: GapRow[]; onOpen: (o: Opened) => void }) {
-  const t = totals(rows)
+/** The minimum quality: type, resolution and audio language. */
+function ThresholdDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  initial,
+  types,
+  resolutions,
+  onSave,
+  onReset,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  title: string
+  description: string
+  initial: GapThreshold
+  types: string[]
+  resolutions: string[]
+  onSave: (t: GapThreshold) => void
+  onReset?: () => void
+}) {
+  const [t, setT] = useState(initial)
+  const [prev, setPrev] = useState({ open, initial })
+  if (prev.open !== open || prev.initial !== initial) {
+    setPrev({ open, initial })
+    if (open) setT(initial)
+  }
+  const pick = (field: keyof GapThreshold) => (v: string) => setT({ ...t, [field]: v === ANY ? "" : v })
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Tipo minimo</Label>
+            <Select value={t.type || ANY} onValueChange={pick("type")}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>Qualsiasi</SelectItem>
+                {types.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {v} o meglio
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Risoluzione minima</Label>
+            <Select value={t.resolution || ANY} onValueChange={pick("resolution")}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>Qualsiasi</SelectItem>
+                {[...resolutions].reverse().map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {v} o più
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="threshold-lang">Lingua audio richiesta</Label>
+            <Input
+              id="threshold-lang"
+              value={t.lang}
+              maxLength={8}
+              placeholder="Qualsiasi (es. ITA)"
+              onChange={(e) => setT({ ...t, lang: e.target.value.toUpperCase() })}
+            />
+            <p className="text-muted-foreground text-xs">
+              Le release di cui non si conoscono le lingue (o solo MULTI) contano come se l'avessero.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          {onReset && (
+            <Button variant="ghost" className="mr-auto" onClick={onReset}>
+              Usa quella generale
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annulla
+          </Button>
+          <Button onClick={() => onSave(t)}>Salva</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function GroupCard({
+  s,
+  layout,
+  group,
+  onOpen,
+  onMark,
+  onThreshold,
+}: {
+  s: GapGroup
+  layout: Layout
+  /** The quality filter of the grid. */
+  group: string
+  onOpen: (o: Opened) => void
+  onMark: MarkFn
+  onThreshold: (s: GapGroup) => void
+}) {
   const k = kinds[s.kind]
+  const parts = byPart(s, layout)
   const prefix = s.kind === "saga" ? sharedPrefix(s.units.map((u) => u.name)) : 0
+  const inFilter = s.rows.filter((r) => inGroup(r.quality.label, group))
+  const rows = inFilter.filter((r) => !r.hidden)
+  const hiddenRows = inFilter.filter((r) => r.hidden)
+  const t = parts
+    ? { missing: s.partTotals.missing, available: s.partTotals.available }
+    : (({ missing, available }) => ({ missing, available }))(totals(rows))
+  const unitOf = (n: number) => s.units.find((u) => u.number === n)
   return (
     <Card className="gap-3 py-4">
       <CardHeader className="px-4">
@@ -284,6 +572,10 @@ function GroupCard({ s, rows, onOpen }: { s: GapGroup; rows: GapRow[]; onOpen: (
           {t.missing > 0 ? (
             <Badge variant="warning">
               {t.missing} {t.missing === 1 ? "mancante" : "mancanti"}
+            </Badge>
+          ) : s.completed ? (
+            <Badge variant="secondary">
+              <CheckCheck /> Segnata completa
             </Badge>
           ) : (
             <Badge variant="success">
@@ -304,57 +596,258 @@ function GroupCard({ s, rows, onOpen }: { s: GapGroup; rows: GapRow[]; onOpen: (
                 <ExternalLink /> TMDB
               </a>
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="Altre azioni">
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {s.completed ? (
+                  <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "complete" }, true)}>
+                    <Undo2 /> Togli il segno di completa
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "complete" })}>
+                    <CheckCheck /> Segna come completa
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => onThreshold(s)}>
+                  <Gauge /> Qualità minima di questa {k.one}…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "hide" })}>
+                  <EyeOff /> Nascondi questa {k.one}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </span>
         </CardTitle>
         <CardDescription>
           {s.units.length} {k.units(s.units.length)} · {s.mine.length} {k.mine(s.mine.length)}
+          {s.customThreshold && <> · qualità minima di questa {k.one}: {thresholdLabel(s.threshold)}</>}
+          {layout === "parts" && s.stale && <> · vista {k.byPart.toLowerCase()} dopo il prossimo controllo</>}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 px-4">
-        {rows.map((row) => (
-          <div key={row.quality.key} className="grid gap-1.5 md:grid-cols-[minmax(180px,240px)_1fr] md:items-start md:gap-3">
-            <div className="flex flex-wrap items-center gap-1 pt-1.5 text-sm">
-              <span className="font-medium">{row.quality.label || "Qualità sconosciuta"}</span>
-              {row.missing > 0 && (
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  · {row.missing} {row.missing === 1 ? "mancante" : "mancanti"}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {row.cells.map((cell) => {
-                const unit = s.units.find((u) => u.number === cell.unit)
-                if (!unit) return null
-                return (
-                  <UnitCell
-                    key={cell.unit}
-                    kind={s.kind}
-                    cell={cell}
-                    unit={unit}
-                    prefix={prefix}
-                    onOpen={() => onOpen({ group: s, row, cell, unit })}
-                  />
-                )
-              })}
-            </div>
+        {parts ? (
+          <div className="flex flex-wrap gap-1.5">
+            {s.parts!.map((p) => {
+              const unit = unitOf(p.unit)
+              if (!unit) return null
+              const look = p.mark ? marks[p.mark] : partStates[p.state]
+              // An accepted torrent of others stands for the part.
+              const shown = (p.mark === "accepted" && unit.versions.find((v) => v.id === p.accepted)) || p.best
+              return (
+                <CellButton
+                  key={p.unit}
+                  kind={s.kind}
+                  look={look}
+                  unit={unit}
+                  label={k.cellLabel(unit, prefix)}
+                  quality={shown ? shortQuality(shown.q) : undefined}
+                  hint={shown && `${shown.mine ? "Tua" : "Di altri"}: ${shown.quality}`}
+                  onOpen={() => onOpen({ group: s.key, unit: p.unit, row: null })}
+                />
+              )
+            })}
           </div>
-        ))}
+        ) : (
+          rows.map((row) => (
+            <div
+              key={row.quality.key}
+              className="group/row grid gap-1.5 md:grid-cols-[minmax(180px,240px)_1fr] md:items-start md:gap-3"
+            >
+              <div className="flex flex-wrap items-center gap-1 pt-1.5 text-sm">
+                <span className="font-medium">{row.quality.label || "Qualità sconosciuta"}</span>
+                {row.missing > 0 && (
+                  <span className="text-muted-foreground text-xs whitespace-nowrap">
+                    · {row.missing} {row.missing === 1 ? "mancante" : "mancanti"}
+                  </span>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground size-6 opacity-60 group-hover/row:opacity-100"
+                      aria-label="Nascondi questa qualità"
+                      onClick={() => onMark({ group: s.key, action: "hide", quality: row.quality.key })}
+                    >
+                      <EyeOff className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Nascondi questa qualità: non conta più</TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {row.cells.map((cell) => {
+                  const unit = unitOf(cell.unit)
+                  if (!unit) return null
+                  const look = cell.mark ? marks[cell.mark] : states[cell.state]
+                  return (
+                    <CellButton
+                      key={cell.unit}
+                      kind={s.kind}
+                      look={look}
+                      unit={unit}
+                      label={k.cellLabel(unit, prefix)}
+                      hint={cell.state === "other_quality" ? cell.qualities.join(", ") : undefined}
+                      onOpen={() => onOpen({ group: s.key, unit: cell.unit, row: row.quality.key })}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        )}
+        {!parts && hiddenRows.length > 0 && (
+          <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
+            <EyeOff className="size-3.5" />
+            {hiddenRows.length === 1 ? "Qualità nascosta:" : "Qualità nascoste:"}
+            {hiddenRows.map((r) => (
+              <Button
+                key={r.quality.key}
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                title="Mostra di nuovo"
+                onClick={() => onMark({ group: s.key, action: "hide", quality: r.quality.key }, true)}
+              >
+                <Eye /> {r.quality.label || "Qualità sconosciuta"}
+              </Button>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
 
-/** The list of one kind: stats, filters, the cards and the unverifiable ones. */
+/** The dialog of a cell: its torrents, accepting one of others, ignoring it. */
+function CellDialog({
+  opened,
+  all,
+  onClose,
+  onMark,
+}: {
+  opened: Opened | null
+  all: GapGroup[]
+  onClose: () => void
+  onMark: MarkFn
+}) {
+  const s = opened ? all.find((g) => g.key === opened.group) : undefined
+  const unit = s?.units.find((u) => u.number === opened?.unit)
+  const row = opened?.row != null ? s?.rows.find((r) => r.quality.key === opened.row) : undefined
+  const cell = row?.cells.find((c) => c.unit === opened?.unit)
+  const part = opened?.row == null ? s?.parts?.find((p) => p.unit === opened?.unit) : undefined
+  const show = !!s && !!unit && (!!cell || !!part)
+
+  let body: React.ReactNode = null
+  if (show) {
+    const mine = (cell ?? part)!.state === "mine"
+    const mark = (cell ?? part)!.mark
+    const accepted = (cell ?? part)!.accepted
+    // The choice is made for this row, or for every row from the view by part.
+    const scope = row ? row.quality.key : ""
+    const markScope = cell ? cell.markQuality : ""
+    const look = mark ? marks[mark] : cell ? states[cell.state] : partStates[part!.state]
+    const set = (action: "accept" | "ignore", torrent?: number) =>
+      onMark({ group: s.key, action, quality: scope, unit: unit.id, torrent })
+    const unset = (action: "accept" | "ignore") => onMark({ group: s.key, action, quality: markScope, unit: unit.id }, true)
+    const refs = cell ? cell.torrents : unit.versions
+    body = (
+      <>
+        <DialogHeader>
+          <DialogTitle>
+            {s.title} · {unit.name}
+          </DialogTitle>
+          <DialogDescription>
+            {look.hint}
+            {row
+              ? `${cell!.state === "other_quality" ? ": cercavi " : " · "}${row.quality.label}`
+              : ` · qualità minima: ${thresholdLabel(s.threshold)}`}
+          </DialogDescription>
+        </DialogHeader>
+        {cell?.state === "other_quality" && (
+          <div className="flex flex-wrap gap-1">
+            {cell.qualities.map((q) => (
+              <Badge key={q} variant="warning">
+                {q}
+              </Badge>
+            ))}
+          </div>
+        )}
+        {mark && mark !== "complete" && cell && markScope === "" && (
+          <p className="text-muted-foreground text-xs">Scelta fatta per tutte le qualità, dalla vista {kinds[s.kind].byPart.toLowerCase()}.</p>
+        )}
+        <TorrentLinks
+          refs={refs}
+          accepted={mark === "accepted" ? accepted : 0}
+          onAccept={mine ? undefined : (id) => set("accept", id)}
+          onUnaccept={() => unset("accept")}
+        />
+        {!mine && (
+          <p className="text-muted-foreground text-xs">
+            {row
+              ? `"Va bene questa" e "Ignora" valgono solo per ${row.quality.label || "questa qualità"}.`
+              : `"Va bene questa" e "Ignora" valgono per tutte le qualità, anche nella vista per qualità.`}
+          </p>
+        )}
+        <DialogFooter className="sm:justify-between">
+          {unit.tmdbId ? (
+            <Button variant="ghost" size="sm" asChild>
+              <a href={`https://www.themoviedb.org/movie/${unit.tmdbId}`} target="_blank" rel="noreferrer">
+                <ExternalLink /> Il film su TMDB
+              </a>
+            </Button>
+          ) : (
+            <span />
+          )}
+          {!mine &&
+            (mark === "ignored" ? (
+              <Button variant="outline" size="sm" onClick={() => unset("ignore")}>
+                <Undo2 /> Non ignorare più
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => set("ignore")}>
+                <EyeOff /> Ignora: non è mancante
+              </Button>
+            ))}
+        </DialogFooter>
+      </>
+    )
+  }
+  return (
+    <Dialog open={show} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">{body}</DialogContent>
+    </Dialog>
+  )
+}
+
+/** The list of one kind: stats, filters, the cards, the hidden and the unverifiable ones. */
 function GapList({
   kind,
   all,
   running,
   checkedAt,
+  prefs,
+  types,
+  resolutions,
+  layout,
+  onLayout,
+  onCheck,
 }: {
   kind: GapKind
   all: GapGroup[]
   running: boolean
   checkedAt: string | null | undefined
+  prefs: GapPrefs
+  types: string[]
+  resolutions: string[]
+  layout: Layout
+  onLayout: (l: Layout) => void
+  onCheck?: () => void
 }) {
   const k = kinds[kind]
   const [query, setQuery] = useState("")
@@ -362,47 +855,75 @@ function GapList({
   const [group, setGroup] = useState("all")
   const [page, setPage] = useState(0)
   const [opened, setOpened] = useState<Opened | null>(null)
+  const [showHidden, setShowHidden] = useState(false)
+  // The minimum quality being edited: of every group (null key) or of one.
+  const [editing, setEditing] = useState<{ key: string | null; title: string; initial: GapThreshold; custom: boolean } | null>(
+    null
+  )
 
+  const mark = useAction(({ input, remove }: { input: GapMarkInput; remove?: boolean }) =>
+    remove ? api.removeGapMark(kind, input) : api.setGapMark(kind, input)
+  )
+  const savePrefs = useAction((p: GapPrefs) => api.saveMissingPrefs(kind, p))
+  const onMark: MarkFn = (input, remove) => mark.mutate({ input, remove })
+
+  const grid = layout === "grid"
   const verifiable = useMemo(() => all.filter((s) => s.status === "ok"), [all])
+  const visibleGroups = useMemo(() => verifiable.filter((s) => !s.hidden), [verifiable])
+  const hidden = useMemo(() => verifiable.filter((s) => s.hidden), [verifiable])
   const unverifiable = useMemo(() => all.filter((s) => s.status !== "ok"), [all])
+  const stale = layout === "parts" && verifiable.some((s) => s.stale)
+  const quality = grid ? group : "all"
 
   const groups = useMemo(() => {
     const set = new Map<string, number>()
-    for (const s of verifiable)
+    for (const s of visibleGroups)
       for (const r of s.rows) {
         const g = [r.quality.resolution, r.quality.type].filter(Boolean).join(" ")
         if (g) set.set(g, parseInt(r.quality.resolution) || 0)
       }
     return [...set.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([g]) => g)
-  }, [verifiable])
+  }, [visibleGroups])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return verifiable
-      .map((s) => ({ s, rows: s.rows.filter((r) => inGroup(r.quality.label, group)) }))
-      .filter(({ s, rows }) => {
-        if (rows.length === 0) return false
-        if (onlyMissing && totals(rows).missing === 0) return false
-        return (
-          !q ||
-          s.title.toLowerCase().includes(q) ||
-          s.mine.some((m) => m.name.toLowerCase().includes(q)) ||
-          (kind === "saga" && s.units.some((u) => u.name.toLowerCase().includes(q)))
-        )
-      })
-  }, [verifiable, query, group, onlyMissing, kind])
+    return visibleGroups.filter((s) => {
+      const rows = s.rows.filter((r) => inGroup(r.quality.label, quality))
+      if (rows.length === 0) return false
+      if (onlyMissing) {
+        const missing = byPart(s, layout) ? s.partTotals.missing : totals(rows.filter((r) => !r.hidden)).missing
+        if (missing === 0) return false
+      }
+      return (
+        !q ||
+        s.title.toLowerCase().includes(q) ||
+        s.mine.some((m) => m.name.toLowerCase().includes(q)) ||
+        (kind === "saga" && s.units.some((u) => u.name.toLowerCase().includes(q)))
+      )
+    })
+  }, [visibleGroups, query, quality, onlyMissing, kind, layout])
 
   const stats = useMemo(() => {
-    const scoped = verifiable.map((s) => s.rows.filter((r) => inGroup(r.quality.label, group))).filter((r) => r.length > 0)
-    const t = scoped.map(totals)
+    const t = visibleGroups
+      .map((s) => {
+        if (byPart(s, layout)) {
+          const p = s.partTotals
+          return { missing: p.missing, available: p.available, other: p.below, absent: p.absent }
+        }
+        const rows = s.rows.filter((r) => !r.hidden && inGroup(r.quality.label, quality))
+        if (!s.rows.some((r) => inGroup(r.quality.label, quality))) return null
+        const x = totals(rows)
+        return { missing: x.missing, available: x.available, other: x.otherQuality, absent: x.absent }
+      })
+      .filter((x) => x !== null)
     return {
-      groups: scoped.length,
+      groups: t.length,
       withMissing: t.filter((x) => x.missing > 0).length,
       available: t.reduce((n, x) => n + x.available, 0),
-      otherQuality: t.reduce((n, x) => n + x.otherQuality, 0),
+      other: t.reduce((n, x) => n + x.other, 0),
       absent: t.reduce((n, x) => n + x.absent, 0),
     }
-  }, [verifiable, group])
+  }, [visibleGroups, quality, layout])
 
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
@@ -415,10 +936,26 @@ function GapList({
   const statCards: { label: string; value: number; icon: React.ElementType; tone?: string }[] = [
     { label: k.noun, value: stats.groups, icon: Layers },
     { label: "Con mancanti", value: stats.withMissing, icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
-    { label: "Da altri, stessa qualità", value: stats.available, icon: Users, tone: "text-emerald-600 dark:text-emerald-400" },
-    { label: "Solo altra qualità", value: stats.otherQuality, icon: Shuffle, tone: "text-amber-600 dark:text-amber-400" },
+    {
+      label: grid ? "Da altri, stessa qualità" : "Da altri, sopra la soglia",
+      value: stats.available,
+      icon: Users,
+      tone: "text-emerald-600 dark:text-emerald-400",
+    },
+    {
+      label: grid ? "Solo altra qualità" : "Sotto la soglia",
+      value: stats.other,
+      icon: grid ? Shuffle : ArrowDown,
+      tone: "text-amber-600 dark:text-amber-400",
+    },
     { label: "Assenti dal tracker", value: stats.absent, icon: X, tone: "text-destructive" },
   ]
+
+  const saveThreshold = (t: GapThreshold) => {
+    if (!editing) return
+    if (editing.key === null) savePrefs.mutate({ ...prefs, ...t }, { onSuccess: () => setEditing(null) })
+    else mark.mutate({ input: { group: editing.key, action: "threshold", threshold: t } }, { onSuccess: () => setEditing(null) })
+  }
 
   return (
     <div className="grid gap-4">
@@ -437,23 +974,63 @@ function GapList({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
+        <div className="bg-muted inline-flex rounded-lg p-0.5">
+          <Button
+            variant={grid ? "ghost" : "outline"}
+            size="sm"
+            className={cn("h-7", !grid && "bg-background")}
+            onClick={() => reset(onLayout)("parts")}
+          >
+            <List /> {k.byPart}
+          </Button>
+          <Button
+            variant={grid ? "outline" : "ghost"}
+            size="sm"
+            className={cn("h-7", grid && "bg-background")}
+            onClick={() => reset(onLayout)("grid")}
+          >
+            <Grid3x3 /> Per qualità
+          </Button>
+        </div>
+        <div className="relative min-w-[200px] flex-1">
           <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
           <Input value={query} onChange={(e) => reset(setQuery)(e.target.value)} placeholder={k.search} className="pl-8" />
         </div>
-        <Select value={group} onValueChange={reset(setGroup)}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tutte le qualità</SelectItem>
-            {groups.map((g) => (
-              <SelectItem key={g} value={g}>
-                {g}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {grid ? (
+          <Select value={group} onValueChange={reset(setGroup)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tutte le qualità</SelectItem>
+              {groups.map((g) => (
+                <SelectItem key={g} value={g}>
+                  {g}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Button
+            variant="outline"
+            onClick={() =>
+              setEditing({ key: null, title: "Qualità minima", initial: prefs, custom: false })
+            }
+          >
+            <Gauge /> Minima: {thresholdLabel(prefs)}
+          </Button>
+        )}
+        <div className="flex items-center gap-2 px-1">
+          <Switch
+            id={`others-count-${kind}`}
+            checked={prefs.othersCount}
+            disabled={savePrefs.isPending}
+            onCheckedChange={(v) => savePrefs.mutate({ ...prefs, othersCount: v })}
+          />
+          <Label htmlFor={`others-count-${kind}`} className="whitespace-nowrap" title="Quello che hanno caricato altri non conta come mancante">
+            Conta quelle di altri
+          </Label>
+        </div>
         <div className="flex items-center gap-2 px-1">
           <Switch id={`missing-only-${kind}`} checked={onlyMissing} onCheckedChange={reset(setOnlyMissing)} />
           <Label htmlFor={`missing-only-${kind}`} className="whitespace-nowrap">
@@ -462,7 +1039,25 @@ function GapList({
         </div>
       </div>
 
-      <Legend />
+      {stale && (
+        <AlertBox>
+          <RefreshCw />
+          <AlertTitle>Serve un nuovo controllo</AlertTitle>
+          <AlertDescription>
+            <span>
+              Questi risultati vengono da un controllo fatto prima della vista {k.byPart.toLowerCase()}: fino al prossimo
+              controllo sono mostrati per qualità.{" "}
+              {onCheck && (
+                <Button variant="link" className="h-auto p-0" onClick={onCheck}>
+                  Controlla ora
+                </Button>
+              )}
+            </span>
+          </AlertDescription>
+        </AlertBox>
+      )}
+
+      <Legend layout={layout} />
 
       {visible.length === 0 && (
         <Card>
@@ -477,8 +1072,23 @@ function GapList({
           </CardContent>
         </Card>
       )}
-      {visible.map(({ s, rows }) => (
-        <GroupCard key={s.key} s={s} rows={rows} onOpen={setOpened} />
+      {visible.map((s) => (
+        <GroupCard
+          key={s.key}
+          s={s}
+          layout={layout}
+          group={quality}
+          onOpen={setOpened}
+          onMark={onMark}
+          onThreshold={(g) =>
+            setEditing({
+              key: g.key,
+              title: `Qualità minima: ${g.title}`,
+              initial: g.customThreshold ? g.threshold : prefs,
+              custom: g.customThreshold,
+            })
+          }
+        />
       ))}
       {pages > 1 && (
         <div className="text-muted-foreground flex items-center justify-end gap-1 text-xs">
@@ -497,7 +1107,43 @@ function GapList({
         </div>
       )}
 
-      {unverifiable.length > 0 && group === "all" && (
+      {hidden.length > 0 && (
+        <Card className="gap-3">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <EyeOff className="text-muted-foreground size-4" /> Nascoste ({hidden.length})
+              <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setShowHidden(!showHidden)}>
+                {showHidden ? "Chiudi" : "Mostra l'elenco"}
+              </Button>
+            </CardTitle>
+            <CardDescription>Non contano nei numeri qui sopra né tra le mancanti.</CardDescription>
+          </CardHeader>
+          {showHidden && (
+            <CardContent>
+              <ul className="max-h-72 divide-y overflow-y-auto rounded-lg border">
+                {hidden.map((s) => (
+                  <li key={s.key} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                    <span className="min-w-0 flex-1 truncate">
+                      {s.title}
+                      {s.year && <span className="text-muted-foreground"> ({s.year})</span>}
+                    </span>
+                    {missingIn(s, layout) > 0 && (
+                      <span className="text-muted-foreground text-xs">
+                        {missingIn(s, layout)} {missingIn(s, layout) === 1 ? "mancante" : "mancanti"}
+                      </span>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => onMark({ group: s.key, action: "hide" }, true)}>
+                      <Eye /> Mostra
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {unverifiable.length > 0 && (!grid || group === "all") && (
         <Card className="gap-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -532,41 +1178,26 @@ function GapList({
         </Card>
       )}
 
-      <Dialog open={opened !== null} onOpenChange={(o) => !o && setOpened(null)}>
-        <DialogContent className="sm:max-w-xl">
-          {opened && (
-            <>
-              <DialogHeader>
-                <DialogTitle>
-                  {opened.group.title} · {opened.unit.name}
-                </DialogTitle>
-                <DialogDescription>
-                  {states[opened.cell.state].hint}
-                  {opened.cell.state === "other_quality" ? ": cercavi " : " · "}
-                  {opened.row.quality.label}
-                </DialogDescription>
-              </DialogHeader>
-              {opened.cell.state === "other_quality" && (
-                <div className="flex flex-wrap gap-1">
-                  {opened.cell.qualities.map((q) => (
-                    <Badge key={q} variant="warning">
-                      {q}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <TorrentLinks refs={opened.cell.torrents} />
-              {opened.unit.tmdbId ? (
-                <Button variant="ghost" size="sm" className="justify-self-start" asChild>
-                  <a href={`https://www.themoviedb.org/movie/${opened.unit.tmdbId}`} target="_blank" rel="noreferrer">
-                    <ExternalLink /> Il film su TMDB
-                  </a>
-                </Button>
-              ) : null}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <CellDialog opened={opened} all={all} onClose={() => setOpened(null)} onMark={onMark} />
+      <ThresholdDialog
+        open={editing !== null}
+        onOpenChange={(o) => !o && setEditing(null)}
+        title={editing?.title ?? ""}
+        description={
+          editing?.key === null
+            ? `Sotto questa qualità ${kind === "saga" ? "un film" : "una stagione"} conta come mancante, anche se l'hai caricato tu. Vale per ${k.noun.toLowerCase()} senza una qualità minima propria.`
+            : `Solo per questa ${k.one}, al posto della qualità minima generale (${thresholdLabel(prefs)}).`
+        }
+        initial={editing?.initial ?? prefs}
+        types={types}
+        resolutions={resolutions}
+        onSave={saveThreshold}
+        onReset={
+          editing?.key && editing.custom
+            ? () => mark.mutate({ input: { group: editing.key!, action: "threshold" }, remove: true }, { onSuccess: () => setEditing(null) })
+            : undefined
+        }
+      />
     </div>
   )
 }
@@ -584,7 +1215,9 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
   const running = !!state?.running || check.isPending
   const seriesAll = useMemo(() => series.data?.series ?? [], [series.data])
   const sagasAll = useMemo(() => sagas.data?.sagas ?? [], [sagas.data])
-  const missingOf = (all: GapGroup[]) => all.filter((g) => g.status === "ok" && g.missing > 0).length
+  const [layouts, setLayout] = useLayouts()
+  const missingOf = (all: GapGroup[], kind: GapKind) =>
+    all.filter((g) => g.status === "ok" && !g.hidden && missingIn(g, layouts[kind]) > 0).length
 
   const run = () =>
     check.mutate(undefined, {
@@ -626,17 +1259,17 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
         <TabsList>
           <TabsTrigger value="series">
             <Tv /> Serie TV
-            {missingOf(seriesAll) > 0 && (
+            {missingOf(seriesAll, "series") > 0 && (
               <Badge variant="warning" className="ml-1 px-1.5">
-                {missingOf(seriesAll)}
+                {missingOf(seriesAll, "series")}
               </Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="sagas">
             <Clapperboard /> Saghe
-            {missingOf(sagasAll) > 0 && (
+            {missingOf(sagasAll, "saga") > 0 && (
               <Badge variant="warning" className="ml-1 px-1.5">
-                {missingOf(sagasAll)}
+                {missingOf(sagasAll, "saga")}
               </Badge>
             )}
           </TabsTrigger>
@@ -681,10 +1314,32 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
       )}
 
       <TabsContent value="series">
-        <GapList kind="series" all={seriesAll} running={running} checkedAt={series.data?.checkedAt} />
+        <GapList
+          kind="series"
+          all={seriesAll}
+          running={running}
+          checkedAt={series.data?.checkedAt}
+          prefs={series.data?.prefs ?? noPrefs}
+          types={series.data?.types ?? []}
+          resolutions={series.data?.resolutions ?? []}
+          layout={layouts.series}
+          onLayout={(l) => setLayout("series", l)}
+          onCheck={data?.enabled && !running ? run : undefined}
+        />
       </TabsContent>
       <TabsContent value="sagas">
-        <GapList kind="saga" all={sagasAll} running={running} checkedAt={sagas.data?.checkedAt} />
+        <GapList
+          kind="saga"
+          all={sagasAll}
+          running={running}
+          checkedAt={sagas.data?.checkedAt}
+          prefs={sagas.data?.prefs ?? noPrefs}
+          types={sagas.data?.types ?? []}
+          resolutions={sagas.data?.resolutions ?? []}
+          layout={layouts.saga}
+          onLayout={(l) => setLayout("saga", l)}
+          onCheck={data?.enabled && !running ? run : undefined}
+        />
       </TabsContent>
     </Tabs>
   )

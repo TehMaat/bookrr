@@ -2,6 +2,7 @@ package gaps
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -97,7 +98,7 @@ func (c *Checker) Run(ctx context.Context) {
 			continue
 		}
 		t, perr := time.Parse(time.RFC3339, deref(last))
-		if last == nil || perr != nil || c.now().Sub(t) > 26*time.Hour {
+		if last == nil || perr != nil || c.now().Sub(t) > 26*time.Hour || c.outdated(ctx, kind) {
 			if soon := c.now().Add(c.StartDelay); soon.Before(next) {
 				next = soon
 			}
@@ -118,6 +119,25 @@ func (c *Checker) Run(ctx context.Context) {
 		c.Check(ctx)
 		next = c.nextRun(c.now())
 	}
+}
+
+// outdated reports whether the stored results of a kind come from an
+// older shape of the check (see Format).
+func (c *Checker) outdated(ctx context.Context, kind string) bool {
+	groups, err := c.store.GapGroups(ctx, kind)
+	if err != nil {
+		return false
+	}
+	for _, g := range groups {
+		var f struct {
+			Format int    `json:"format"`
+			Status string `json:"status"`
+		}
+		if json.Unmarshal(g.Data, &f) == nil && f.Status == StatusOK && f.Format < Format {
+			return true
+		}
+	}
+	return false
 }
 
 // Check runs every check now and stores the results.

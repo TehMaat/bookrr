@@ -76,6 +76,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/missing/series", s.missingSeries)
 	mux.HandleFunc("GET /api/missing/sagas", s.missingSagas)
 	mux.HandleFunc("POST /api/missing/check", s.checkMissing)
+	mux.HandleFunc("PUT /api/missing/{kind}/prefs", s.saveMissingPrefs)
+	mux.HandleFunc("POST /api/missing/{kind}/marks", s.setMissingMark)
+	mux.HandleFunc("DELETE /api/missing/{kind}/marks", s.deleteMissingMark)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
