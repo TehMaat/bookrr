@@ -18,7 +18,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
-- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. Controllo ogni notte, stagioni e saghe da TMDB.
+- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate** e parti **ignorate**. Controllo ogni notte, stagioni e saghe da TMDB.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -270,11 +270,34 @@ Per ogni film che hai caricato e che su TMDB fa parte di una **saga** (una *coll
 
 Nelle celle il titolo del film è scritto senza la parte comune a tutta la saga («La compagnia dell'anello (2001)»); cliccando si aprono i torrent trovati e il link al film su TMDB. Si può cercare per nome della saga o di un film.
 
+#### Vista per stagione / per film e qualità minima
+
+La griglia per qualità diventa difficile da leggere quando hai caricato una saga in più qualità «massime» (Alien in 2160p Remux DV, Alien³ che esiste solo in 1080p Remux): Alien³ risulta mancante in tutte le righe 2160p. Per questo ogni sottoscheda ha due viste, e il browser ricorda l'ultima scelta (la prima volta è quella per parte):
+
+- **Per stagione / Per film**: una sola riga per serie o saga, una cella per stagione o film con la **versione migliore** (la tua, se ne hai una che raggiunge la qualità minima; altrimenti la migliore degli altri che la raggiunge; altrimenti la migliore in assoluto). «Migliore» vuol dire, in ordine: tipo (Full Disc > Remux > Encode > WEB-DL > WEBRip > HDTV), risoluzione, HDR (DV vale più degli altri), numero di lingue audio;
+- **Per qualità**: la griglia descritta sopra, una riga per ogni tua qualità.
+
+La **qualità minima** (pulsante «Minima», una per le serie e una per le saghe; ogni serie o saga può averne una propria dal menu ⋯) è fatta di tipo minimo, risoluzione minima e lingua audio richiesta, ognuno facoltativo. Una parte è **Tua** se l'hai caricata almeno in quella qualità, **C'è, di altri** se l'ha caricata qualcun altro almeno in quella qualità, **Sotto la soglia** se sul tracker c'è solo in qualità inferiori, **Assente** se non c'è. Le release di cui non si conoscono le lingue (o solo `MULTI`) contano come se avessero quella richiesta. Esempio: con minima *Encode*, «300 - L'alba di un impero» in 1080p Encode di altri va bene; con minima *Remux* è sotto la soglia.
+
+Le tue scelte restano anche dopo i controlli successivi:
+
+| Scelta | Dove | Effetto |
+|---|---|---|
+| **Conta quelle di altri** | interruttore sopra la lista | quello che hanno caricato altri (nella stessa qualità, o sopra la soglia) non conta come mancante |
+| **Va bene questa** | dettaglio di una cella, su una release di altri | la cella diventa «Va bene così» e non conta come mancante; se il torrent sparisce dal tracker torna mancante |
+| **Ignora** | dettaglio di una cella | la cella non conta come mancante (es. «Alien³ non esiste in 4K») |
+| **Segna come completa** | menu ⋯ della serie o saga | le parti uscite finora non contano come mancanti; una stagione o un film usciti dopo sì |
+| **Nascondi** | menu ⋯ (serie o saga), icona accanto a una qualità | sparisce dai numeri e dalla lista; si ripristina da «Nascoste» o dal link sotto la griglia |
+
+«Va bene questa» e «Ignora» dalla vista per parte valgono per tutte le qualità; dalla vista per qualità solo per quella riga.
+
 #### Quando gira
 
 Il controllo, serie e saghe insieme, gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti (se fallisce solo una delle due parti, l'altra viene comunque aggiornata).
 
-API: `GET /api/missing/series`, `GET /api/missing/sagas`, `POST /api/missing/check` (controlla ora, serie e saghe).
+API: `GET /api/missing/series`, `GET /api/missing/sagas`, `POST /api/missing/check` (controlla ora, serie e saghe), `PUT /api/missing/{series|sagas}/prefs` (qualità minima e «conta quelle di altri»), `POST`/`DELETE /api/missing/{series|sagas}/marks` (le scelte: `hide`, `complete`, `accept`, `ignore`, `threshold`).
+
+I risultati di un controllo fatto con una versione precedente non hanno le versioni delle singole parti: fino al controllo successivo (che parte da solo 10 minuti dopo l'avvio) la vista per parte li mostra per qualità.
 
 ### Release archiviabili
 

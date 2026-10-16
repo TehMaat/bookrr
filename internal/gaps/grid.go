@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
@@ -25,6 +26,23 @@ const (
 	StateAbsent       = "absent"        // not on the tracker at all
 )
 
+// States of a part in the view by part (one cell per season or film,
+// whatever its quality), against the user's minimum quality.
+const (
+	PartBelow = "below" // on the tracker, only below the minimum quality
+)
+
+// Choices of the user on a cell or a part (see Mark).
+const (
+	MarkAccepted = "accepted" // a torrent of others is fine
+	MarkIgnored  = "ignored"  // not to be counted
+	MarkComplete = "complete" // the collection was marked complete
+)
+
+// Format is the shape of the stored groups: older ones lack the versions
+// of the parts (the view by part needs a new check).
+const Format = 2
+
 // Statuses of a collection.
 const (
 	StatusOK           = "ok"
@@ -35,6 +53,7 @@ const (
 // for every quality the user uploaded it in, the grid of its parts (the
 // seasons, the films).
 type Group struct {
+	Format int    `json:"format"`
 	Kind   string `json:"kind"`
 	Key    string `json:"key"` // "tmdb:1399", "collection:119"
 	Title  string `json:"title"`
@@ -56,6 +75,26 @@ type Group struct {
 	OtherQuality int    `json:"otherQuality"`
 	Absent       int    `json:"absent"`
 	CheckedAt    string `json:"checkedAt"`
+
+	// Set when read, from the user's choices (see Apply).
+	Hidden bool `json:"hidden"`
+	// Marked complete: the parts out then do not count as missing.
+	Completed bool `json:"completed"`
+	// Minimum quality of the view by part, and whether it is this group's own.
+	Threshold       store.GapThreshold `json:"threshold"`
+	CustomThreshold bool               `json:"customThreshold"`
+	// The view by part, nil when the group comes from an older check (Stale).
+	Parts      []Part `json:"parts"`
+	PartTotals Totals `json:"partTotals"`
+	Stale      bool   `json:"stale"`
+}
+
+// Totals counts the parts that are missing, and how they stand.
+type Totals struct {
+	Missing   int `json:"missing"`
+	Available int `json:"available"`
+	Below     int `json:"below"`
+	Absent    int `json:"absent"`
 }
 
 // Unit is a part of a collection: a season of a series, a film of a saga
@@ -67,6 +106,27 @@ type Unit struct {
 	Episodes int    `json:"episodes"`
 	// The film on TMDB, for sagas.
 	TmdbID int64 `json:"tmdbId,omitempty"`
+	// Every torrent that holds it, the user's and others', best first.
+	Versions []Version `json:"versions"`
+	// Stays the same across checks (see UnitID), set when read.
+	ID int64 `json:"id"`
+}
+
+// UnitID identifies a part across checks: the TMDB id of a film (its
+// number moves when a film comes out before it), the number of a season.
+func UnitID(u Unit) int64 {
+	if u.TmdbID != 0 {
+		return u.TmdbID
+	}
+	return int64(u.Number)
+}
+
+// Version is a torrent that holds a part, with its quality.
+type Version struct {
+	Ref
+	Q unit3d.Quality `json:"q"`
+	// Reaches the minimum quality, set when read.
+	Meets bool `json:"meets"`
 }
 
 // Row is the grid of one quality the user uploaded the collection in.
@@ -77,6 +137,8 @@ type Row struct {
 	Available    int            `json:"available"`
 	OtherQuality int            `json:"otherQuality"`
 	Absent       int            `json:"absent"`
+	// Hidden by the user: it does not count.
+	Hidden bool `json:"hidden"`
 }
 
 // Cell is how a part stands in a quality.
@@ -88,6 +150,12 @@ type Cell struct {
 	Torrents []Ref `json:"torrents"`
 	// Labels of the qualities it exists in, for other_quality.
 	Qualities []string `json:"qualities"`
+	// The user's choice on it, set when read (see Apply), and the torrent
+	// accepted.
+	Mark     string `json:"mark"`
+	Accepted int64  `json:"accepted"`
+	// The row the choice was made for, "" if for every row.
+	MarkQuality string `json:"markQuality"`
 }
 
 // Ref is a torrent on the tracker.
@@ -107,8 +175,19 @@ type item struct {
 }
 
 // buildRows makes one row per quality of the user's items, best first,
-// and fills in the totals of the group.
+// lists the versions of every part and fills in the totals of the group.
 func (g *Group) buildRows(items []item) {
+	g.Format = Format
+	for i, u := range g.Units {
+		vs := []Version{}
+		for _, it := range items {
+			if it.units[u.Number] {
+				vs = append(vs, Version{Ref: it.ref, Q: it.quality})
+			}
+		}
+		sort.SliceStable(vs, func(a, b int) bool { return betterVersion(vs[a], vs[b]) })
+		g.Units[i].Versions = vs
+	}
 	qualities := map[string]unit3d.Quality{}
 	for _, it := range items {
 		if it.ref.Mine {

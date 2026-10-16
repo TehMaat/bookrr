@@ -295,6 +295,12 @@ export type Quality = {
 /** A torrent on the tracker. */
 export type GapRef = { id: number; name: string; url: string; quality: string; mine: boolean }
 
+/** A torrent that holds a part, with its quality. */
+export type GapVersion = GapRef & { q: Quality }
+
+/** The user's choice on a cell or a part. */
+export type GapMarkState = "" | "accepted" | "ignored" | "complete"
+
 export type GapCell = {
   /** Number of the season, or of the film in the saga (GapUnit.number). */
   unit: number
@@ -303,6 +309,11 @@ export type GapCell = {
   torrents: GapRef[]
   /** Labels of the qualities found, for other_quality. */
   qualities: string[]
+  mark: GapMarkState
+  /** The torrent of others accepted, for mark "accepted". */
+  accepted: number
+  /** The row the choice was made for, "" if for every row. */
+  markQuality: string
 }
 
 export type GapRow = {
@@ -312,10 +323,44 @@ export type GapRow = {
   available: number
   otherQuality: number
   absent: number
+  /** Hidden by the user: it does not count. */
+  hidden: boolean
+}
+
+/** How a part stands against the minimum quality, whatever the rows. */
+export type GapPartState = "mine" | "available" | "below" | "absent"
+
+/** A season, or a film, in the view by part. */
+export type GapPart = {
+  unit: number
+  state: GapPartState
+  /** The user's best version reaching the minimum, else the best of others that does, else the best of all. */
+  best: GapVersion | null
+  mark: GapMarkState
+  accepted: number
+}
+
+/** The lowest quality a part counts as present in; "" for any. */
+export type GapThreshold = { type: string; resolution: string; lang: string }
+
+/** Options of the view by part, for one kind of check. */
+export type GapPrefs = GapThreshold & {
+  /** What others uploaded counts as present. */
+  othersCount: boolean
 }
 
 /** A season of a series, or a film of a saga (numbered in order of release, with its TMDB id). */
-export type GapUnit = { number: number; name: string; airDate: string; episodes: number; tmdbId?: number }
+export type GapUnit = {
+  number: number
+  name: string
+  airDate: string
+  episodes: number
+  tmdbId?: number
+  /** Stays the same across checks: TMDB id of a film, number of a season. */
+  id: number
+  /** Every torrent that holds it, best first (empty for results of an older check). */
+  versions: GapVersion[]
+}
 
 export type GapKind = "series" | "saga"
 
@@ -345,6 +390,28 @@ export type GapGroup = {
   otherQuality: number
   absent: number
   checkedAt: string
+  hidden: boolean
+  /** Marked complete (and no part came out since). */
+  completed: boolean
+  /** The minimum quality used, and whether it is this group's own. */
+  threshold: GapThreshold
+  customThreshold: boolean
+  /** The view by part, null for results of an older check (stale). */
+  parts: GapPart[] | null
+  partTotals: { missing: number; available: number; below: number; absent: number }
+  stale: boolean
+}
+
+/** A choice of the user on a series or a saga. */
+export type GapMarkInput = {
+  group: string
+  action: "hide" | "complete" | "accept" | "ignore" | "threshold"
+  /** Key of the quality row; "" for the whole group, or every row. */
+  quality?: string
+  /** GapUnit.id */
+  unit?: number
+  torrent?: number
+  threshold?: GapThreshold
 }
 
 export type MissingCheckState = {
@@ -370,6 +437,10 @@ type MissingCheck = {
   checkedAt: string | null
   /** Time of the nightly check, "04:00". */
   checkAt: string
+  prefs: GapPrefs
+  /** Types from best to worst, and resolutions, for the minimum quality. */
+  types: string[]
+  resolutions: string[]
 }
 
 export type MissingSeries = MissingCheck & { series: GapGroup[] }
@@ -478,6 +549,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 const enc = encodeURIComponent
 
+const gapPath: Record<GapKind, string> = { series: "series", saga: "sagas" }
+
 export const api = {
   info: () => request<Info>("GET", "/api/info"),
 
@@ -527,6 +600,9 @@ export const api = {
   missingSagas: () => request<MissingSagas>("GET", "/api/missing/sagas"),
   /** Starts the check of the missing seasons and films now, in the background. */
   checkMissing: () => request<MissingCheckState>("POST", "/api/missing/check"),
+  saveMissingPrefs: (kind: GapKind, p: GapPrefs) => request<GapPrefs>("PUT", `/api/missing/${gapPath[kind]}/prefs`, p),
+  setGapMark: (kind: GapKind, m: GapMarkInput) => request<unknown>("POST", `/api/missing/${gapPath[kind]}/marks`, m),
+  removeGapMark: (kind: GapKind, m: GapMarkInput) => request<void>("DELETE", `/api/missing/${gapPath[kind]}/marks`, m),
 
   alerts: (open = true) => request<Alert[]>("GET", `/api/alerts?open=${open ? 1 : 0}`),
   resolveAlert: (id: number, r: ResolveInput) => request<void>("POST", `/api/alerts/${id}/resolve`, r),
