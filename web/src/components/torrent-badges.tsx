@@ -1,8 +1,20 @@
-import { Archive, CircleHelp, Copy, HandHeart, HardDrive, Server, Star, TriangleAlert } from "lucide-react"
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  CheckCheck,
+  CircleHelp,
+  Copy,
+  HandHeart,
+  HardDrive,
+  Server,
+  Star,
+  TriangleAlert,
+} from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Archivability, Torrent, TorrentStatus } from "@/lib/api"
+import type { Archivability, Peers, Torrent, TorrentStatus } from "@/lib/api"
 import { formatDate, formatState, isErrorState } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -188,4 +200,24 @@ export function archivableSummary(a: Archivability): string {
     a.timesCompleted < a.rule.minCompleted && `completati ${a.timesCompleted} su ${a.rule.minCompleted}`,
   ].filter(Boolean)
   return `Non ancora archiviabile: ${missing.join(", ")}.`
+}
+
+/** Seeders, leechers and completed downloads, as on the tracker. */
+export function PeerCounts({ p }: { p: Pick<Peers, "seeders" | "leechers" | "timesCompleted"> }) {
+  return (
+    <div className="flex items-center gap-2 text-xs tabular-nums">
+      <span className={cn("flex items-center gap-0.5", p.seeders === 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
+        <ArrowUp className="size-3" />
+        {p.seeders}
+      </span>
+      <span className="text-muted-foreground flex items-center gap-0.5">
+        <ArrowDown className="size-3" />
+        {p.leechers}
+      </span>
+      <span className="text-muted-foreground flex items-center gap-0.5">
+        <CheckCheck className="size-3" />
+        {p.timesCompleted}
+      </span>
+    </div>
+  )
 }

@@ -26,6 +26,7 @@ import {
   noRange,
   OptionsFilter,
   optionsMatch,
+  parseCount,
   parseSize,
   RangeFilter,
   rangeMatch,
@@ -39,6 +40,7 @@ import {
   ArchivableBadge,
   archivableTone,
   DuplicateBadge,
+  PeerCounts,
   PersonalBadge,
   StatusBadge,
   statusLabels,
@@ -68,7 +70,7 @@ import { useAdopters, useClients, useDisks, useInfo, useTorrents } from "@/lib/q
 import { cn } from "@/lib/utils"
 
 type Filter = "all" | "client" | "duplicate" | "missing" | "archived" | "adopted" | "unknown" | "archivable"
-type SortKey = "name" | "size" | "status"
+type SortKey = "name" | "size" | "seeders" | "completed" | "status"
 
 const PAGE_SIZE = 50
 
@@ -80,6 +82,8 @@ const noFilters = {
   size: noRange,
   where: [] as string[],
   download: [] as string[],
+  seeders: noRange,
+  completed: noRange,
   archivable: [] as string[],
   status: [] as string[],
 }
@@ -205,6 +209,9 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       if (!rangeMatch(t.size, cf.size, parseSize)) return false
       if (!optionsMatch(cf.where, ...places(t))) return false
       if (!optionsMatch(cf.download, t.locations.some(isDownloading) ? "yes" : "no")) return false
+      // Torrents that are not uploads have no counters: a bound leaves them out.
+      if (!rangeMatch(t.peers?.seeders ?? -1, cf.seeders, parseCount)) return false
+      if (!rangeMatch(t.peers?.timesCompleted ?? -1, cf.completed, parseCount)) return false
       if (!optionsMatch(cf.archivable, t.archivable?.archivable ? "yes" : "no")) return false
       if (!optionsMatch(cf.status, t.status, ...(t.openAlert ? ["alert"] : []))) return false
       if (!q) return true
@@ -228,6 +235,8 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     out.sort((a, b) => {
       let c = 0
       if (sort.key === "size") c = a.size - b.size
+      else if (sort.key === "seeders") c = (a.peers?.seeders ?? -1) - (b.peers?.seeders ?? -1)
+      else if (sort.key === "completed") c = (a.peers?.timesCompleted ?? -1) - (b.peers?.timesCompleted ?? -1)
       else if (sort.key === "status") c = statusOrder[a.status] - statusOrder[b.status]
       if (c === 0) c = a.name.localeCompare(b.name, "it", { sensitivity: "base" })
       return c * dir
@@ -240,7 +249,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const visible = rows.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
   const totalSize = rows.reduce((s, t) => s + t.size, 0)
   const showDownload = filter === "duplicate"
-  const cols = showDownload ? 6 : 5
+  const cols = showDownload ? 7 : 6
   const selectedTorrent = selected ? (all.find((t) => t.hash === selected) ?? null) : null
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -249,7 +258,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   }
 
   const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key === "size" }))
+    setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== "name" && key !== "status" }))
 
   const SortIcon = ({ k }: { k: SortKey }) =>
     sort.key === k ? sort.desc ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" /> : null
@@ -401,6 +410,30 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   </div>
                 </TableHead>
               )}
+              <TableHead className="hidden sm:table-cell">
+                <span className="flex items-center gap-2">
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("seeders")}>
+                    Seed <SortIcon k="seeders" />
+                  </button>
+                  <span className="text-muted-foreground">/</span>
+                  <button className="flex items-center gap-1" onClick={() => toggleSort("completed")}>
+                    Completati <SortIcon k="completed" />
+                  </button>
+                  <ColumnFilter
+                    label="Seed / Completati"
+                    active={isActive(cf.seeders) || isActive(cf.completed)}
+                    onClear={() => columns.clear("seeders", "completed")}
+                  >
+                    <RangeFilter title="Seeder" value={cf.seeders} onChange={(v) => columns.set("seeders", v)} parse={parseCount} />
+                    <RangeFilter
+                      title="Completati"
+                      value={cf.completed}
+                      onChange={(v) => columns.set("completed", v)}
+                      parse={parseCount}
+                    />
+                  </ColumnFilter>
+                </span>
+              </TableHead>
               <TableHead className="hidden md:table-cell">
                 <div className="flex items-center gap-1">
                   Archiviabile
@@ -503,6 +536,9 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                     <DownloadCell t={t} />
                   </TableCell>
                 )}
+                <TableCell className="hidden sm:table-cell">
+                  {t.peers ? <PeerCounts p={t.peers} /> : <span className="text-muted-foreground text-xs">—</span>}
+                </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <ArchivableBadge a={t.archivable} />
                 </TableCell>

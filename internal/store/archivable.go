@@ -63,6 +63,7 @@ type releaseCounters struct {
 	id        int64
 	hash      string
 	seeders   int64
+	leechers  int64
 	completed int64
 	seenAt    string
 	removed   bool
@@ -113,12 +114,26 @@ func assessArchivable(r releaseCounters, locs []seedLoc, rule ArchiveRule, now t
 	return a
 }
 
-const releaseCounterCols = `id, hash, seeders, times_completed, seen_at, removed_at IS NOT NULL, archivable_since`
+// Peers is what the tracker counts of an upload.
+type Peers struct {
+	ReleaseID      int64 `json:"releaseId"`
+	Seeders        int64 `json:"seeders"`
+	Leechers       int64 `json:"leechers"`
+	TimesCompleted int64 `json:"timesCompleted"`
+	// Last time the tracker gave these counters.
+	TrackerAt string `json:"trackerAt"`
+}
+
+func (r releaseCounters) peers() *Peers {
+	return &Peers{ReleaseID: r.id, Seeders: r.seeders, Leechers: r.leechers, TimesCompleted: r.completed, TrackerAt: r.seenAt}
+}
+
+const releaseCounterCols = `id, hash, seeders, leechers, times_completed, seen_at, removed_at IS NOT NULL, archivable_since`
 
 func scanCounters(rows *sql.Rows) (releaseCounters, error) {
 	var r releaseCounters
 	var since sql.NullString
-	err := rows.Scan(&r.id, &r.hash, &r.seeders, &r.completed, &r.seenAt, &r.removed, &since)
+	err := rows.Scan(&r.id, &r.hash, &r.seeders, &r.leechers, &r.completed, &r.seenAt, &r.removed, &since)
 	r.since = nullStr(since)
 	return r, err
 }

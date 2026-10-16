@@ -3,7 +3,6 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
-  CheckCheck,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
@@ -37,7 +36,7 @@ import {
   textMatch,
   useColumnFilters,
 } from "@/components/column-filter"
-import { ArchivableBadge, archivableTone, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
+import { ArchivableBadge, archivableTone, PeerCounts, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -104,26 +103,6 @@ export function ReleaseStatusBadge({ status }: { status: ReleaseStatus }) {
       </TooltipTrigger>
       <TooltipContent>Sul tracker, ma bookrr non conosce nessun torrent con questo hash</TooltipContent>
     </Tooltip>
-  )
-}
-
-/** Seeders, leechers and completed downloads, as on the tracker. */
-function Peers({ r }: { r: TrackerRelease }) {
-  return (
-    <div className="flex items-center gap-2 text-xs tabular-nums">
-      <span className={cn("flex items-center gap-0.5", r.seeders === 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
-        <ArrowUp className="size-3" />
-        {r.seeders}
-      </span>
-      <span className="text-muted-foreground flex items-center gap-0.5">
-        <ArrowDown className="size-3" />
-        {r.leechers}
-      </span>
-      <span className="text-muted-foreground flex items-center gap-0.5">
-        <CheckCheck className="size-3" />
-        {r.timesCompleted}
-      </span>
-    </div>
   )
 }
 
@@ -591,7 +570,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">{formatDate(r.createdAt)}</TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <Peers r={r} />
+                    <PeerCounts p={r} />
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap items-center gap-1.5">
