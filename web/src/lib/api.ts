@@ -75,6 +75,16 @@ export type Archivability = {
   rule: ArchiveRule
 }
 
+/** What the tracker counts of an upload. */
+export type Peers = {
+  releaseId: number
+  seeders: number
+  leechers: number
+  timesCompleted: number
+  /** Last time the tracker gave these numbers. */
+  trackerAt: string
+}
+
 export type Torrent = {
   hash: string
   name: string
@@ -103,6 +113,8 @@ export type Torrent = {
   status: TorrentStatus
   /** Null when it is not one of the user's uploads still on a client. */
   archivable: Archivability | null
+  /** Null when it is not one of the user's uploads still on the tracker. */
+  peers: Peers | null
 }
 
 export type Disk = {

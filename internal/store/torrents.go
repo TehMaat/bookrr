@@ -72,6 +72,9 @@ type Torrent struct {
 	// How the upload with this hash on the tracker stands against the
 	// archive rule; nil when it is not on a client or not an upload.
 	Archivable *Archivability `json:"archivable"`
+	// The counters of the upload with this hash on the tracker, wherever the
+	// torrent is; nil when it is not an upload still on the tracker.
+	Peers *Peers `json:"peers"`
 }
 
 // Status values exposed to the UI.
@@ -226,6 +229,7 @@ FROM locations l JOIN clients c ON c.id = l.client_id`+lwhere+` ORDER BY c.name 
 	for i := range out {
 		out[i].finalize()
 		if r, ok := releases[out[i].Hash]; ok {
+			out[i].Peers = r.peers()
 			out[i].Archivable = assessArchivable(r, locationsSeedLocs(out[i].Locations), rule, now)
 		}
 	}

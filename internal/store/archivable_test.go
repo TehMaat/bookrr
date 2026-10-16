@@ -239,8 +239,13 @@ func TestRefreshArchivable(t *testing.T) {
 
 	// Removed from every client (archived): no longer assessed.
 	clients(map[Client][]SnapshotTorrent{a: {other}, b: {}})
-	if tr, _ := s.GetTorrent(ctx, "h1"); tr.Archivable != nil {
+	tr, _ := s.GetTorrent(ctx, "h1")
+	if tr.Archivable != nil {
 		t.Fatalf("off the clients: %+v", tr.Archivable)
+	}
+	// The counters of the tracker are still shown.
+	if p := tr.Peers; p == nil || p.ReleaseID != 1 || p.Seeders != 2 || p.TimesCompleted != 2 {
+		t.Fatalf("tracker off the clients: %+v", p)
 	}
 	if r, _ := s.GetTrackerRelease(ctx, 1); r.Archivable != nil {
 		t.Fatalf("release off the clients: %+v", r.Archivable)
