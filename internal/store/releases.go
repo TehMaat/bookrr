@@ -271,7 +271,7 @@ SELECT hash, name, size FROM torrents WHERE substr(hash, 1, length(?)) = ? ORDER
 
 const releaseCols = `r.id, r.name, r.category, r.type, r.type_id, r.resolution, r.resolution_id, r.size, r.seeders, r.leechers,
 	r.times_completed, r.tmdb_id, r.imdb_id, r.tvdb_id, r.personal_release, r.created_at, r.details_link, r.hash, r.hash_error,
-	r.torrent_file IS NOT NULL, r.seen_at, r.removed_at, r.updated_at, r.archivable_since, COALESCE(t.hash, ''),
+	r.torrent_file IS NOT NULL, r.seen_at, r.removed_at, r.updated_at, r.archivable_since, COALESCE(t.hash, ''), COALESCE(t.never_archive, 0),
 	CASE
 		WHEN t.hash IS NULL THEN '` + ReleaseUntracked + `'
 		WHEN EXISTS (SELECT 1 FROM locations l WHERE l.hash = t.hash) THEN '` + StatusClient + `'
@@ -308,19 +308,22 @@ ORDER BY r.created_at DESC, r.id DESC`, args...)
 	}
 	out := []TrackerRelease{}
 	var since []*string
+	var never []bool
 	for rows.Next() {
 		var r TrackerRelease
+		var keep bool
 		var removed, archivable sql.NullString
 		if err := rows.Scan(&r.ID, &r.Name, &r.Category, &r.Type, &r.TypeID, &r.Resolution, &r.ResolutionID, &r.Size,
 			&r.Seeders, &r.Leechers, &r.TimesCompleted, &r.TmdbID, &r.ImdbID, &r.TvdbID, &r.PersonalRelease, &r.CreatedAt,
 			&r.DetailsLink, &r.Hash, &r.HashError, &r.HasTorrentFile, &r.SeenAt, &removed, &r.UpdatedAt, &archivable,
-			&r.TorrentHash, &r.Status); err != nil {
+			&r.TorrentHash, &keep, &r.Status); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		r.RemovedAt = nullStr(removed)
 		out = append(out, r)
 		since = append(since, nullStr(archivable))
+		never = append(never, keep)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -341,7 +344,7 @@ ORDER BY r.created_at DESC, r.id DESC`, args...)
 		}
 		c := releaseCounters{id: r.ID, hash: r.Hash, seeders: r.Seeders, completed: r.TimesCompleted, seenAt: r.SeenAt,
 			removed: r.RemovedAt != nil, since: since[i]}
-		out[i].Archivable = assessArchivable(c, locs[r.TorrentHash], rule, now)
+		out[i].Archivable = assessArchivable(c, locs[r.TorrentHash], rule, now).neverArchive(never[i])
 	}
 	return out, nil
 }

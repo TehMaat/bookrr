@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { neverArchiveDone, useNeverArchive } from "@/components/never-archive"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import { AdopterSelect } from "@/components/adopter-select"
 import { ArchiveFields, emptyArchive } from "@/components/archive-fields"
@@ -138,6 +139,7 @@ export function TorrentSheet({
   const addAdoption = useAction((a: AdoptionInput) => api.addAdoption(hash!, a), "Adozione aggiunta")
   const delAdoption = useAction((id: number) => api.deleteAdoption(id), "Adozione rimossa")
   const del = useAction(() => api.deleteTorrent(hash!), "Torrent eliminato")
+  const neverArchive = useNeverArchive()
   const lookup = useAction(async () => {
     const found = await api.lookupHash(hash!)
     onHashChange?.(found.hash)
@@ -279,6 +281,20 @@ export function TorrentSheet({
                 </p>
                 <div className="text-muted-foreground rounded-lg border p-3 text-xs">
                   <ArchivableNumbers a={t.archivable} />
+                </div>
+                <div className="flex items-start gap-2">
+                  <Switch
+                    id="never-archive"
+                    checked={t.archivable.neverArchive}
+                    disabled={neverArchive.isPending}
+                    onCheckedChange={(never) =>
+                      neverArchive.mutate({ hashes: [t.hash], never }, { onSuccess: (r) => neverArchiveDone(r.updated, never) })
+                    }
+                  />
+                  <div className="grid gap-0.5">
+                    <Label htmlFor="never-archive">Non segnare da archiviare</Label>
+                    <p className="text-muted-foreground text-xs">Per quelli che tieni sui client: non comparirà tra gli archiviabili.</p>
+                  </div>
                 </div>
               </Section>
             </>

@@ -215,6 +215,25 @@ func TestRefreshArchivable(t *testing.T) {
 	tracker(3, 2)
 	check("two days later", true, 2, day0)
 
+	// Kept on the clients: never archivable, the days are still counted.
+	if n, err := s.SetNeverArchive(ctx, []string{"h1", "nope"}, true); err != nil || n != 1 {
+		t.Fatalf("never archive: %d %v", n, err)
+	}
+	check("never archive", false, 2, day0)
+	if tr, _ := s.GetTorrent(ctx, "h1"); !tr.Archivable.NeverArchive || tr.Archivable.ReadyAt != nil {
+		t.Fatalf("never archive: %+v", tr.Archivable)
+	}
+	if r, _ := s.GetTrackerRelease(ctx, 1); !r.Archivable.NeverArchive {
+		t.Fatalf("release never archive: %+v", r.Archivable)
+	}
+	if tr, _ := s.GetTorrent(ctx, "h2"); tr.Archivable.NeverArchive || !tr.Archivable.Archivable {
+		t.Fatalf("other upload kept too: %+v", tr.Archivable)
+	}
+	if _, err := s.SetNeverArchive(ctx, []string{"h1"}, false); err != nil {
+		t.Fatal(err)
+	}
+	check("archivable again", true, 2, day0)
+
 	// The other seeder leaves: the count starts over.
 	clock = clock.Add(time.Hour)
 	tracker(1, 2)

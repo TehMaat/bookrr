@@ -75,6 +75,8 @@ type Torrent struct {
 	// The counters of the upload with this hash on the tracker, wherever the
 	// torrent is; nil when it is not an upload still on the tracker.
 	Peers *Peers `json:"peers"`
+	// The user keeps it on the clients (see SetNeverArchive).
+	neverArchive bool
 }
 
 // Status values exposed to the UI.
@@ -103,13 +105,13 @@ func (t *Torrent) finalize() {
 }
 
 const torrentCols = `hash, name, size, tags, category, tracker, personal_release, manual, notes, first_seen_at, last_seen_at, updated_at, hash_lookup_at, hash_lookup_error, tracker_url,
-	EXISTS (SELECT 1 FROM torrent_files f WHERE f.hash = torrents.hash)`
+	EXISTS (SELECT 1 FROM torrent_files f WHERE f.hash = torrents.hash), never_archive`
 
 func scanTorrent(row interface{ Scan(...any) error }) (Torrent, error) {
 	var t Torrent
 	var tags string
 	var last, lookup sql.NullString
-	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt, &lookup, &t.HashLookupError, &t.TrackerURL, &t.HasTorrentFile)
+	err := row.Scan(&t.Hash, &t.Name, &t.Size, &tags, &t.Category, &t.Tracker, &t.PersonalRelease, &t.Manual, &t.Notes, &t.FirstSeenAt, &last, &t.UpdatedAt, &lookup, &t.HashLookupError, &t.TrackerURL, &t.HasTorrentFile, &t.neverArchive)
 	t.Tags = SplitTags(tags)
 	t.LastSeenAt = nullStr(last)
 	t.HashLookupAt = nullStr(lookup)
@@ -230,7 +232,7 @@ FROM locations l JOIN clients c ON c.id = l.client_id`+lwhere+` ORDER BY c.name 
 		out[i].finalize()
 		if r, ok := releases[out[i].Hash]; ok {
 			out[i].Peers = r.peers()
-			out[i].Archivable = assessArchivable(r, locationsSeedLocs(out[i].Locations), rule, now)
+			out[i].Archivable = assessArchivable(r, locationsSeedLocs(out[i].Locations), rule, now).neverArchive(out[i].neverArchive)
 		}
 	}
 	return out, nil

@@ -56,6 +56,8 @@ type Archivability struct {
 	// When it becomes archivable if the thresholds stay met.
 	ReadyAt *string     `json:"readyAt"`
 	Rule    ArchiveRule `json:"rule"`
+	// The user keeps it on the clients: never archivable.
+	NeverArchive bool `json:"neverArchive"`
 }
 
 // releaseCounters is what the tracker says of an upload.
@@ -112,6 +114,39 @@ func assessArchivable(r releaseCounters, locs []seedLoc, rule ArchiveRule, now t
 		a.ReadyAt = &r
 	}
 	return a
+}
+
+// neverArchive applies the user's choice to keep an upload on the clients
+// (see SetNeverArchive): it is never archivable, while the days the rule is
+// met are still counted, so it is right again if the choice is undone.
+func (a *Archivability) neverArchive(never bool) *Archivability {
+	if a != nil && never {
+		a.NeverArchive = true
+		a.Archivable = false
+		a.ReadyAt = nil
+	}
+	return a
+}
+
+// SetNeverArchive marks torrents as never to archive, or lets them be
+// archivable again. It returns how many torrents it found.
+func (s *Store) SetNeverArchive(ctx context.Context, hashes []string, never bool) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	n := 0
+	for _, h := range hashes {
+		res, err := tx.ExecContext(ctx, `UPDATE torrents SET never_archive = ? WHERE hash = ?`, boolInt(never), h)
+		if err != nil {
+			return 0, err
+		}
+		if c, _ := res.RowsAffected(); c > 0 {
+			n++
+		}
+	}
+	return n, tx.Commit()
 }
 
 // Peers is what the tracker counts of an upload.

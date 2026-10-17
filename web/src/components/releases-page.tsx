@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import {
   Archive,
+  ArchiveX,
   ArrowDown,
   ArrowUp,
   ChevronLeft,
@@ -36,7 +37,15 @@ import {
   textMatch,
   useColumnFilters,
 } from "@/components/column-filter"
-import { ArchivableBadge, archivableTone, PeerCounts, PersonalBadge, StatusBadge } from "@/components/torrent-badges"
+import { NeverArchiveBar, PickBox, usePicker } from "@/components/never-archive"
+import {
+  ArchivableBadge,
+  archivableTone,
+  NeverArchiveBadge,
+  PeerCounts,
+  PersonalBadge,
+  StatusBadge,
+} from "@/components/torrent-badges"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -160,7 +169,12 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       if (!dateMatch(r.createdAt, cf.date)) return false
       if (!rangeMatch(r.seeders, cf.seeders, parseCount)) return false
       if (!rangeMatch(r.timesCompleted, cf.completed, parseCount)) return false
-      const flags = [r.status, ...(r.archivable?.archivable ? ["archivable"] : []), ...(r.removedAt ? ["removed"] : [])]
+      const flags = [
+        r.status,
+        ...(r.archivable?.archivable ? ["archivable"] : []),
+        ...(r.archivable?.neverArchive ? ["never"] : []),
+        ...(r.removedAt ? ["removed"] : []),
+      ]
       if (!optionsMatch(cf.status, ...flags)) return false
       if (!q) return true
       return (
@@ -189,7 +203,11 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const visible = rows.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
   const allTorrents = torrents.data ?? []
   const selectedTorrent = selected ? (allTorrents.find((t) => t.hash === selected) ?? null) : null
-  const cols = 6
+  // Ticks to mark uploads as never to archive, among the archivable ones or those already marked.
+  const picking = filter === "archivable" || cf.status.includes("never")
+  const picker = usePicker(picking ? rows.map((r) => ({ hash: r.torrentHash, archivable: r.archivable })) : [])
+  const kept = scoped.filter((r) => r.archivable?.neverArchive).length
+  const cols = picking ? 7 : 6
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
     fn(v)
@@ -373,7 +391,10 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <button
             key={s.key}
             type="button"
-            onClick={() => reset(setFilter)(filter === s.key && s.key !== "all" ? "all" : s.key)}
+            onClick={() => {
+              picker.clear()
+              reset(setFilter)(filter === s.key && s.key !== "all" ? "all" : s.key)
+            }}
             className="text-left"
           >
             <Card
@@ -415,10 +436,32 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         )}
       </div>
 
+      {picking && (
+        <NeverArchiveBar
+          chosen={picker.chosen}
+          kept={kept}
+          onShowKept={
+            cf.status.includes("never")
+              ? undefined
+              : () => {
+                  picker.clear()
+                  setFilter("all")
+                  columns.set("status", ["never"])
+                }
+          }
+          onClear={picker.clear}
+        />
+      )}
+
       <Card className="gap-0 overflow-hidden py-0">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
+              {picking && (
+                <TableHead className="w-0">
+                  <PickBox label="Seleziona tutte" checked={picker.all} indeterminate={picker.some} onChange={picker.toggleAll} />
+                </TableHead>
+              )}
               <TableHead className="w-full">
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
@@ -502,6 +545,14 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                           ),
                         },
                         {
+                          value: "never",
+                          label: (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              <ArchiveX /> Da non archiviare
+                            </Badge>
+                          ),
+                        },
+                        {
                           value: "removed",
                           label: (
                             <Badge variant="destructive">
@@ -539,6 +590,17 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   onClick={linked ? () => setSelected(r.torrentHash) : undefined}
                   className={cn(linked && "cursor-pointer", r.removedAt && "opacity-70")}
                 >
+                  {picking && (
+                    <TableCell>
+                      {r.archivable && (
+                        <PickBox
+                          label={`Seleziona ${r.name}`}
+                          checked={picker.isPicked(r.torrentHash)}
+                          onChange={(on) => picker.toggle(r.torrentHash, on)}
+                        />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="max-w-0 min-w-[260px] whitespace-normal">
                     <div className="flex items-center gap-1.5">
                       <span className={cn("truncate font-medium", r.removedAt && "line-through")} title={r.name}>
@@ -576,6 +638,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <ReleaseStatusBadge status={r.status} />
                       <ArchivableBadge a={r.archivable} label="Archiviabile" />
+                      <NeverArchiveBadge a={r.archivable} />
                       {r.status === "untracked" && (
                         <Button
                           size="sm"

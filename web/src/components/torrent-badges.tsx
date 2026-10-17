@@ -1,5 +1,6 @@
 import {
   Archive,
+  ArchiveX,
   ArrowDown,
   ArrowUp,
   CheckCheck,
@@ -191,8 +192,24 @@ export function ArchivableBadge({ a, label = "Sì" }: { a: Archivability | null;
   )
 }
 
+/** An upload the user keeps on the clients, never archivable. */
+export function NeverArchiveBadge({ a }: { a: Archivability | null }) {
+  if (!a?.neverArchive) return null
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className="text-muted-foreground">
+          <ArchiveX /> Da non archiviare
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>La tieni sui client: non viene segnata come archiviabile anche se altri la seminano.</TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** One line on where an upload stands: archivable, waiting for the days, or why not. */
 export function archivableSummary(a: Archivability): string {
+  if (a.neverArchive) return "Da non archiviare: la tieni sui client, anche se altri la seminano."
   if (a.archivable) return `Archiviabile ${sinceDays(a.days)}: altri la seminano, puoi toglierla dai client.`
   if (a.met) return `Condizioni rispettate dal ${formatDate(a.since)}: archiviabile dal ${formatDate(a.readyAt)} se restano tali.`
   const missing = [
