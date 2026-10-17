@@ -73,6 +73,8 @@ export type Archivability = {
   /** When it becomes archivable if the thresholds stay met. */
   readyAt: string | null
   rule: ArchiveRule
+  /** The user keeps it on the clients: never archivable. */
+  neverArchive: boolean
 }
 
 /** What the tracker counts of an upload. */
@@ -564,6 +566,9 @@ export const api = {
     }),
   updateTorrent: (hash: string, p: TorrentPatch) => request<Torrent>("PATCH", `/api/torrents/${enc(hash)}`, p),
   deleteTorrent: (hash: string) => request<void>("DELETE", `/api/torrents/${enc(hash)}`),
+  /** Marks uploads the user keeps on the clients, never archivable; never false undoes it. */
+  neverArchive: (hashes: string[], never: boolean) =>
+    request<{ updated: number }>("POST", "/api/torrents/never-archive", { hashes, never }),
   /** Looks up on the UNIT3D tracker the hash of a torrent added without one; returns it under the new hash. */
   lookupHash: (hash: string) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/lookup-hash`),
   trackerCandidates: (hash: string, q = "") =>

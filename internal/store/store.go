@@ -260,6 +260,11 @@ CREATE TABLE gap_marks (
 	PRIMARY KEY (kind, group_key, action, quality, unit)
 );
 `,
+	`
+-- Uploads the user keeps on the clients: never archivable, whoever seeds
+-- them (see archivable.go).
+ALTER TABLE torrents ADD COLUMN never_archive INTEGER NOT NULL DEFAULT 0;
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

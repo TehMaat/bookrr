@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import {
   Archive,
+  ArchiveX,
   ArrowDown,
   ArrowUp,
   ChevronLeft,
@@ -35,11 +36,13 @@ import {
   useColumnFilters,
 } from "@/components/column-filter"
 import { ImportDialog } from "@/components/import-dialog"
+import { NeverArchiveBar, PickBox, usePicker } from "@/components/never-archive"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import {
   ArchivableBadge,
   archivableTone,
   DuplicateBadge,
+  NeverArchiveBadge,
   PeerCounts,
   PersonalBadge,
   StatusBadge,
@@ -212,7 +215,8 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       // Torrents that are not uploads have no counters: a bound leaves them out.
       if (!rangeMatch(t.peers?.seeders ?? -1, cf.seeders, parseCount)) return false
       if (!rangeMatch(t.peers?.timesCompleted ?? -1, cf.completed, parseCount)) return false
-      if (!optionsMatch(cf.archivable, t.archivable?.archivable ? "yes" : "no")) return false
+      const archivable = [t.archivable?.archivable ? "yes" : "no", ...(t.archivable?.neverArchive ? ["never"] : [])]
+      if (!optionsMatch(cf.archivable, ...archivable)) return false
       if (!optionsMatch(cf.status, t.status, ...(t.openAlert ? ["alert"] : []))) return false
       if (!q) return true
       return (
@@ -249,7 +253,11 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const visible = rows.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
   const totalSize = rows.reduce((s, t) => s + t.size, 0)
   const showDownload = filter === "duplicate"
-  const cols = showDownload ? 7 : 6
+  // Ticks to mark uploads as never to archive, among the archivable ones or those already marked.
+  const picking = filter === "archivable" || cf.archivable.includes("never")
+  const picker = usePicker(picking ? rows : [])
+  const kept = scoped.filter((t) => t.archivable?.neverArchive).length
+  const cols = (showDownload ? 7 : 6) + (picking ? 1 : 0)
   const selectedTorrent = selected ? (all.find((t) => t.hash === selected) ?? null) : null
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -285,6 +293,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               const next = filter === s.key && s.key !== "all" ? "all" : s.key
               // The "In download" column, and so its filter, exists only among the duplicates.
               if (next !== "duplicate" && isActive(cf.download)) columns.clear("download")
+              picker.clear()
               reset(setFilter)(next)
             }}
             className="text-left"
@@ -331,10 +340,32 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </Button>
       </div>
 
+      {picking && (
+        <NeverArchiveBar
+          chosen={picker.chosen}
+          kept={kept}
+          onShowKept={
+            cf.archivable.includes("never")
+              ? undefined
+              : () => {
+                  picker.clear()
+                  setFilter("all")
+                  columns.set("archivable", ["never"])
+                }
+          }
+          onClear={picker.clear}
+        />
+      )}
+
       <Card className="gap-0 overflow-hidden py-0">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
+              {picking && (
+                <TableHead className="w-0">
+                  <PickBox label="Seleziona tutti" checked={picker.all} indeterminate={picker.some} onChange={picker.toggleAll} />
+                </TableHead>
+              )}
               <TableHead className="w-full">
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
@@ -442,6 +473,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       options={[
                         { value: "yes", label: <><Archive className={archivableTone} /> Archiviabile</> },
                         { value: "no", label: "Non archiviabile" },
+                        { value: "never", label: <><ArchiveX /> Da non archiviare</> },
                       ]}
                       value={cf.archivable}
                       onChange={(v) => columns.set("archivable", v)}
@@ -513,6 +545,17 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   !t.openAlert && t.duplicate && "bg-destructive/5 hover:bg-destructive/10 shadow-[inset_3px_0_0_var(--destructive)]"
                 )}
               >
+                {picking && (
+                  <TableCell>
+                    {t.archivable && (
+                      <PickBox
+                        label={`Seleziona ${t.name}`}
+                        checked={picker.isPicked(t.hash)}
+                        onChange={(on) => picker.toggle(t.hash, on)}
+                      />
+                    )}
+                  </TableCell>
+                )}
                 <TableCell className="max-w-0 min-w-[260px] whitespace-normal">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate font-medium" title={t.name}>
@@ -541,6 +584,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <ArchivableBadge a={t.archivable} />
+                  <NeverArchiveBadge a={t.archivable} />
                 </TableCell>
                 <TableCell>
                   {t.openAlert ? (

@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/torrents", s.listTorrents)
 	mux.HandleFunc("POST /api/torrents", s.createTorrent)
 	mux.HandleFunc("POST /api/torrents/import", s.importTorrents)
+	mux.HandleFunc("POST /api/torrents/never-archive", s.neverArchive)
 	mux.HandleFunc("GET /api/torrents/{hash}", s.getTorrent)
 	mux.HandleFunc("PATCH /api/torrents/{hash}", s.updateTorrent)
 	mux.HandleFunc("DELETE /api/torrents/{hash}", s.deleteTorrent)
@@ -444,6 +445,29 @@ func (s *Server) torrentFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/x-bittorrent")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	w.Write(data)
+}
+
+// neverArchive marks uploads the user keeps on the clients, never to be
+// archivable: {"hashes": ["…"], "never": true}; "never": false undoes it.
+func (s *Server) neverArchive(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Hashes []string `json:"hashes"`
+		Never  bool     `json:"never"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if len(in.Hashes) == 0 {
+		writeError(w, http.StatusBadRequest, "nessun torrent indicato")
+		return
+	}
+	n, err := s.store.SetNeverArchive(r.Context(), in.Hashes, in.Never)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	slog.Info("torrent da non archiviare", "never", in.Never, "count", n)
+	writeJSON(w, 200, map[string]int{"updated": n})
 }
 
 type importRow struct {

@@ -319,7 +319,9 @@ Le soglie si scelgono dall'icona **Impostazioni** (ingranaggio) in alto:
 
 Nella lista **Torrent** la colonna **Archiviabile** mostra *Sì · da N giorni* (vuota altrimenti) con, nel tooltip, seeder totali, tuoi, altri, completati, regola e data dell'ultimo aggiornamento dal tracker; la casella **Archiviabili** filtra la lista. La stessa informazione è nella scheda del torrent (anche quando le soglie sono rispettate ma mancano ancora dei giorni, o perché non lo è) e nella pagina **Release**, con il suo filtro. Non ci sono notifiche.
 
-API: `GET`/`PUT /api/settings` con `archiveMinSeeders`, `archiveMinCompleted`, `archiveDays` (le opzioni non inviate restano invariate); ogni torrent e ogni release hanno il campo `archivable` (`null` se non su un client).
+**Da non archiviare**: i film che vuoi tenere sui client si possono escludere. Nella vista **Archiviabili** (Torrent o Release) compare una casella su ogni riga: spunta quelli che non archivierai mai (o tutti con la casella in intestazione) e premi **Non segnare da archiviare**; per uno solo c'è anche l'interruttore nella scheda del torrent. Non compaiono più tra gli archiviabili e mostrano *Da non archiviare*; per ritrovarli usa il link *N da non archiviare · mostra* o il filtro della colonna Archiviabile (Stato nelle Release), da cui puoi selezionarli e premere **Segnala di nuovo quando archiviabile**. bookrr continua a contare i giorni in cui le soglie sono rispettate, quindi se annulli la scelta torna subito archiviabile se lo era già.
+
+API: `GET`/`PUT /api/settings` con `archiveMinSeeders`, `archiveMinCompleted`, `archiveDays` (le opzioni non inviate restano invariate); ogni torrent e ogni release hanno il campo `archivable` (`null` se non su un client), con `neverArchive` per quelli da non archiviare. `POST /api/torrents/never-archive` con `{"hashes": ["…"], "never": true}` li segna da non archiviare (`false` annulla) e risponde `{"updated": N}`.
 
 ## API
 
