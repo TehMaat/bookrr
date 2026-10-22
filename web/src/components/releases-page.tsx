@@ -37,6 +37,7 @@ import {
   textMatch,
   useColumnFilters,
 } from "@/components/column-filter"
+import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { NeverArchiveBar, PickBox, usePicker } from "@/components/never-archive"
 import {
   ArchivableBadge,
@@ -386,32 +387,22 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
+      <NavbarStats>
         {stats.map((s) => (
-          <button
+          <StatCard
             key={s.key}
-            type="button"
+            label={s.label}
+            value={counts[s.key]}
+            icon={s.icon}
+            tone={s.tone}
+            active={filter === s.key}
             onClick={() => {
               picker.clear()
               reset(setFilter)(filter === s.key && s.key !== "all" ? "all" : s.key)
             }}
-            className="text-left"
-          >
-            <Card
-              className={cn(
-                "hover:bg-accent/50 gap-1 px-4 py-3 transition-colors",
-                filter === s.key && "ring-primary/40 border-primary/50 ring-2"
-              )}
-            >
-              <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                <s.icon className={cn("size-3.5", s.tone)} />
-                {s.label}
-              </div>
-              <div className={cn("text-2xl font-semibold tabular-nums", counts[s.key] > 0 && s.tone)}>{counts[s.key]}</div>
-            </Card>
-          </button>
+          />
         ))}
-      </div>
+      </NavbarStats>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">

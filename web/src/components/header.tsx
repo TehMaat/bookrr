@@ -1,9 +1,8 @@
-import { useState } from "react"
-import { Check, Laptop, Moon, Palette, RefreshCw, Settings, Sun } from "lucide-react"
+import { useState, type Ref } from "react"
+import { Check, Laptop, Menu, Moon, Palette, RefreshCw, Settings, Sun } from "lucide-react"
 import { toast } from "sonner"
 
 import { SettingsDialog } from "@/components/settings-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,13 +15,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { accents, logoUrl } from "@/lib/accent"
 import { api } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
-import { useAction, useInfo, useSyncState } from "@/lib/queries"
+import { useAction, useSyncState } from "@/lib/queries"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
-export function Header() {
+/**
+ * The bar on top of the page: the open page's counters (slotRef, see NavbarStats),
+ * or its title when it has none, then sync and preferences.
+ */
+export function Header({ title, slotRef, onMenu }: { title: React.ReactNode; slotRef: Ref<HTMLDivElement>; onMenu: () => void }) {
   const { setTheme, accent, setAccent } = useTheme()
-  const info = useInfo()
   const sync = useSyncState()
   const syncNow = useAction(() => api.syncNow())
   const running = sync.data?.running || syncNow.isPending
@@ -30,25 +32,16 @@ export function Header() {
 
   return (
     <header className="bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
-        <div className="flex items-center gap-2 font-semibold">
-          <img src={logoUrl(accent)} alt="" className="size-8" />
-          <span className="text-lg">bookrr</span>
-          {info.data && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="brand" className="font-mono">
-                  {info.data.version}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>Versione di bookrr</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+      <div className="flex min-h-16 flex-wrap items-center gap-x-3 px-4 sm:px-6 md:flex-nowrap">
+        <Button variant="ghost" size="icon-sm" aria-label="Menu" className="lg:hidden" onClick={onMenu}>
+          <Menu />
+        </Button>
+        <div ref={slotRef} className="peer order-last -mx-1 flex min-w-0 basis-full items-center gap-2 overflow-x-auto px-1 pt-1 pb-2.5 empty:hidden md:order-none md:mx-0 md:flex-1 md:basis-auto md:px-0.5 md:py-1" />
+        <div className="hidden h-16 flex-1 items-center gap-2 font-semibold peer-empty:flex [&_svg]:size-4">{title}</div>
+        <div className="ml-auto flex h-16 shrink-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-muted-foreground hidden text-xs md:inline">
+              <span className="text-muted-foreground hidden text-xs xl:inline">
                 Sync {formatRelative(sync.data?.lastRunAt)}
               </span>
             </TooltipTrigger>

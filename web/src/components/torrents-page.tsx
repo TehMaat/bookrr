@@ -36,6 +36,7 @@ import {
   useColumnFilters,
 } from "@/components/column-filter"
 import { ImportDialog } from "@/components/import-dialog"
+import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { NeverArchiveBar, PickBox, usePicker } from "@/components/never-archive"
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import {
@@ -284,11 +285,16 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
 
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+      <NavbarStats>
         {stats.map((s) => (
-          <button
+          <StatCard
             key={s.key}
-            type="button"
+            label={s.label}
+            value={counts[s.key]}
+            icon={s.icon}
+            tone={s.tone}
+            active={filter === s.key}
+            loading={torrents.isLoading}
             onClick={() => {
               const next = filter === s.key && s.key !== "all" ? "all" : s.key
               // The "In download" column, and so its filter, exists only among the duplicates.
@@ -296,25 +302,9 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               picker.clear()
               reset(setFilter)(next)
             }}
-            className="text-left"
-          >
-            <Card
-              className={cn(
-                "hover:bg-accent/50 gap-1 px-4 py-3 transition-colors",
-                filter === s.key && "ring-primary/40 border-primary/50 ring-2"
-              )}
-            >
-              <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                <s.icon className={cn("size-3.5", s.tone)} />
-                {s.label}
-              </div>
-              <div className={cn("text-2xl font-semibold tabular-nums", counts[s.key] > 0 && s.tone)}>
-                {torrents.isLoading ? <Skeleton className="h-8 w-12" /> : counts[s.key]}
-              </div>
-            </Card>
-          </button>
+          />
         ))}
-      </div>
+      </NavbarStats>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">

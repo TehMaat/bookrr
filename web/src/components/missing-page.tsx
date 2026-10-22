@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -961,17 +962,11 @@ function GapList({
     <div className="grid gap-4">
       <p className="text-muted-foreground text-sm">{k.intro}</p>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <NavbarStats>
         {statCards.map((s) => (
-          <Card key={s.label} className="gap-1 px-4 py-3">
-            <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-              <s.icon className={cn("size-3.5", s.tone)} />
-              {s.label}
-            </div>
-            <div className={cn("text-2xl font-semibold tabular-nums", s.value > 0 && s.tone)}>{s.value}</div>
-          </Card>
+          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
         ))}
-      </div>
+      </NavbarStats>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="bg-muted inline-flex rounded-lg p-0.5">
