@@ -37,17 +37,15 @@ export function StatCard({
       type={onClick ? "button" : undefined}
       onClick={onClick}
       className={cn(
-        "bg-card flex min-w-[6.5rem] shrink-0 flex-col items-start rounded-lg border px-2.5 py-1 text-left transition-colors",
+        "bg-card flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm whitespace-nowrap transition-colors",
         onClick && "hover:bg-accent/50 cursor-pointer",
         active && "ring-primary/40 border-primary/50 ring-2"
       )}
     >
-      <span className="text-muted-foreground flex items-center gap-1 text-[11px] leading-4 whitespace-nowrap">
-        <Icon className={cn("size-3", tone)} />
-        {label}
-      </span>
-      <span className={cn("text-lg leading-6 font-semibold tabular-nums", value > 0 && tone)}>
-        {loading ? <Skeleton className="my-0.5 h-5 w-8" /> : value}
+      <Icon className={cn("text-muted-foreground size-4", tone)} />
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-semibold tabular-nums", value > 0 && tone)}>
+        {loading ? <Skeleton className="h-4 w-6" /> : value}
       </span>
     </Box>
   )
