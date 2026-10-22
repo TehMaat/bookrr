@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, Server } from "lucide-react"
+import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, Server, Skull } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -17,7 +17,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
 
-const tabs = ["torrents", "releases", "missing", "alerts", "disks", "adopters", "clients"] as const
+const tabs = ["torrents", "releases", "dead", "missing", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
 
 type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
@@ -57,6 +57,7 @@ export default function App() {
   const nav: (NavItem & { id: Tab })[] = [
     { id: "torrents", label: "Torrent", icon: ListTree },
     { id: "releases", label: "Release", icon: CloudUpload },
+    { id: "dead", label: "Morte", icon: Skull },
     { id: "missing", label: "Mancanti", icon: Puzzle },
     { id: "alerts", label: "Segnalazioni", icon: BellRing, count: openCount },
     { id: "disks", label: "Dischi", icon: HardDrive },
@@ -99,6 +100,7 @@ export default function App() {
             <AlertsBanner alerts={alerts.data ?? []} onResolve={resolveOne} onShowAll={() => go("alerts")} />
             {tab === "torrents" && <TorrentsPage onResolve={resolveOne} />}
             {tab === "releases" && <ReleasesPage onResolve={resolveOne} />}
+            {tab === "dead" && <ReleasesPage dead onResolve={resolveOne} />}
             {tab === "missing" && (
               <MissingPage view={missingView} onView={(v) => go(v === "sagas" ? "missing/sagas" : "missing")} />
             )}
