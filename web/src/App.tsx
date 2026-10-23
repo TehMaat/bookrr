@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, Server } from "lucide-react"
+import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, Server, Skull } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -8,17 +8,16 @@ import { ClientsPage } from "@/components/clients-page"
 import { DisksPage } from "@/components/disks-page"
 import { Header } from "@/components/header"
 import { MissingPage, type MissingView } from "@/components/missing-page"
+import { NavbarSlot } from "@/components/navbar-stats"
 import { ReleasesPage } from "@/components/releases-page"
 import { ResolveDialog } from "@/components/resolve-dialog"
+import { Sidebar, type NavItem } from "@/components/sidebar"
 import { TorrentsPage } from "@/components/torrents-page"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { logoUrl } from "@/lib/accent"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
-import { useTheme } from "@/lib/theme"
 
-const tabs = ["torrents", "releases", "missing", "alerts", "disks", "adopters", "clients"] as const
+const tabs = ["torrents", "releases", "dead", "missing", "alerts", "disks", "adopters", "clients"] as const
 type Tab = (typeof tabs)[number]
 
 type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
@@ -38,9 +37,10 @@ function routeFromHash(): Route {
 export default function App() {
   const [{ tab, diskId, missingView }, setRoute] = useState<Route>(routeFromHash)
   const [resolving, setResolving] = useState<Alert[]>([])
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null)
   const resolveOne = (a: Alert) => setResolving([a])
   const alerts = useAlerts(true)
-  const { accent } = useTheme()
   const openCount = alerts.data?.length ?? 0
 
   useEffect(() => {
@@ -54,67 +54,66 @@ export default function App() {
     setRoute(routeFromHash())
   }
 
+  const nav: (NavItem & { id: Tab })[] = [
+    { id: "torrents", label: "Torrent", icon: ListTree },
+    { id: "releases", label: "Release", icon: CloudUpload },
+    { id: "dead", label: "Morte", icon: Skull },
+    { id: "missing", label: "Mancanti", icon: Puzzle },
+    { id: "alerts", label: "Segnalazioni", icon: BellRing, count: openCount },
+    { id: "disks", label: "Dischi", icon: HardDrive },
+    { id: "adopters", label: "Adottatori", icon: HandHeart },
+    { id: "clients", label: "Client", icon: Server },
+  ]
+  const current = nav.find((n) => n.id === tab)!
+  const sidebar = (
+    <Sidebar
+      items={nav}
+      active={tab}
+      onSelect={(id) => {
+        setMenuOpen(false)
+        go(id)
+      }}
+    />
+  )
+
   return (
-    <div className="min-h-screen">
-      <Header />
-      <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-6">
-        <AlertsBanner alerts={alerts.data ?? []} onResolve={resolveOne} onShowAll={() => go("alerts")} />
-        <Tabs value={tab} onValueChange={go}>
-          <TabsList className="w-full justify-start overflow-x-auto sm:w-fit">
-            <TabsTrigger value="torrents">
-              <ListTree /> Torrent
-            </TabsTrigger>
-            <TabsTrigger value="releases">
-              <CloudUpload /> Release
-            </TabsTrigger>
-            <TabsTrigger value="missing">
-              <Puzzle /> Mancanti
-            </TabsTrigger>
-            <TabsTrigger value="alerts">
-              <BellRing /> Segnalazioni
-              {openCount > 0 && (
-                <Badge variant="warning" className="ml-1 px-1.5">
-                  {openCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="disks">
-              <HardDrive /> Dischi
-            </TabsTrigger>
-            <TabsTrigger value="adopters">
-              <HandHeart /> Adottatori
-            </TabsTrigger>
-            <TabsTrigger value="clients">
-              <Server /> Client
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="torrents">
-            <TorrentsPage onResolve={resolveOne} />
-          </TabsContent>
-          <TabsContent value="releases">
-            <ReleasesPage onResolve={resolveOne} />
-          </TabsContent>
-          <TabsContent value="missing">
-            <MissingPage view={missingView} onView={(v) => go(v === "sagas" ? "missing/sagas" : "missing")} />
-          </TabsContent>
-          <TabsContent value="alerts">
-            <AlertsPage onResolve={setResolving} />
-          </TabsContent>
-          <TabsContent value="disks">
-            <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={resolveOne} />
-          </TabsContent>
-          <TabsContent value="adopters">
-            <AdoptersPage onResolve={resolveOne} />
-          </TabsContent>
-          <TabsContent value="clients">
-            <ClientsPage />
-          </TabsContent>
-        </Tabs>
-      </main>
+    <div className="flex min-h-screen">
+      <aside className="bg-sidebar sticky top-0 hidden h-screen w-56 shrink-0 border-r lg:block">{sidebar}</aside>
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent side="left" className="bg-sidebar w-64 gap-0 sm:max-w-64">
+          <SheetTitle className="sr-only">Menu</SheetTitle>
+          {sidebar}
+        </SheetContent>
+      </Sheet>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header
+          slotRef={setSlot}
+          onMenu={() => setMenuOpen(true)}
+          title={
+            <>
+              <current.icon /> {current.label}
+            </>
+          }
+        />
+        <NavbarSlot.Provider value={slot}>
+          <main className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-4 sm:px-6">
+            <AlertsBanner alerts={alerts.data ?? []} onResolve={resolveOne} onShowAll={() => go("alerts")} />
+            {tab === "torrents" && <TorrentsPage onResolve={resolveOne} />}
+            {tab === "releases" && <ReleasesPage onResolve={resolveOne} />}
+            {tab === "dead" && <ReleasesPage dead onResolve={resolveOne} />}
+            {tab === "missing" && (
+              <MissingPage view={missingView} onView={(v) => go(v === "sagas" ? "missing/sagas" : "missing")} />
+            )}
+            {tab === "alerts" && <AlertsPage onResolve={setResolving} />}
+            {tab === "disks" && (
+              <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={resolveOne} />
+            )}
+            {tab === "adopters" && <AdoptersPage onResolve={resolveOne} />}
+            {tab === "clients" && <ClientsPage />}
+          </main>
+        </NavbarSlot.Provider>
+      </div>
       <ResolveDialog alerts={resolving} onClose={() => setResolving([])} />
-      <footer className="text-muted-foreground flex items-center justify-center gap-1.5 py-6 text-xs">
-        <img src={logoUrl(accent)} alt="" className="size-4" /> bookrr
-      </footer>
     </div>
   )
 }

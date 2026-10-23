@@ -83,7 +83,18 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
         {disks.data?.map((d) => {
           const usage = d.capacity > 0 ? Math.min(100, (d.archivedSize / d.capacity) * 100) : null
           return (
-            <Card key={d.id} className="gap-4">
+            <Card
+              key={d.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`Torrent archiviati su ${d.label}`}
+              className="hover:bg-accent/50 focus-visible:ring-ring/50 cursor-pointer gap-4 transition-colors outline-none focus-visible:ring-[3px]"
+              onClick={() => {
+                // Selecting text, like the serial, does not open the disk.
+                if (!window.getSelection()?.toString()) onOpenDisk(d.id)
+              }}
+              onKeyDown={(e) => e.target === e.currentTarget && e.key === "Enter" && onOpenDisk(d.id)}
+            >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   {d.s3 ? <Cloud className="text-violet-600 size-4" /> : <HardDrive className="text-violet-600 size-4" />}
@@ -93,7 +104,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                 <CardDescription className="font-mono text-xs break-all">
                   {d.s3 ? `s3://${d.s3.bucket}/${d.s3.prefix}` : d.serial ? `SN ${d.serial}` : "Seriale non indicato"}
                 </CardDescription>
-                <CardAction className="flex gap-1">
+                <CardAction className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {isPhysicalDisk(d.kind) && (
                     <Button variant="ghost" size="icon-sm" aria-label="QR code" title="QR code" onClick={() => setQr(d)}>
                       <QrCode />
@@ -155,9 +166,12 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                   </div>
                 )}
                 {d.s3 && <BucketStatus disk={d} />}
-                <div>
-                  <span className="font-medium">{d.archiveCount}</span> torrent · {formatBytes(d.archivedSize)}
-                  {d.capacity > 0 && <span className="text-muted-foreground"> su {formatBytes(d.capacity)}</span>}
+                <div className="flex items-center gap-1.5">
+                  <ListTree className="text-muted-foreground size-3.5" />
+                  <span>
+                    <span className="font-medium">{d.archiveCount}</span> torrent · {formatBytes(d.archivedSize)}
+                    {d.capacity > 0 && <span className="text-muted-foreground"> su {formatBytes(d.capacity)}</span>}
+                  </span>
                 </div>
                 {usage !== null && (
                   <div className="bg-muted h-1.5 overflow-hidden rounded-full">
@@ -165,9 +179,6 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                   </div>
                 )}
                 {d.notes && <p className="text-muted-foreground text-xs whitespace-pre-wrap">{d.notes}</p>}
-                <Button variant="outline" size="sm" className="mt-1 w-fit" onClick={() => onOpenDisk(d.id)}>
-                  <ListTree /> Torrent archiviati
-                </Button>
               </CardContent>
             </Card>
           )

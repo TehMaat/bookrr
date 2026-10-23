@@ -27,6 +27,7 @@
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
   --warning: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
 }
 
 .dark {
@@ -51,6 +52,7 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.552 0.016 285.938);
   --warning: oklch(0.828 0.189 84.429);
+  --sidebar: oklch(0.175 0.005 285.823);
 }
 
 @theme inline {
@@ -79,6 +81,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-warning: var(--warning);
+  --color-sidebar: var(--sidebar);
 }
 
 @layer base {

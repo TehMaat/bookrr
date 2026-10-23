@@ -37,6 +37,7 @@ import {
   textMatch,
   useColumnFilters,
 } from "@/components/column-filter"
+import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { NeverArchiveBar, PickBox, usePicker } from "@/components/never-archive"
 import {
   ArchivableBadge,
@@ -115,7 +116,8 @@ export function ReleaseStatusBadge({ status }: { status: ReleaseStatus }) {
   )
 }
 
-export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
+/** With dead, only the uploads still on the tracker that nobody seeds. */
+export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert) => void; dead?: boolean }) {
   const releases = useReleases()
   const torrents = useTorrents()
   const info = useInfo()
@@ -136,7 +138,10 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
 
   const data = releases.data
   const all = useMemo(() => data?.releases ?? [], [data])
-  const scoped = useMemo(() => (onlyPersonal ? all.filter((r) => r.personalRelease) : all), [all, onlyPersonal])
+  const scoped = useMemo(
+    () => all.filter((r) => (!onlyPersonal || r.personalRelease) && (!dead || (r.seeders === 0 && !r.removedAt))),
+    [all, onlyPersonal, dead]
+  )
   const state = data?.state
   const running = !!state?.running || syncNow.isPending
   const addable = all.filter((r) => r.status === "untracked" && r.hash)
@@ -237,7 +242,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     else toast.warning(`${what} ${tag}`, { description: `Tag non rimosso da: ${r.errors.join("; ")}` })
   }
 
-  const stats: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
+  const allStats: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
     { key: "all", label: "Totale", icon: Layers },
     { key: "client", label: "Su client", icon: Server, tone: "text-sky-600 dark:text-sky-400" },
     { key: "missing", label: "Da localizzare", icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
@@ -248,6 +253,8 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     { key: "removed", label: "Rimosse", icon: CloudOff, tone: "text-destructive" },
     { key: "archivable", label: "Archiviabili", icon: Archive, tone: archivableTone },
   ]
+  // Dead uploads are still on the tracker: none is removed.
+  const stats = dead ? allStats.filter((s) => s.key !== "removed") : allStats
 
   if (releases.isLoading) return <Skeleton className="h-48 w-full" />
   if (releases.isError)
@@ -276,14 +283,16 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-sm">
-          Tutti i torrent che hai caricato sul tracker
+          {dead ? "I tuoi upload ancora sul tracker" : "Tutti i torrent che hai caricato sul tracker"}
           {state?.username && (
             <>
               {" "}
               come <span className="text-foreground font-medium">{state.username}</span>
             </>
           )}
-          , collegati ai torrent di bookrr con lo stesso hash.
+          {dead
+            ? " che nessuno ha in seed: rimettili in seed da un client o da un archivio."
+            : ", collegati ai torrent di bookrr con lo stesso hash."}
         </p>
         <div className="ml-auto flex items-center gap-2">
           <Tooltip>
@@ -326,7 +335,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </AlertBox>
       )}
 
-      {data && data.notOnTracker.length > 0 && (
+      {!dead && data && data.notOnTracker.length > 0 && (
         <Card className="border-warning/60 gap-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -386,32 +395,22 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
+      <NavbarStats>
         {stats.map((s) => (
-          <button
+          <StatCard
             key={s.key}
-            type="button"
+            label={s.label}
+            value={counts[s.key]}
+            icon={s.icon}
+            tone={s.tone}
+            active={filter === s.key}
             onClick={() => {
               picker.clear()
               reset(setFilter)(filter === s.key && s.key !== "all" ? "all" : s.key)
             }}
-            className="text-left"
-          >
-            <Card
-              className={cn(
-                "hover:bg-accent/50 gap-1 px-4 py-3 transition-colors",
-                filter === s.key && "ring-primary/40 border-primary/50 ring-2"
-              )}
-            >
-              <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                <s.icon className={cn("size-3.5", s.tone)} />
-                {s.label}
-              </div>
-              <div className={cn("text-2xl font-semibold tabular-nums", counts[s.key] > 0 && s.tone)}>{counts[s.key]}</div>
-            </Card>
-          </button>
+          />
         ))}
-      </div>
+      </NavbarStats>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
@@ -429,7 +428,7 @@ export function ReleasesPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             Solo Personal Release
           </Label>
         </div>
-        {addable.length > 0 && (
+        {!dead && addable.length > 0 && (
           <Button onClick={() => setAddingAll(true)} disabled={add.isPending}>
             <Plus /> Aggiungi tutte ({addable.length})
           </Button>
