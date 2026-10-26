@@ -280,8 +280,11 @@ export type Releases = {
   notOnTracker: { hash: string; name: string; tracker: string }[]
 }
 
-/** How a season, or a film of a saga or a collection, stands in one of the user's qualities. */
-export type GapState = "mine" | "available" | "other_quality" | "absent"
+/**
+ * How a season, or a film of a saga or a collection, stands in one of the user's qualities. banned: uploaded by others
+ * in this quality, but only by release groups the user banned (still missing, with less priority).
+ */
+export type GapState = "mine" | "available" | "banned" | "other_quality" | "absent"
 
 /** Quality of a release: type, resolution, HDR formats and audio languages. */
 export type Quality = {
@@ -294,8 +297,8 @@ export type Quality = {
   langs: string[]
 }
 
-/** A torrent on the tracker. */
-export type GapRef = { id: number; name: string; url: string; quality: string; mine: boolean }
+/** A torrent on the tracker, with its release group ("" if the name has none) and whether the user banned it. */
+export type GapRef = { id: number; name: string; url: string; quality: string; mine: boolean; group: string; banned: boolean }
 
 /** A torrent that holds a part, with its quality. */
 export type GapVersion = GapRef & { q: Quality }
@@ -325,18 +328,22 @@ export type GapRow = {
   available: number
   otherQuality: number
   absent: number
+  banned: number
   /** Hidden by the user: it does not count. */
   hidden: boolean
 }
 
-/** How a part stands against the minimum quality, whatever the rows. */
-export type GapPartState = "mine" | "available" | "below" | "absent"
+/** How a part stands against the minimum quality, whatever the rows (banned: only by banned groups). */
+export type GapPartState = "mine" | "available" | "banned" | "below" | "absent"
 
 /** A season, or a film, in the view by part. */
 export type GapPart = {
   unit: number
   state: GapPartState
-  /** The user's best version reaching the minimum, else the best of others that does, else the best of all. */
+  /**
+   * The user's best version reaching the minimum, else the best of others that does (of banned groups last), else
+   * the best of all.
+   */
   best: GapVersion | null
   mark: GapMarkState
   accepted: number
@@ -397,6 +404,7 @@ export type GapGroup = {
   available: number
   otherQuality: number
   absent: number
+  banned: number
   checkedAt: string
   hidden: boolean
   /** Marked complete (and no part came out since). */
@@ -406,7 +414,7 @@ export type GapGroup = {
   customThreshold: boolean
   /** The view by part, null for results of an older check (stale). */
   parts: GapPart[] | null
-  partTotals: { missing: number; available: number; below: number; absent: number }
+  partTotals: { missing: number; available: number; banned: number; below: number; absent: number }
   stale: boolean
 }
 
@@ -446,6 +454,8 @@ type MissingCheck = {
   /** Time of the nightly check, "04:00". */
   checkAt: string
   prefs: GapPrefs
+  /** Release groups the user does not want, for every kind of check. */
+  bannedGroups: string[]
   /** Types from best to worst, and resolutions, for the minimum quality. */
   types: string[]
   resolutions: string[]
@@ -636,6 +646,8 @@ export const api = {
   removeGapList: (id: number) => request<void>("DELETE", `/api/missing/lists/sources/${id}`),
   /** Starts the check of the missing seasons and films now, in the background. */
   checkMissing: () => request<MissingCheckState>("POST", "/api/missing/check"),
+  saveBannedGroups: (groups: string[]) =>
+    request<{ groups: string[] }>("PUT", "/api/missing/banned-groups", { groups }),
   saveMissingPrefs: (kind: GapKind, p: GapPrefs) => request<GapPrefs>("PUT", `/api/missing/${gapPath[kind]}/prefs`, p),
   setGapMark: (kind: GapKind, m: GapMarkInput) => request<unknown>("POST", `/api/missing/${gapPath[kind]}/marks`, m),
   removeGapMark: (kind: GapKind, m: GapMarkInput) => request<void>("DELETE", `/api/missing/${gapPath[kind]}/marks`, m),

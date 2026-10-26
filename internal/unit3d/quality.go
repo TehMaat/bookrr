@@ -173,3 +173,17 @@ func Episodic(name string) bool {
 // Title is the title a release name starts with, in lower case
 // ("Criminal.Minds.S19.2160p…" → "criminal minds").
 func Title(name string) string { return parseRelease(name).title }
+
+// ReleaseGroup is the group that made a release, after the last "-" of its
+// name, as the name writes it ("…H.265-MaTiTa" → "MaTiTa"); "" if none.
+func ReleaseGroup(name string) string {
+	g := parseRelease(name).group
+	s := strings.TrimSpace(name)
+	if n := len(s) - len(".torrent"); n >= 0 && strings.EqualFold(s[n:], ".torrent") {
+		s = s[:n]
+	}
+	if n := len(s) - len(g); g != "" && n >= 0 && strings.EqualFold(s[n:], g) {
+		return s[n:]
+	}
+	return g
+}

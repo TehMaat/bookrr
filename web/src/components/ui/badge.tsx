@@ -18,6 +18,7 @@ const badgeVariants = cva(
         success: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
         info: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-300",
         violet: "border-transparent bg-violet-500/15 text-violet-700 dark:text-violet-300",
+        pink: "border-transparent bg-pink-500/15 text-pink-700 dark:text-pink-300",
         brand: "border-brand/30 bg-brand/15 text-foreground",
       },
     },

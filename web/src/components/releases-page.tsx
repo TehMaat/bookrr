@@ -48,6 +48,7 @@ import {
   StatusBadge,
 } from "@/components/torrent-badges"
 import { TorrentSheet } from "@/components/torrent-sheet"
+import { TableCard } from "@/components/table-card"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -452,7 +453,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
         />
       )}
 
-      <Card className="gap-0 overflow-hidden py-0">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -669,7 +670,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
             })}
           </TableBody>
         </Table>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
           <span>
             {rows.length} release · {formatBytes(rows.reduce((s, r) => s + r.size, 0))}
           </span>
@@ -688,7 +689,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
             </div>
           )}
         </div>
-      </Card>
+      </TableCard>
 
       <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} onHashChange={setSelected} />
       <AlertDialog open={unflaggingAll} onOpenChange={setUnflaggingAll}>

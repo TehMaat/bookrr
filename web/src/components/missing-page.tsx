@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import {
   ArrowDown,
+  Ban,
   Check,
   CheckCheck,
   ChevronLeft,
@@ -205,6 +206,7 @@ const looks = {
   available: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   other: "border-dashed border-amber-500/60 bg-amber-500/10 text-amber-800 dark:text-amber-200",
   absent: "border-destructive/40 text-destructive bg-transparent",
+  banned: "border-dashed border-pink-500/50 bg-pink-500/10 text-pink-700 dark:text-pink-300",
 }
 
 /** States of a cell of the view by quality. */
@@ -215,6 +217,12 @@ const states: Record<GapState, Look> = {
     hint: "Caricata da altri nella stessa qualità",
     icon: Users,
     className: looks.available,
+  },
+  banned: {
+    label: "Solo gruppi bannati",
+    hint: "Caricata da altri nella stessa qualità, ma solo da gruppi che hai bannato: manca, con meno priorità",
+    icon: Ban,
+    className: looks.banned,
   },
   other_quality: {
     label: "Solo altra qualità",
@@ -233,6 +241,12 @@ const partStates: Record<GapPartState, Look> = {
     hint: "Caricata da altri, almeno nella qualità minima",
     icon: Users,
     className: looks.available,
+  },
+  banned: {
+    label: "Solo gruppi bannati",
+    hint: "Caricata da altri almeno nella qualità minima, ma solo da gruppi che hai bannato: manca, con meno priorità",
+    icon: Ban,
+    className: looks.banned,
   },
   below: {
     label: "Sotto la soglia",
@@ -269,6 +283,8 @@ const ANY = "any"
 
 const noPrefs: GapPrefs = { type: "", resolution: "", lang: "", othersCount: false }
 
+const noGroups: string[] = []
+
 /** "Remux · 1080p · ITA", or "qualsiasi". */
 function thresholdLabel(t: GapThreshold) {
   return [t.type, t.resolution, t.lang].filter(Boolean).join(" · ") || "qualsiasi"
@@ -296,15 +312,16 @@ function inGroup(label: string, group: string) {
   return group === "all" || label === group || label.startsWith(group + " ")
 }
 
-type Totals = { missing: number; available: number; otherQuality: number; absent: number }
+type Totals = { missing: number; available: number; otherQuality: number; absent: number; banned: number }
 
 function totals(rows: GapRow[]): Totals {
-  const t = { missing: 0, available: 0, otherQuality: 0, absent: 0 }
+  const t = { missing: 0, available: 0, otherQuality: 0, absent: 0, banned: 0 }
   for (const r of rows) {
     t.missing += r.missing
     t.available += r.available
     t.otherQuality += r.otherQuality
     t.absent += r.absent
+    t.banned += r.banned
   }
   return t
 }
@@ -317,6 +334,17 @@ function byPart(s: GapGroup, layout: Layout) {
 /** What is missing in a group, in the layout. */
 function missingIn(s: GapGroup, layout: Layout) {
   return byPart(s, layout) ? s.partTotals.missing : totals(s.rows.filter((r) => !r.hidden)).missing
+}
+
+/** What is missing in a group, in the layout, leaving out what is there only by banned groups (less priority). */
+function urgentIn(s: GapGroup, layout: Layout) {
+  const t = byPart(s, layout) ? s.partTotals : totals(s.rows.filter((r) => !r.hidden))
+  return t.missing - t.banned
+}
+
+/** The release group of a torrent, for the hints. */
+function groupOf(r: GapRef) {
+  return r.group || "gruppo sconosciuto"
 }
 
 const layoutKey = (kind: GapKind) => `bookrr.missing.layout.${kind}`
@@ -422,11 +450,14 @@ function TorrentLinks({
   accepted,
   onAccept,
   onUnaccept,
+  onBan,
 }: {
   refs: (GapRef | GapVersion)[]
   accepted: number
   onAccept?: (id: number) => void
   onUnaccept?: () => void
+  /** Bans the release group of a torrent of others, or lets it back. */
+  onBan?: (group: string, ban: boolean) => void
 }) {
   if (refs.length === 0) return <p className="text-muted-foreground text-sm">Nessun torrent sul tracker.</p>
   return (
@@ -439,9 +470,19 @@ function TorrentLinks({
             </div>
             <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
               {r.quality}
+              {r.group && (
+                <Badge variant="outline" className="px-1.5 py-0" title="Release group">
+                  {r.group}
+                </Badge>
+              )}
               {r.mine && (
                 <Badge variant="brand" className="px-1.5 py-0">
                   tua
+                </Badge>
+              )}
+              {r.banned && (
+                <Badge variant="pink" className="px-1.5 py-0">
+                  <Ban /> gruppo bannato
                 </Badge>
               )}
               {"meets" in r && !r.meets && (
@@ -456,6 +497,26 @@ function TorrentLinks({
               )}
             </div>
           </div>
+          {!r.mine && r.group && onBan && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(r.banned && "text-pink-600 dark:text-pink-400")}
+                  aria-label={r.banned ? `Togli il ban a ${r.group}` : `Banna ${r.group}`}
+                  onClick={() => onBan(r.group, !r.banned)}
+                >
+                  <Ban />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {r.banned
+                  ? `Togli il ban a ${r.group}: le sue release tornano a contare come le altre`
+                  : `Banna ${r.group}: le sue release segnalano la parte come mancante, con meno priorità`}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {!r.mine &&
             onAccept &&
             (r.id === accepted ? (
@@ -602,8 +663,9 @@ function GroupCard({
   const rows = inFilter.filter((r) => !r.hidden)
   const hiddenRows = inFilter.filter((r) => r.hidden)
   const t = parts
-    ? { missing: s.partTotals.missing, available: s.partTotals.available }
-    : (({ missing, available }) => ({ missing, available }))(totals(rows))
+    ? { missing: s.partTotals.missing, available: s.partTotals.available, banned: s.partTotals.banned }
+    : (({ missing, available, banned }) => ({ missing, available, banned }))(totals(rows))
+  const urgent = t.missing - t.banned
   const unitOf = (n: number) => s.units.find((u) => u.number === n)
   return (
     <Card className="gap-3 py-4">
@@ -614,17 +676,22 @@ function GroupCard({
           {s.year && <span className="text-muted-foreground font-normal">({s.year})</span>}
           {!parts && s.rows.length === 0 ? (
             <Badge variant="secondary">Nessun tuo upload</Badge>
-          ) : t.missing > 0 ? (
+          ) : urgent > 0 ? (
             <Badge variant="warning">
-              {t.missing} {t.missing === 1 ? "mancante" : "mancanti"}
+              {urgent} {urgent === 1 ? "mancante" : "mancanti"}
             </Badge>
-          ) : s.completed ? (
+          ) : t.banned > 0 ? null : s.completed ? (
             <Badge variant="secondary">
               <CheckCheck /> Segnata completa
             </Badge>
           ) : (
             <Badge variant="success">
               <Check /> Completa
+            </Badge>
+          )}
+          {t.banned > 0 && (
+            <Badge variant="pink" title="Mancanti che sul tracker ci sono solo da gruppi che hai bannato: meno priorità">
+              <Ban /> {t.banned} {t.banned === 1 ? "mancante" : "mancanti"}, solo bannati
             </Badge>
           )}
           {t.available > 0 && <Badge variant="success">{t.available} da altri</Badge>}
@@ -700,7 +767,10 @@ function GroupCard({
                   unit={unit}
                   label={k.cellLabel(unit, prefix)}
                   quality={shown ? shortQuality(shown.q) : undefined}
-                  hint={shown && `${shown.mine ? "Tua" : "Di altri"}: ${shown.quality}`}
+                  hint={
+                    shown &&
+                    `${shown.mine ? "Tua" : shown.banned ? `Di ${shown.group}, bannato` : "Di altri"}: ${shown.quality}${shown.group && !shown.banned ? ` · ${shown.group}` : ""}`
+                  }
                   onOpen={() => onOpen({ group: s.key, unit: p.unit, row: null })}
                 />
               )
@@ -746,7 +816,13 @@ function GroupCard({
                       look={look}
                       unit={unit}
                       label={k.cellLabel(unit, prefix)}
-                      hint={cell.state === "other_quality" ? cell.qualities.join(", ") : undefined}
+                      hint={
+                        cell.state === "other_quality"
+                          ? cell.qualities.join(", ")
+                          : cell.state === "banned"
+                            ? [...new Set(cell.torrents.map(groupOf))].join(", ")
+                            : undefined
+                      }
                       onOpen={() => onOpen({ group: s.key, unit: cell.unit, row: row.quality.key })}
                     />
                   )
@@ -790,11 +866,13 @@ function CellDialog({
   all,
   onClose,
   onMark,
+  onBan,
 }: {
   opened: Opened | null
   all: GapGroup[]
   onClose: () => void
   onMark: MarkFn
+  onBan: (group: string, ban: boolean) => void
 }) {
   const s = opened ? all.find((g) => g.key === opened.group) : undefined
   const unit = s?.units.find((u) => u.number === opened?.unit)
@@ -846,6 +924,7 @@ function CellDialog({
           accepted={mark === "accepted" ? accepted : 0}
           onAccept={mine ? undefined : (id) => set("accept", id)}
           onUnaccept={() => unset("accept")}
+          onBan={onBan}
         />
         {!mine && (
           <p className="text-muted-foreground text-xs">
@@ -881,6 +960,102 @@ function CellDialog({
   return (
     <Dialog open={show} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">{body}</DialogContent>
+    </Dialog>
+  )
+}
+
+/** The release groups the user banned, for every kind of check: add some, take some back. */
+function BannedDialog({
+  open,
+  onOpenChange,
+  groups,
+  onSave,
+  saving,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  groups: string[]
+  onSave: (groups: string[]) => void
+  saving: boolean
+}) {
+  const [list, setList] = useState(groups)
+  const [text, setText] = useState("")
+  const [prev, setPrev] = useState({ open, groups })
+  if (prev.open !== open || prev.groups !== groups) {
+    setPrev({ open, groups })
+    if (open) {
+      setList(groups)
+      setText("")
+    }
+  }
+  // "FLUX, -Arc" → FLUX and Arc, once each whatever the case.
+  const words = (t: string) => t.split(/[\s,;]+/).map((w) => w.replace(/^-+/, "")).filter(Boolean)
+  const merge = (more: string[]) => {
+    const seen = new Set(list.map((g) => g.toLowerCase()))
+    const out = [...list]
+    for (const w of more)
+      if (!seen.has(w.toLowerCase())) {
+        seen.add(w.toLowerCase())
+        out.push(w)
+      }
+    return out
+  }
+  const add = (e: React.FormEvent) => {
+    e.preventDefault()
+    setList(merge(words(text)))
+    setText("")
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Gruppi bannati</DialogTitle>
+          <DialogDescription>
+            Le release di questi gruppi non bastano: se sul tracker una stagione o un film c'è solo da loro, resta mancante
+            ma in rosa, con meno priorità. Il gruppo è quello dopo l'ultimo "-" del nome. Vale per serie, saghe e
+            collezioni; le tue release non contano mai come bannate.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={add} className="flex gap-2">
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Es. FLUX, YIFY"
+            aria-label="Gruppi da bannare"
+            className="flex-1"
+          />
+          <Button type="submit" variant="outline" disabled={!text.trim()}>
+            <Plus /> Aggiungi
+          </Button>
+        </form>
+        {list.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {list.map((g) => (
+              <Badge key={g} variant="pink" className="gap-1 pr-1">
+                <Ban /> {g}
+                <button
+                  type="button"
+                  className="hover:bg-pink-500/20 rounded p-0.5"
+                  aria-label={`Togli il ban a ${g}`}
+                  onClick={() => setList(list.filter((x) => x !== g))}
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">Nessun gruppo bannato.</p>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annulla
+          </Button>
+          <Button disabled={saving} onClick={() => onSave(text.trim() ? merge(words(text)) : list)}>
+            Salva
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   )
 }
@@ -1011,6 +1186,7 @@ function GapList({
   running,
   checkedAt,
   prefs,
+  bannedGroups,
   types,
   resolutions,
   layout,
@@ -1024,6 +1200,8 @@ function GapList({
   running: boolean
   checkedAt: string | null | undefined
   prefs: GapPrefs
+  /** Release groups the user banned, for every kind. */
+  bannedGroups: string[]
   types: string[]
   resolutions: string[]
   layout: Layout
@@ -1051,6 +1229,13 @@ function GapList({
   )
   const savePrefs = useAction((p: GapPrefs) => api.saveMissingPrefs(kind, p))
   const onMark: MarkFn = (input, remove) => mark.mutate({ input, remove })
+  const [editingBanned, setEditingBanned] = useState(false)
+  const saveBanned = useAction((groups: string[]) => api.saveBannedGroups(groups))
+  const onBan = (group: string, ban: boolean) =>
+    saveBanned.mutate(
+      ban ? [...bannedGroups, group] : bannedGroups.filter((g) => g.toLowerCase() !== group.toLowerCase()),
+      { onSuccess: () => toast.success(ban ? `${group} bannato` : `Ban tolto a ${group}`) }
+    )
 
   const grid = layout === "grid"
   const verifiable = useMemo(() => all.filter((s) => s.status === "ok"), [all])
@@ -1072,7 +1257,7 @@ function GapList({
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return visibleGroups.filter((s) => {
+    const matching = visibleGroups.filter((s) => {
       const rows = s.rows.filter((r) => inGroup(r.quality.label, quality))
       // A collection with none of the user's films has no rows: shown anyway, with every quality.
       const noRows = s.rows.length === 0 && quality === "all"
@@ -1088,6 +1273,9 @@ function GapList({
         (kind !== "series" && s.units.some((u) => u.name.toLowerCase().includes(q)))
       )
     })
+    // Missing only what banned groups uploaded: less priority, after the others.
+    const later = (s: GapGroup) => (urgentIn(s, layout) === 0 && missingIn(s, layout) > 0 ? 1 : 0)
+    return matching.sort((a, b) => later(a) - later(b))
   }, [visibleGroups, query, quality, onlyMissing, kind, layout])
 
   const stats = useMemo(() => {
@@ -1095,18 +1283,19 @@ function GapList({
       .map((s) => {
         if (byPart(s, layout)) {
           const p = s.partTotals
-          return { missing: p.missing, available: p.available, other: p.below, absent: p.absent }
+          return { missing: p.missing, available: p.available, banned: p.banned, other: p.below, absent: p.absent }
         }
         const rows = s.rows.filter((r) => !r.hidden && inGroup(r.quality.label, quality))
         if (!s.rows.some((r) => inGroup(r.quality.label, quality))) return null
         const x = totals(rows)
-        return { missing: x.missing, available: x.available, other: x.otherQuality, absent: x.absent }
+        return { missing: x.missing, available: x.available, banned: x.banned, other: x.otherQuality, absent: x.absent }
       })
       .filter((x) => x !== null)
     return {
       groups: t.length,
-      withMissing: t.filter((x) => x.missing > 0).length,
+      withMissing: t.filter((x) => x.missing > x.banned).length,
       available: t.reduce((n, x) => n + x.available, 0),
+      banned: t.reduce((n, x) => n + x.banned, 0),
       other: t.reduce((n, x) => n + x.other, 0),
       absent: t.reduce((n, x) => n + x.absent, 0),
     }
@@ -1129,6 +1318,7 @@ function GapList({
       icon: Users,
       tone: "text-emerald-600 dark:text-emerald-400",
     },
+    { label: "Solo gruppi bannati", value: stats.banned, icon: Ban, tone: "text-pink-600 dark:text-pink-400" },
     {
       label: grid ? "Solo altra qualità" : "Sotto la soglia",
       value: stats.other,
@@ -1202,6 +1392,9 @@ function GapList({
             <Gauge /> Minima: {thresholdLabel(prefs)}
           </Button>
         )}
+        <Button variant="outline" onClick={() => setEditingBanned(true)} title="Gruppi le cui release non bastano">
+          <Ban /> Gruppi bannati{bannedGroups.length > 0 && `: ${bannedGroups.length}`}
+        </Button>
         <div className="flex items-center gap-2 px-1">
           <Switch
             id={`others-count-${kind}`}
@@ -1362,7 +1555,14 @@ function GapList({
         </Card>
       )}
 
-      <CellDialog opened={opened} all={all} onClose={() => setOpened(null)} onMark={onMark} />
+      <CellDialog opened={opened} all={all} onClose={() => setOpened(null)} onMark={onMark} onBan={onBan} />
+      <BannedDialog
+        open={editingBanned}
+        onOpenChange={setEditingBanned}
+        groups={bannedGroups}
+        saving={saveBanned.isPending}
+        onSave={(groups) => saveBanned.mutate(groups, { onSuccess: () => setEditingBanned(false) })}
+      />
       <ThresholdDialog
         open={editing !== null}
         onOpenChange={(o) => !o && setEditing(null)}
@@ -1402,8 +1602,9 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
   const sagasAll = useMemo(() => sagas.data?.sagas ?? [], [sagas.data])
   const listsAll = useMemo(() => lists.data?.lists ?? [], [lists.data])
   const [layouts, setLayout] = useLayouts()
+  // Those missing only what banned groups uploaded are left out: less priority.
   const missingOf = (all: GapGroup[], kind: GapKind) =>
-    all.filter((g) => g.status === "ok" && !g.hidden && missingIn(g, layouts[kind]) > 0).length
+    all.filter((g) => g.status === "ok" && !g.hidden && urgentIn(g, layouts[kind]) > 0).length
 
   const run = () =>
     check.mutate(undefined, {
@@ -1514,6 +1715,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
           running={running}
           checkedAt={series.data?.checkedAt}
           prefs={series.data?.prefs ?? noPrefs}
+          bannedGroups={series.data?.bannedGroups ?? noGroups}
           types={series.data?.types ?? []}
           resolutions={series.data?.resolutions ?? []}
           layout={layouts.series}
@@ -1528,6 +1730,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
           running={running}
           checkedAt={sagas.data?.checkedAt}
           prefs={sagas.data?.prefs ?? noPrefs}
+          bannedGroups={sagas.data?.bannedGroups ?? noGroups}
           types={sagas.data?.types ?? []}
           resolutions={sagas.data?.resolutions ?? []}
           layout={layouts.saga}
@@ -1542,6 +1745,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
           running={running}
           checkedAt={lists.data?.checkedAt}
           prefs={lists.data?.prefs ?? noPrefs}
+          bannedGroups={lists.data?.bannedGroups ?? noGroups}
           types={lists.data?.types ?? []}
           resolutions={lists.data?.resolutions ?? []}
           layout={layouts.list}

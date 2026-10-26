@@ -14,9 +14,9 @@ import {
   textMatch,
   useColumnFilters,
 } from "@/components/column-filter"
+import { TableCard } from "@/components/table-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -103,7 +103,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
           </Button>
         </div>
       )}
-      <Card className="gap-0 overflow-hidden py-0">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -248,12 +248,12 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
           </TableBody>
         </Table>
         {columns.active > 0 && (
-          <div className="text-muted-foreground flex items-center gap-2 border-t px-4 py-2 text-xs">
+          <div className="text-muted-foreground flex items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
             <span>{rows.length === 1 ? "1 segnalazione" : `${rows.length} segnalazioni`}</span>
             <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           </div>
         )}
-      </Card>
+      </TableCard>
     </div>
   )
 }
