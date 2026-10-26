@@ -280,7 +280,7 @@ export type Releases = {
   notOnTracker: { hash: string; name: string; tracker: string }[]
 }
 
-/** How a season, or a film of a saga, stands in one of the user's qualities. */
+/** How a season, or a film of a saga or a collection, stands in one of the user's qualities. */
 export type GapState = "mine" | "available" | "other_quality" | "absent"
 
 /** Quality of a release: type, resolution, HDR formats and audio languages. */
@@ -351,7 +351,10 @@ export type GapPrefs = GapThreshold & {
   othersCount: boolean
 }
 
-/** A season of a series, or a film of a saga (numbered in order of release, with its TMDB id). */
+/**
+ * A season of a series, or a film of a saga (numbered in order of release) or of a collection (in the order of the
+ * list), with its TMDB id.
+ */
 export type GapUnit = {
   number: number
   name: string
@@ -364,25 +367,28 @@ export type GapUnit = {
   versions: GapVersion[]
 }
 
-export type GapKind = "series" | "saga"
+export type GapKind = "series" | "saga" | "list"
 
 /**
  * A series the user uploaded at least a season pack of, with its seasons in each of their qualities,
- * or a saga the user uploaded at least a film of, with its films.
+ * a saga the user uploaded at least a film of, with its films, or a collection the user follows
+ * (a list of films on MDBList), with its films even if the user has none of them.
  */
 export type GapGroup = {
   kind: GapKind
   key: string
   title: string
   year: string
-  /** Of the series, or of the saga (TMDB collection). */
+  /** Of the series, or of the saga (TMDB collection); 0 for collections. */
   tmdbId: number
   tvdbId: number
   /** unverifiable: no TMDB id, or unknown to TMDB. */
   status: "ok" | "unverifiable"
   note: string
-  /** The series or the saga on the tracker. */
+  /** The series or the saga on the tracker; "" for collections. */
   searchUrl: string
+  /** The list on MDBList, for collections. */
+  sourceUrl?: string
   units: GapUnit[]
   rows: GapRow[]
   /** The user's uploads of the series or the saga. */
@@ -404,7 +410,7 @@ export type GapGroup = {
   stale: boolean
 }
 
-/** A choice of the user on a series or a saga. */
+/** A choice of the user on a series, a saga or a collection. */
 export type GapMarkInput = {
   group: string
   action: "hide" | "complete" | "accept" | "ignore" | "threshold"
@@ -422,8 +428,8 @@ export type MissingCheckState = {
   lastResult: string
   lastError: string
   nextRunAt: string | null
-  /** What the running check is reading: series, then films, then sagas. */
-  phase: "" | "series" | "movies" | "sagas"
+  /** What the running check is reading: series, then films, then sagas, then collections. */
+  phase: "" | "series" | "movies" | "sagas" | "lists"
   /** Read so far in this phase, out of total. */
   done: number
   total: number
@@ -447,6 +453,27 @@ type MissingCheck = {
 
 export type MissingSeries = MissingCheck & { series: GapGroup[] }
 export type MissingSagas = MissingCheck & { sagas: GapGroup[] }
+
+/** A collection the user follows: a list of films on MDBList. */
+export type GapListSource = {
+  id: number
+  source: "mdblist"
+  /** "user/slug" */
+  path: string
+  title: string
+  /** The list on MDBList. */
+  url: string
+  createdAt: string
+}
+
+export type MissingLists = MissingCheck & {
+  lists: GapGroup[]
+  /** Every collection followed, checked or not yet. */
+  sources: GapListSource[]
+  /** An MDBList key is configured (and the check is on). */
+  listsEnabled: boolean
+  listsDisabledReason: string
+}
 
 export type Info = {
   version: string
@@ -551,7 +578,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 const enc = encodeURIComponent
 
-const gapPath: Record<GapKind, string> = { series: "series", saga: "sagas" }
+const gapPath: Record<GapKind, string> = { series: "series", saga: "sagas", list: "lists" }
 
 export const api = {
   info: () => request<Info>("GET", "/api/info"),
@@ -603,6 +630,10 @@ export const api = {
 
   missingSeries: () => request<MissingSeries>("GET", "/api/missing/series"),
   missingSagas: () => request<MissingSagas>("GET", "/api/missing/sagas"),
+  missingLists: () => request<MissingLists>("GET", "/api/missing/lists"),
+  /** Follows a list of films on MDBList (its address) and checks it now. */
+  addGapList: (url: string) => request<GapListSource>("POST", "/api/missing/lists/sources", { url }),
+  removeGapList: (id: number) => request<void>("DELETE", `/api/missing/lists/sources/${id}`),
   /** Starts the check of the missing seasons and films now, in the background. */
   checkMissing: () => request<MissingCheckState>("POST", "/api/missing/check"),
   saveMissingPrefs: (kind: GapKind, p: GapPrefs) => request<GapPrefs>("PUT", `/api/missing/${gapPath[kind]}/prefs`, p),

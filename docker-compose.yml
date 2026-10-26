@@ -32,5 +32,8 @@ services:
       # Chiave API TMDB (v3) o token di lettura (v4): con il tracker UNIT3D
       # attiva il controllo delle stagioni mancanti (scheda Mancanti)
       # BOOKRR_TMDB_API_KEY: la-tua-chiave-tmdb
+      # Chiave API MDBList (gratuita): con TMDB attiva le collezioni da seguire
+      # (liste di film come l'MCU o i film Pixar, scheda Mancanti)
+      # BOOKRR_MDBLIST_API_KEY: la-tua-chiave-mdblist
       # Ora del controllo notturno delle stagioni mancanti (ora locale)
       # BOOKRR_MISSING_CHECK_AT: "04:00"
