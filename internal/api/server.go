@@ -80,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/missing/lists/sources", s.addMissingList)
 	mux.HandleFunc("DELETE /api/missing/lists/sources/{id}", s.deleteMissingList)
 	mux.HandleFunc("POST /api/missing/check", s.checkMissing)
+	mux.HandleFunc("PUT /api/missing/banned-groups", s.saveBannedGroups)
 	mux.HandleFunc("PUT /api/missing/{kind}/prefs", s.saveMissingPrefs)
 	mux.HandleFunc("POST /api/missing/{kind}/marks", s.setMissingMark)
 	mux.HandleFunc("DELETE /api/missing/{kind}/marks", s.deleteMissingMark)

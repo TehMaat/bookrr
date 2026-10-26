@@ -188,7 +188,7 @@ func TestCheckLists(t *testing.T) {
 	if g.Title != "me/empty" || g.Status != StatusOK || len(g.Rows) != 0 || len(g.Units) != 1 || g.Year != "1995" {
 		t.Fatalf("empty %+v", g)
 	}
-	Apply(&g, store.GapPrefs{}, nil)
+	Apply(&g, store.GapPrefs{}, nil, nil)
 	if len(g.Parts) != 1 || g.Parts[0].State != StateAvailable || g.PartTotals.Missing != 1 {
 		t.Errorf("empty parts %+v %+v", g.Parts, g.PartTotals)
 	}

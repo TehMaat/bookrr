@@ -45,3 +45,16 @@ func TestParseRelease(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestReleaseGroup(t *testing.T) {
+	for name, want := range map[string]string{
+		"Criminal Minds S19 2160p UHD DSNP WEB-DL DD+ 5.1 ITA ENG SUBS DV HDR10+ H.265-MaTiTa": "MaTiTa",
+		"2012.2009.1080p.BluRay.DTS-HD.MA.5.1.x264-GRP.torrent":                                "GRP",
+		"Mad.Max.Fury.Road.2015.2160p.WEB-DL":                                                  "",
+		"Ad Astra 2019 2160p":                                                                  "",
+	} {
+		if got := ReleaseGroup(name); got != want {
+			t.Errorf("%s: got %q, want %q", name, got, want)
+		}
+	}
+}

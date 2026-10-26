@@ -18,7 +18,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
-- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. E per le **collezioni** che segui (liste di film su MDBList: l'MCU, i film Pixar, i classici Disney), anche se non ne hai caricato nessuno. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate** e parti **ignorate**. Controllo ogni notte, stagioni e saghe da TMDB.
+- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. E per le **collezioni** che segui (liste di film su MDBList: l'MCU, i film Pixar, i classici Disney), anche se non ne hai caricato nessuno. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate**, parti **ignorate** e **gruppi bannati** (le loro release non bastano: la parte resta mancante, in rosa e con meno priorità). Controllo ogni notte, stagioni e saghe da TMDB.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -255,6 +255,7 @@ Per ogni serie e ogni tua qualità la griglia mostra ogni stagione come:
 |---|---|
 | **Mia** | l'hai caricata tu in questa qualità |
 | **C'è, di altri** | caricata da altri nella stessa qualità |
+| **Solo gruppi bannati** | caricata da altri nella stessa qualità, ma solo da [gruppi bannati](#gruppi-bannati) |
 | **Solo altra qualità** | sul tracker c'è, ma solo in altre qualità (elencate nel dettaglio) |
 | **Assente** | non c'è sul tracker in nessuna qualità |
 
@@ -304,11 +305,21 @@ Le tue scelte restano anche dopo i controlli successivi:
 
 «Va bene questa» e «Ignora» dalla vista per parte valgono per tutte le qualità; dalla vista per qualità solo per quella riga.
 
+#### Gruppi bannati
+
+Il **release group** è quello dopo l'ultimo `-` del nome (`…H.265-MaTiTa` → `MaTiTa`) e compare accanto a ogni torrent nel dettaglio di una cella. Con **Gruppi bannati** (sopra la lista, oppure l'icona del divieto accanto a una release di altri) indichi i gruppi le cui release non ti bastano; la lista è una sola per serie, saghe e collezioni e le maiuscole non contano. Se una stagione o un film c'è sul tracker **solo** da gruppi bannati:
+
+- resta **mancante**, anche con «Conta quelle di altri», ma è in **rosa** («Solo gruppi bannati») invece che verde, per dargli meno priorità;
+- nella vista per parte una release di un gruppo bannato vale solo se non ce n'è una di altri gruppi che raggiunge la qualità minima;
+- il conteggio «mancanti» della serie o saga e il numero sulla sottoscheda non lo contano: è mostrato a parte («N mancanti, solo bannati»), e le serie o saghe a cui manca solo questo vanno in fondo alla lista.
+
+Le tue release non contano mai come bannate. Un torrent accettato con «Va bene questa» resta accettato anche se il suo gruppo è bannato.
+
 #### Quando gira
 
 Il controllo, serie, saghe e collezioni insieme, gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti (se fallisce solo una delle parti, le altre vengono comunque aggiornate).
 
-API: `GET /api/missing/series`, `GET /api/missing/sagas`, `GET /api/missing/lists` (con le collezioni seguite in `sources`), `POST /api/missing/check` (controlla ora, serie, saghe e collezioni), `PUT /api/missing/{series|sagas|lists}/prefs` (qualità minima e «conta quelle di altri»), `POST`/`DELETE /api/missing/{series|sagas|lists}/marks` (le scelte: `hide`, `complete`, `accept`, `ignore`, `threshold`), `POST /api/missing/lists/sources` con `{"url": "https://mdblist.com/lists/…"}` (segui una collezione) e `DELETE /api/missing/lists/sources/{id}`.
+API: `GET /api/missing/series`, `GET /api/missing/sagas`, `GET /api/missing/lists` (con le collezioni seguite in `sources`), `POST /api/missing/check` (controlla ora, serie, saghe e collezioni), `PUT /api/missing/{series|sagas|lists}/prefs` (qualità minima e «conta quelle di altri»), `POST`/`DELETE /api/missing/{series|sagas|lists}/marks` (le scelte: `hide`, `complete`, `accept`, `ignore`, `threshold`), `PUT /api/missing/banned-groups` con `{"groups": ["FLUX"]}` (i gruppi bannati, in `bannedGroups` nelle risposte), `POST /api/missing/lists/sources` con `{"url": "https://mdblist.com/lists/…"}` (segui una collezione) e `DELETE /api/missing/lists/sources/{id}`.
 
 I risultati di un controllo fatto con una versione precedente non hanno le versioni delle singole parti: fino al controllo successivo (che parte da solo 10 minuti dopo l'avvio) la vista per parte li mostra per qualità.
 

@@ -50,11 +50,11 @@ import {
   statusLabels,
   WhereBadges,
 } from "@/components/torrent-badges"
-import { Badge } from "@/components/ui/badge"
 import { TorrentFormDialog } from "@/components/torrent-form-dialog"
 import { TorrentSheet } from "@/components/torrent-sheet"
+import { TableCard } from "@/components/table-card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -347,7 +347,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         />
       )}
 
-      <Card className="gap-0 overflow-hidden py-0">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -597,7 +597,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             ))}
           </TableBody>
         </Table>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
           <span>
             {rows.length} torrent · {formatBytes(totalSize)}
           </span>
@@ -621,7 +621,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             </div>
           )}
         </div>
-      </Card>
+      </TableCard>
 
       <TorrentSheet
         torrent={selectedTorrent}

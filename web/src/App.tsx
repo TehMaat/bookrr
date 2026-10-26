@@ -96,7 +96,7 @@ export default function App() {
           }
         />
         <NavbarSlot.Provider value={slot}>
-          <main className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-4 sm:px-6">
+          <main className="w-full space-y-4 px-4 py-4 sm:px-6">
             <AlertsBanner alerts={alerts.data ?? []} onResolve={resolveOne} onShowAll={() => go("alerts")} />
             {tab === "torrents" && <TorrentsPage onResolve={resolveOne} />}
             {tab === "releases" && <ReleasesPage onResolve={resolveOne} />}

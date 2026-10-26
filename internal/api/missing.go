@@ -110,6 +110,11 @@ func (s *Server) missingResult(ctx context.Context, kind, field string) (map[str
 	if err != nil {
 		return nil, err
 	}
+	banned, err := s.store.BannedGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bannedSet := gaps.BannedSet(banned)
 	byGroup := map[string][]store.GapMark{}
 	for _, m := range marks {
 		byGroup[m.Group] = append(byGroup[m.Group], m)
@@ -120,12 +125,12 @@ func (s *Server) missingResult(ctx context.Context, kind, field string) (map[str
 		if err := json.Unmarshal(row.Data, &g); err != nil {
 			return nil, fmt.Errorf("risultato di %q: %w", row.Key, err)
 		}
-		gaps.Apply(&g, prefs, byGroup[g.Key])
+		gaps.Apply(&g, prefs, byGroup[g.Key], bannedSet)
 		list = append(list, g)
 	}
 	out := map[string]any{"enabled": s.missing != nil, "disabledReason": s.missingDisabled(), "state": nil,
 		"checkedAt": checked, "checkAt": minutesClock(s.cfg.MissingCheckAt), field: list, "prefs": prefs,
-		"types": gaps.TypeLadder, "resolutions": gaps.Resolutions}
+		"bannedGroups": banned, "types": gaps.TypeLadder, "resolutions": gaps.Resolutions}
 	if s.missing != nil {
 		out["state"] = s.missing.State()
 	}
@@ -224,6 +229,28 @@ func (s *Server) saveMissingPrefs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, in)
+}
+
+// saveBannedGroups replaces the release groups the user does not want, for
+// every kind of check: their releases leave a part missing, with less
+// priority.
+func (s *Server) saveBannedGroups(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Groups []string `json:"groups"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	groups, err := gaps.ValidBannedGroups(in.Groups)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.store.SaveBannedGroups(r.Context(), groups); err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"groups": groups})
 }
 
 // markIn is a choice of the user on a result (see store.GapMark).

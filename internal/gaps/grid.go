@@ -26,6 +26,10 @@ const (
 	StateAvailable    = "available"     // uploaded by others in this quality
 	StateOtherQuality = "other_quality" // on the tracker, only in other qualities
 	StateAbsent       = "absent"        // not on the tracker at all
+	// Uploaded by others in this quality (or, in the view by part, at least
+	// in the minimum quality), but only by release groups the user banned:
+	// still missing, with less priority. Set when read (see Apply).
+	StateBanned = "banned"
 )
 
 // States of a part in the view by part (one cell per season or film,
@@ -78,6 +82,7 @@ type Group struct {
 	Available    int    `json:"available"`
 	OtherQuality int    `json:"otherQuality"`
 	Absent       int    `json:"absent"`
+	Banned       int    `json:"banned"` // set when read
 	CheckedAt    string `json:"checkedAt"`
 
 	// Set when read, from the user's choices (see Apply).
@@ -99,6 +104,7 @@ type Totals struct {
 	Available int `json:"available"`
 	Below     int `json:"below"`
 	Absent    int `json:"absent"`
+	Banned    int `json:"banned"`
 }
 
 // Unit is a part of a collection: a season of a series, a film of a saga
@@ -141,6 +147,7 @@ type Row struct {
 	Available    int            `json:"available"`
 	OtherQuality int            `json:"otherQuality"`
 	Absent       int            `json:"absent"`
+	Banned       int            `json:"banned"` // set when read
 	// Hidden by the user: it does not count.
 	Hidden bool `json:"hidden"`
 }
@@ -169,6 +176,10 @@ type Ref struct {
 	URL     string `json:"url"`
 	Quality string `json:"quality"` // label
 	Mine    bool   `json:"mine"`
+	// The release group, from the name, and whether the user banned it
+	// (never for the user's own), set when read (see Apply).
+	Group  string `json:"group"`
+	Banned bool   `json:"banned"`
 }
 
 // item is a tracker torrent with the parts of the collection it holds.

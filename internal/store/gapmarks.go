@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 )
 
@@ -152,4 +153,35 @@ func (s *Store) GapGroup(ctx context.Context, kind, key string) (GapGroup, error
 	}
 	g.Data = []byte(data)
 	return g, err
+}
+
+const keyBannedGroups = "gaps_banned_groups"
+
+// BannedGroups returns the release groups the user does not want, for
+// every kind of check, as saved.
+func (s *Store) BannedGroups(ctx context.Context) ([]string, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, keyBannedGroups).Scan(&v)
+	out := []string{}
+	if errors.Is(err, sql.ErrNoRows) || v == "" {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return out, json.Unmarshal([]byte(v), &out)
+}
+
+// SaveBannedGroups replaces the release groups the user does not want.
+func (s *Store) SaveBannedGroups(ctx context.Context, groups []string) error {
+	if groups == nil {
+		groups = []string{}
+	}
+	data, err := json.Marshal(groups)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`, keyBannedGroups, string(data))
+	return err
 }

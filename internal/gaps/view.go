@@ -3,6 +3,7 @@ package gaps
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -24,7 +25,7 @@ const (
 // the minimum quality, whatever the quality rows.
 type Part struct {
 	Unit  int    `json:"unit"`  // Unit.Number
-	State string `json:"state"` // mine, available, below, absent
+	State string `json:"state"` // mine, available, banned, below, absent
 	// The version shown: the user's best that reaches the minimum, else
 	// the best of others that does, else the best of all.
 	Best     *Version `json:"best"`
@@ -147,16 +148,69 @@ func CompleteValue(g Group) string {
 	return strings.Join(ids, ",")
 }
 
+// Banned is the set of release groups the user does not want, in lower
+// case (see BannedSet). Their releases still tell that a part is on the
+// tracker, but it stays missing, with less priority.
+type Banned map[string]bool
+
+// BannedSet makes the set of the banned groups.
+func BannedSet(groups []string) Banned {
+	b := Banned{}
+	for _, g := range groups {
+		b[strings.ToLower(g)] = true
+	}
+	return b
+}
+
+// ValidBannedGroups checks the banned groups and writes them the usual
+// way: no "-" before, no repeats (whatever the case), in order.
+func ValidBannedGroups(groups []string) ([]string, error) {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, g := range groups {
+		g = strings.TrimLeft(strings.TrimSpace(g), "-")
+		if g == "" {
+			continue
+		}
+		if strings.IndexFunc(g, func(r rune) bool { return r > unicode.MaxASCII || (!unicode.IsLetter(r) && !unicode.IsDigit(r)) }) >= 0 {
+			return nil, errors.New("gruppo non valido (solo lettere e numeri): " + g)
+		}
+		if k := strings.ToLower(g); !seen[k] {
+			seen[k] = true
+			out = append(out, g)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i]) < strings.ToLower(out[j]) })
+	return out, nil
+}
+
+// tag sets the release group of a torrent and whether it is banned.
+func (b Banned) tag(r *Ref) {
+	r.Group = unit3d.ReleaseGroup(r.Name)
+	r.Banned = !r.Mine && r.Group != "" && b[strings.ToLower(r.Group)]
+}
+
+// onlyBanned reports whether every torrent is of a banned group (false
+// for none).
+func onlyBanned(refs []Ref) bool {
+	for _, r := range refs {
+		if !r.Banned {
+			return false
+		}
+	}
+	return len(refs) > 0
+}
+
 type markKey struct {
 	quality string
 	unit    int64
 }
 
 // Apply adds the user's options and choices to a stored group: the hidden
-// rows, the marks of the cells, the view by part against the minimum
-// quality, and the totals that leave out what the user does not want
-// counted. marks are those of this group.
-func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
+// rows, the marks of the cells, the releases of the banned groups, the view
+// by part against the minimum quality, and the totals that leave out what
+// the user does not want counted. marks are those of this group.
+func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark, banned Banned) {
 	g.Threshold = prefs.GapThreshold
 	var completed map[int64]bool
 	hiddenRows := map[string]bool{}
@@ -189,6 +243,9 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
 			}
 		}
 	}
+	for i := range g.Mine {
+		banned.tag(&g.Mine[i])
+	}
 	ids := map[int]int64{}
 	for i := range g.Units {
 		u := &g.Units[i]
@@ -196,6 +253,9 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
 		ids[u.Number] = u.ID
 		if u.Versions == nil {
 			u.Versions = []Version{}
+		}
+		for vi := range u.Versions {
+			banned.tag(&u.Versions[vi].Ref)
 		}
 	}
 	if completed != nil {
@@ -232,14 +292,23 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
 		return "", 0, ""
 	}
 
-	g.Missing, g.Available, g.OtherQuality, g.Absent = 0, 0, 0, 0
+	g.Missing, g.Available, g.OtherQuality, g.Absent, g.Banned = 0, 0, 0, 0, 0
 	for ri := range g.Rows {
 		r := &g.Rows[ri]
 		r.Hidden = hiddenRows[r.Quality.Key]
-		r.Missing, r.Available, r.OtherQuality, r.Absent = 0, 0, 0, 0
+		r.Missing, r.Available, r.OtherQuality, r.Absent, r.Banned = 0, 0, 0, 0, 0
 		for ci := range r.Cells {
 			c := &r.Cells[ci]
 			c.Mark, c.Accepted, c.MarkQuality = "", 0, ""
+			for ti := range c.Torrents {
+				banned.tag(&c.Torrents[ti])
+			}
+			if c.State == StateAvailable || c.State == StateBanned {
+				c.State = StateAvailable
+				if onlyBanned(c.Torrents) {
+					c.State = StateBanned
+				}
+			}
 			if c.State == StateMine {
 				continue
 			}
@@ -253,6 +322,8 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
 				r.OtherQuality++
 			case StateAbsent:
 				r.Absent++
+			case StateBanned:
+				r.Banned++
 			}
 			if c.State != StateAvailable || !prefs.OthersCount {
 				r.Missing++
@@ -263,6 +334,7 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
 			g.Available += r.Available
 			g.OtherQuality += r.OtherQuality
 			g.Absent += r.Absent
+			g.Banned += r.Banned
 		}
 	}
 
@@ -290,6 +362,8 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark) {
 				g.PartTotals.Below++
 			case StateAbsent:
 				g.PartTotals.Absent++
+			case StateBanned:
+				g.PartTotals.Banned++
 			}
 			if p.State != StateAvailable || !prefs.OthersCount {
 				g.PartTotals.Missing++
@@ -315,10 +389,11 @@ func holds(u Unit, cell []Ref, id int64) bool {
 	return false
 }
 
-// partOf is how a part stands against the minimum quality.
+// partOf is how a part stands against the minimum quality. The releases of
+// banned groups come after the others.
 func partOf(u Unit, t store.GapThreshold) Part {
 	p := Part{Unit: u.Number, State: StateAbsent}
-	var mine, others, mineAny, all *Version
+	var mine, others, banned, mineAny, all *Version
 	pick := func(best **Version, v *Version) {
 		if *best == nil || betterVersion(*v, **best) {
 			*best = v
@@ -330,6 +405,8 @@ func partOf(u Unit, t store.GapThreshold) Part {
 		switch {
 		case v.Mine && ok:
 			pick(&mine, v)
+		case ok && v.Banned:
+			pick(&banned, v)
 		case ok:
 			pick(&others, v)
 		}
@@ -343,6 +420,8 @@ func partOf(u Unit, t store.GapThreshold) Part {
 		p.State, p.Best = StateMine, mine
 	case others != nil:
 		p.State, p.Best = StateAvailable, others
+	case banned != nil:
+		p.State, p.Best = StateBanned, banned
 	case mineAny != nil:
 		p.State, p.Best = PartBelow, mineAny
 	case all != nil:

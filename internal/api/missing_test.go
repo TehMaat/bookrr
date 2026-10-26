@@ -160,6 +160,47 @@ func TestMissingMarks(t *testing.T) {
 	}
 }
 
+// The banned release groups are kept for every kind of check and leave
+// the parts of their releases missing.
+func TestMissingBannedGroups(t *testing.T) {
+	ctx := context.Background()
+	st, h := newServer(t)
+	q := unit3d.QualityOf("Saga.2.2003.1080p.BluRay.x264.ITA-FLUX", "Encode", "", "")
+	g := gaps.Group{Format: gaps.Format, Kind: gaps.KindSaga, Key: "collection:1", Title: "Saga", Status: gaps.StatusOK,
+		Units: []gaps.Unit{{Number: 1, Name: "Due", TmdbID: 12, Versions: []gaps.Version{
+			{Ref: gaps.Ref{ID: 2, Name: "Saga.2.2003.1080p.BluRay.x264.ITA-FLUX"}, Q: q},
+		}}}, Rows: []gaps.Row{}}
+	data, _ := json.Marshal(g)
+	if err := st.SaveGapGroups(ctx, gaps.KindSaga, []store.GapGroup{{Key: g.Key, Title: g.Title, Data: data}}); err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		BannedGroups []string     `json:"bannedGroups"`
+		Sagas        []gaps.Group `json:"sagas"`
+	}
+	var out result
+	if code := call(t, h, "GET", "/api/missing/sagas", nil, &out); code != http.StatusOK || out.BannedGroups == nil ||
+		len(out.BannedGroups) != 0 || out.Sagas[0].Parts[0].State != gaps.StateAvailable || out.Sagas[0].Units[0].Versions[0].Group != "FLUX" {
+		t.Fatalf("no bans: %d %+v", code, out)
+	}
+
+	if code := call(t, h, "PUT", "/api/missing/banned-groups", map[string]any{"groups": []string{"flux!"}}, nil); code != http.StatusBadRequest {
+		t.Errorf("bad group: %d", code)
+	}
+	var saved struct {
+		Groups []string `json:"groups"`
+	}
+	if code := call(t, h, "PUT", "/api/missing/banned-groups", map[string]any{"groups": []string{"-flux", "FLUX", " Arc "}}, &saved); code != http.StatusOK ||
+		strings.Join(saved.Groups, ",") != "Arc,flux" {
+		t.Fatalf("save: %d %+v", code, saved)
+	}
+	out = result{}
+	if call(t, h, "GET", "/api/missing/sagas", nil, &out); strings.Join(out.BannedGroups, ",") != "Arc,flux" ||
+		out.Sagas[0].Parts[0].State != gaps.StateBanned || out.Sagas[0].PartTotals.Banned != 1 || out.Sagas[0].PartTotals.Missing != 1 {
+		t.Fatalf("banned: %+v", out)
+	}
+}
+
 // The lists of films the user follows: added from their address on
 // MDBList, shown before their first check, removed with their results.
 func TestMissingLists(t *testing.T) {
