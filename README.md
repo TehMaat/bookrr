@@ -18,7 +18,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🔎 **Hash automatico da UNIT3D**: i torrent aggiunti senza info hash vengono cercati per nome sul tuo tracker UNIT3D e ricevono l'hash vero.
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
-- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate** e parti **ignorate**. Controllo ogni notte, stagioni e saghe da TMDB.
+- 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. E per le **collezioni** che segui (liste di film su MDBList: l'MCU, i film Pixar, i classici Disney), anche se non ne hai caricato nessuno. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate** e parti **ignorate**. Controllo ogni notte, stagioni e saghe da TMDB.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -69,6 +69,7 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_UNIT3D_URL` / `BOOKRR_UNIT3D_API_KEY` | — | Indirizzo del tracker UNIT3D (es. `https://tracker.example`) e la tua API key (Impostazioni → API key): servono a trovare l'hash dei torrent aggiunti senza e per lo storico delle tue release. |
 | `BOOKRR_UNIT3D_RELEASES_INTERVAL` | `6h` | Ogni quanto rileggere i tuoi upload sul tracker per lo storico release (minimo `15m`). |
 | `BOOKRR_TMDB_API_KEY` | — | Chiave API (v3) o token di lettura (v4) di [TMDB](https://www.themoviedb.org/settings/api): con il tracker UNIT3D attiva il controllo delle **stagioni mancanti** e dei **film mancanti delle saghe**. |
+| `BOOKRR_MDBLIST_API_KEY` | — | Chiave API di [MDBList](https://mdblist.com) (gratuita, nelle preferenze del tuo account): con il tracker e TMDB attiva le **collezioni** (liste di film da seguire oltre le saghe). |
 | `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno delle stagioni e dei film mancanti (ora locale, `TZ`). |
 | `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
@@ -270,6 +271,18 @@ Per ogni film che hai caricato e che su TMDB fa parte di una **saga** (una *coll
 
 Nelle celle il titolo del film è scritto senza la parte comune a tutta la saga («La compagnia dell'anello (2001)»); cliccando si aprono i torrent trovati e il link al film su TMDB. Si può cercare per nome della saga o di un film.
 
+#### Collezioni
+
+Una saga di TMDB è Iron Man 1, 2 e 3; l'MCU, i film Pixar o i classici Disney non sono saghe. Per questi c'è la sottoscheda **Collezioni**: con `BOOKRR_MDBLIST_API_KEY` incolli il link di una lista pubblica di [MDBList](https://mdblist.com) (es. `https://mdblist.com/lists/utente/nome-lista`, anche una lista di IMDb o Trakt copiata da MDBList) e bookrr la segue. Regole:
+
+- i film della collezione sono quelli della lista **nell'ordine della lista**, letti a ogni controllo (`GET /lists/{utente}/{lista}/items/movie` dell'API di MDBList), quindi se la lista cambia cambia anche la collezione; titolo e data di uscita vengono da TMDB, e un film senza id TMDB si cerca dall'id IMDb. I film **non ancora usciti** non contano, tranne quelli che hai caricato tu;
+- una collezione si vede **sempre**, anche se non hai caricato nessuno dei suoi film: nella vista per film ogni film è tuo, di altri, sotto la soglia o assente; la vista per qualità ha una riga per ogni qualità in cui hai caricato almeno un film della collezione;
+- il tracker non conosce le liste: bookrr cerca **film per film** (`tmdbId=…`), una volta sola per film anche se è in più collezioni;
+- le collezioni sono **indipendenti dalle saghe**: Iron Man compare sia nella saga sia nell'MCU, e le scelte (accettata, ignorata, completa, nascosta, qualità minima) fatte in una non valgono nell'altra;
+- una lista cancellata o resa privata su MDBList compare tra le **liste non trovate**. **Smetti di seguire** (cestino accanto alla collezione) toglie la collezione con i suoi risultati e le scelte fatte sui suoi film; la lista su MDBList non viene toccata.
+
+Aggiunta una collezione, bookrr la controlla subito; le altre si aggiornano con il controllo notturno. MDBList gratuito permette 1000 richieste al giorno: bookrr ne usa una per collezione a ogni controllo (più una quando la aggiungi).
+
 #### Vista per stagione / per film e qualità minima
 
 La griglia per qualità diventa difficile da leggere quando hai caricato una saga in più qualità «massime» (Alien in 2160p Remux DV, Alien³ che esiste solo in 1080p Remux): Alien³ risulta mancante in tutte le righe 2160p. Per questo ogni sottoscheda ha due viste, e il browser ricorda l'ultima scelta (la prima volta è quella per parte):
@@ -277,7 +290,7 @@ La griglia per qualità diventa difficile da leggere quando hai caricato una sag
 - **Per stagione / Per film**: una sola riga per serie o saga, una cella per stagione o film con la **versione migliore** (la tua, se ne hai una che raggiunge la qualità minima; altrimenti la migliore degli altri che la raggiunge; altrimenti la migliore in assoluto). «Migliore» vuol dire, in ordine: tipo (Full Disc > Remux > Encode > WEB-DL > WEBRip > HDTV), risoluzione, HDR (DV vale più degli altri), numero di lingue audio;
 - **Per qualità**: la griglia descritta sopra, una riga per ogni tua qualità.
 
-La **qualità minima** (pulsante «Minima», una per le serie e una per le saghe; ogni serie o saga può averne una propria dal menu ⋯) è fatta di tipo minimo, risoluzione minima e lingua audio richiesta, ognuno facoltativo. Una parte è **Tua** se l'hai caricata almeno in quella qualità, **C'è, di altri** se l'ha caricata qualcun altro almeno in quella qualità, **Sotto la soglia** se sul tracker c'è solo in qualità inferiori, **Assente** se non c'è. Le release di cui non si conoscono le lingue (o solo `MULTI`) contano come se avessero quella richiesta. Esempio: con minima *Encode*, «300 - L'alba di un impero» in 1080p Encode di altri va bene; con minima *Remux* è sotto la soglia.
+La **qualità minima** (pulsante «Minima», una per le serie, una per le saghe e una per le collezioni; ognuna può averne una propria dal menu ⋯) è fatta di tipo minimo, risoluzione minima e lingua audio richiesta, ognuno facoltativo. Una parte è **Tua** se l'hai caricata almeno in quella qualità, **C'è, di altri** se l'ha caricata qualcun altro almeno in quella qualità, **Sotto la soglia** se sul tracker c'è solo in qualità inferiori, **Assente** se non c'è. Le release di cui non si conoscono le lingue (o solo `MULTI`) contano come se avessero quella richiesta. Esempio: con minima *Encode*, «300 - L'alba di un impero» in 1080p Encode di altri va bene; con minima *Remux* è sotto la soglia.
 
 Le tue scelte restano anche dopo i controlli successivi:
 
@@ -293,9 +306,9 @@ Le tue scelte restano anche dopo i controlli successivi:
 
 #### Quando gira
 
-Il controllo, serie e saghe insieme, gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti (se fallisce solo una delle due parti, l'altra viene comunque aggiornata).
+Il controllo, serie, saghe e collezioni insieme, gira **ogni notte** alle `BOOKRR_MISSING_CHECK_AT` (04:00), con **Controlla ora** e, se l'ultimo ha più di un giorno (bookrr era spento), 10 minuti dopo l'avvio. Usa i tuoi upload letti dallo storico release; i risultati restano nel database con la data dell'ultimo controllo, e un controllo non riuscito lascia quelli precedenti (se fallisce solo una delle parti, le altre vengono comunque aggiornate).
 
-API: `GET /api/missing/series`, `GET /api/missing/sagas`, `POST /api/missing/check` (controlla ora, serie e saghe), `PUT /api/missing/{series|sagas}/prefs` (qualità minima e «conta quelle di altri»), `POST`/`DELETE /api/missing/{series|sagas}/marks` (le scelte: `hide`, `complete`, `accept`, `ignore`, `threshold`).
+API: `GET /api/missing/series`, `GET /api/missing/sagas`, `GET /api/missing/lists` (con le collezioni seguite in `sources`), `POST /api/missing/check` (controlla ora, serie, saghe e collezioni), `PUT /api/missing/{series|sagas|lists}/prefs` (qualità minima e «conta quelle di altri»), `POST`/`DELETE /api/missing/{series|sagas|lists}/marks` (le scelte: `hide`, `complete`, `accept`, `ignore`, `threshold`), `POST /api/missing/lists/sources` con `{"url": "https://mdblist.com/lists/…"}` (segui una collezione) e `DELETE /api/missing/lists/sources/{id}`.
 
 I risultati di un controllo fatto con una versione precedente non hanno le versioni delle singole parti: fino al controllo successivo (che parte da solo 10 minuti dopo l'avvio) la vista per parte li mostra per qualità.
 
@@ -356,7 +369,8 @@ internal/qbit     client minimale per la Web API di qBittorrent
 internal/s3       client S3 minimale in sola lettura (ListObjectsV2, firma SigV4)
 internal/smart    lettura dei rapporti SMART (smartctl, CrystalDiskInfo)
 internal/store    SQLite (modernc.org/sqlite, puro Go, niente CGO)
-internal/gaps     controllo delle stagioni mancanti delle serie e dei film mancanti delle saghe
+internal/gaps     controllo delle stagioni mancanti delle serie e dei film mancanti delle saghe e delle collezioni
+internal/mdblist  client minimale per le liste di MDBList
 internal/syncer   sincronizzazione periodica
 internal/tmdb     client minimale per The Movie Database
 internal/unit3d   tracker UNIT3D: ricerca dell'hash, storico delle release, qualità

@@ -28,6 +28,8 @@ type Config struct {
 	// The Movie Database key, for the seasons of the series and the films
 	// of the sagas uploaded.
 	TMDBAPIKey string
+	// MDBList key, for the lists of films the user follows beyond the sagas.
+	MDBListAPIKey string
 	// Time of the nightly check of the missing seasons and films, in minutes after
 	// midnight (local time).
 	MissingCheckAt int
@@ -37,15 +39,16 @@ func (c Config) DBPath() string { return filepath.Join(c.DataDir, "bookrr.db") }
 
 func Load() (Config, error) {
 	c := Config{
-		Listen:       env("BOOKRR_LISTEN", ":8080"),
-		DataDir:      env("BOOKRR_DATA_DIR", "/data"),
-		ReleaseTag:   env("BOOKRR_RELEASE_TAG", "Personal Release"),
-		WebhookToken: os.Getenv("BOOKRR_WEBHOOK_TOKEN"),
-		AuthUser:     os.Getenv("BOOKRR_AUTH_USER"),
-		AuthPassword: os.Getenv("BOOKRR_AUTH_PASSWORD"),
-		Unit3DURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_URL")), "/"),
-		Unit3DAPIKey: strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_API_KEY")),
-		TMDBAPIKey:   strings.TrimSpace(os.Getenv("BOOKRR_TMDB_API_KEY")),
+		Listen:        env("BOOKRR_LISTEN", ":8080"),
+		DataDir:       env("BOOKRR_DATA_DIR", "/data"),
+		ReleaseTag:    env("BOOKRR_RELEASE_TAG", "Personal Release"),
+		WebhookToken:  os.Getenv("BOOKRR_WEBHOOK_TOKEN"),
+		AuthUser:      os.Getenv("BOOKRR_AUTH_USER"),
+		AuthPassword:  os.Getenv("BOOKRR_AUTH_PASSWORD"),
+		Unit3DURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_URL")), "/"),
+		Unit3DAPIKey:  strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_API_KEY")),
+		TMDBAPIKey:    strings.TrimSpace(os.Getenv("BOOKRR_TMDB_API_KEY")),
+		MDBListAPIKey: strings.TrimSpace(os.Getenv("BOOKRR_MDBLIST_API_KEY")),
 	}
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)

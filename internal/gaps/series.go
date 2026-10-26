@@ -2,7 +2,6 @@ package gaps
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -10,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/tehmaat/bookrr/internal/store"
@@ -108,22 +106,8 @@ func (c *Checker) checkSeries(ctx context.Context) (string, error) {
 	}
 	groups = append(groups, unverifiable...)
 
-	ts := c.now().UTC().Format(time.RFC3339)
-	rows := make([]store.GapGroup, len(groups))
-	missing, unver := 0, 0
-	for i, g := range groups {
-		g.CheckedAt = ts
-		data, err := json.Marshal(g)
-		if err != nil {
-			return "", err
-		}
-		rows[i] = store.GapGroup{Key: g.Key, Title: g.Title, Missing: g.Missing, Data: data, CheckedAt: ts}
-		missing += g.Missing
-		if g.Status == StatusUnverifiable {
-			unver++
-		}
-	}
-	if err := c.store.SaveGapGroups(ctx, KindSeries, rows); err != nil {
+	missing, unver, err := c.save(ctx, KindSeries, groups)
+	if err != nil {
 		return "", err
 	}
 	res := fmt.Sprintf("%d serie, %d stagioni mancanti", len(groups), missing)

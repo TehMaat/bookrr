@@ -115,6 +115,17 @@ type Movie struct {
 	} `json:"belongs_to_collection"`
 }
 
+// Released reports whether the film was out on day (YYYY-MM-DD).
+func (m Movie) Released(day string) bool { return m.ReleaseDate != "" && m.ReleaseDate <= day }
+
+// Year of release, "" if unknown.
+func (m Movie) Year() string {
+	if len(m.ReleaseDate) >= 4 {
+		return m.ReleaseDate[:4]
+	}
+	return ""
+}
+
 // Movie returns a film: GET /movie/{id}.
 func (c *Client) Movie(ctx context.Context, id int64) (Movie, error) {
 	var m Movie

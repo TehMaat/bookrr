@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,7 +13,9 @@ import (
 
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/gaps"
+	"github.com/tehmaat/bookrr/internal/mdblist"
 	"github.com/tehmaat/bookrr/internal/store"
+	"github.com/tehmaat/bookrr/internal/tmdb"
 	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
@@ -153,5 +157,98 @@ func TestMissingMarks(t *testing.T) {
 	}
 	if code := call(t, h, "POST", "/api/missing/sagas/marks", map[string]any{"group": "collection:9", "action": "hide"}, nil); code != http.StatusNotFound {
 		t.Errorf("unknown group: %d", code)
+	}
+}
+
+// The lists of films the user follows: added from their address on
+// MDBList, shown before their first check, removed with their results.
+func TestMissingLists(t *testing.T) {
+	ctx := context.Background()
+	md := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/lists/me/mcu":
+			w.Write([]byte(`[{"id":5,"name":"Marvel Cinematic Universe","slug":"mcu","items":34}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer md.Close()
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := config.Config{Unit3DURL: "https://t.example", Unit3DAPIKey: "k", TMDBAPIKey: "k"}
+	checker := gaps.New(st, unit3d.New(cfg.Unit3DURL, "k"), tmdb.New("k"), cfg.Unit3DURL, 0)
+	h := New(cfg, st, nil, nil, nil, nil, checker, fstest.MapFS{}, "test").Handler()
+
+	type result struct {
+		ListsEnabled        bool         `json:"listsEnabled"`
+		ListsDisabledReason string       `json:"listsDisabledReason"`
+		Lists               []gaps.Group `json:"lists"`
+		Sources             []struct {
+			store.GapList
+			URL string `json:"url"`
+		} `json:"sources"`
+	}
+	var out result
+	if code := call(t, h, "GET", "/api/missing/lists", nil, &out); code != http.StatusOK || out.ListsEnabled ||
+		!strings.Contains(out.ListsDisabledReason, "BOOKRR_MDBLIST_API_KEY") || out.Lists == nil || out.Sources == nil {
+		t.Fatalf("without key: %d %+v", code, out)
+	}
+	add := map[string]string{"url": "https://mdblist.com/lists/me/mcu"}
+	if code := call(t, h, "POST", "/api/missing/lists/sources", add, nil); code != http.StatusBadRequest {
+		t.Errorf("add without key: %d", code)
+	}
+
+	checker.MDBList = mdblist.New("k")
+	checker.MDBList.BaseURL = md.URL
+	checker.MDBList.MinInterval = 0
+	if code := call(t, h, "POST", "/api/missing/lists/sources", map[string]string{"url": "https://example.com/x"}, nil); code != http.StatusBadRequest {
+		t.Errorf("bad address: %d", code)
+	}
+	if code := call(t, h, "POST", "/api/missing/lists/sources", map[string]string{"url": "me/gone"}, nil); code != http.StatusNotFound {
+		t.Errorf("unknown list: %d", code)
+	}
+	var l store.GapList
+	if code := call(t, h, "POST", "/api/missing/lists/sources", add, &l); code != http.StatusCreated ||
+		l.Path != "me/mcu" || l.Title != "Marvel Cinematic Universe" || l.ID == 0 {
+		t.Fatalf("add: %d %+v", code, l)
+	}
+	if !checker.State().Running {
+		t.Error("no check started")
+	}
+	if code := call(t, h, "POST", "/api/missing/lists/sources", map[string]string{"url": "me/mcu/json"}, nil); code != http.StatusConflict {
+		t.Errorf("added twice: %d", code)
+	}
+	out = result{}
+	if code := call(t, h, "GET", "/api/missing/lists", nil, &out); code != http.StatusOK || !out.ListsEnabled || len(out.Sources) != 1 ||
+		out.Sources[0].URL != "https://mdblist.com/lists/me/mcu" || len(out.Lists) != 0 {
+		t.Fatalf("listed: %d %+v", code, out)
+	}
+
+	// The choices of the users on lists are kept like the others.
+	g := gaps.Group{Format: gaps.Format, Kind: gaps.KindList, Key: l.Key(), Title: l.Title, Status: gaps.StatusOK, Units: []gaps.Unit{}, Rows: []gaps.Row{}}
+	data, _ := json.Marshal(g)
+	if err := st.SaveGapGroups(ctx, gaps.KindList, []store.GapGroup{{Key: g.Key, Title: g.Title, Data: data}}); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, h, "POST", "/api/missing/lists/marks", map[string]any{"group": g.Key, "action": "hide"}, nil); code != http.StatusOK {
+		t.Fatalf("hide: %d", code)
+	}
+	out = result{}
+	if call(t, h, "GET", "/api/missing/lists", nil, &out); len(out.Lists) != 1 || !out.Lists[0].Hidden {
+		t.Fatalf("hidden: %+v", out.Lists)
+	}
+
+	if code := call(t, h, "DELETE", fmt.Sprintf("/api/missing/lists/sources/%d", l.ID), nil, nil); code != http.StatusNoContent {
+		t.Fatalf("delete: %d", code)
+	}
+	if code := call(t, h, "DELETE", fmt.Sprintf("/api/missing/lists/sources/%d", l.ID), nil, nil); code != http.StatusNotFound {
+		t.Errorf("delete again: %d", code)
+	}
+	out = result{}
+	if call(t, h, "GET", "/api/missing/lists", nil, &out); len(out.Lists) != 0 || len(out.Sources) != 0 {
+		t.Errorf("after delete: %+v", out)
 	}
 }

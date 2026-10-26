@@ -24,13 +24,13 @@ type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
 
 /**
  * "#disks" or "#disks/3" (the torrents archived on disk 3, the target of its QR code);
- * "#missing" (the series) or "#missing/sagas".
+ * "#missing" (the series), "#missing/sagas" or "#missing/lists".
  */
 function routeFromHash(): Route {
   const [h, id] = window.location.hash.replace("#", "").split("/")
   const tab = (tabs as readonly string[]).includes(h) ? (h as Tab) : "torrents"
   const diskId = tab === "disks" && /^\d+$/.test(id ?? "") ? Number(id) : null
-  const missingView = tab === "missing" && id === "sagas" ? "sagas" : "series"
+  const missingView = tab === "missing" && (id === "sagas" || id === "lists") ? id : "series"
   return { tab, diskId, missingView }
 }
 
@@ -102,7 +102,7 @@ export default function App() {
             {tab === "releases" && <ReleasesPage onResolve={resolveOne} />}
             {tab === "dead" && <ReleasesPage dead onResolve={resolveOne} />}
             {tab === "missing" && (
-              <MissingPage view={missingView} onView={(v) => go(v === "sagas" ? "missing/sagas" : "missing")} />
+              <MissingPage view={missingView} onView={(v) => go(v === "series" ? "missing" : `missing/${v}`)} />
             )}
             {tab === "alerts" && <AlertsPage onResolve={setResolving} />}
             {tab === "disks" && (

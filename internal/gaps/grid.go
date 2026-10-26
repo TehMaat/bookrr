@@ -1,6 +1,7 @@
 // Package gaps tells what is missing from the collections the user has
-// uploaded to the tracker, in the same quality: the seasons of a series
-// and the films of a saga, and whether others uploaded them.
+// uploaded to the tracker, in the same quality: the seasons of a series,
+// the films of a saga and those of the lists the user follows, and
+// whether others uploaded them.
 package gaps
 
 import (
@@ -16,6 +17,7 @@ import (
 const (
 	KindSeries = "series"
 	KindSaga   = "saga"
+	KindList   = "list" // a list of films on MDBList the user follows (store.GapList)
 )
 
 // States of a cell of the grid.
@@ -55,7 +57,7 @@ const (
 type Group struct {
 	Format int    `json:"format"`
 	Kind   string `json:"kind"`
-	Key    string `json:"key"` // "tmdb:1399", "collection:119"
+	Key    string `json:"key"` // "tmdb:1399", "collection:119", "mdblist:user/slug"
 	Title  string `json:"title"`
 	Year   string `json:"year"`
 	TmdbID int64  `json:"tmdbId"` // of the series, or of the saga (collection)
@@ -65,6 +67,8 @@ type Group struct {
 	Note string `json:"note"`
 	// The collection on the tracker (search by TMDB id, or by saga).
 	SearchURL string `json:"searchUrl"`
+	// The list on MDBList, for lists.
+	SourceURL string `json:"sourceUrl,omitempty"`
 	Units     []Unit `json:"units"`
 	Rows      []Row  `json:"rows"`
 	// The user's uploads it was made of.
@@ -98,13 +102,13 @@ type Totals struct {
 }
 
 // Unit is a part of a collection: a season of a series, a film of a saga
-// (numbered in order of release).
+// (numbered in order of release) or of a list (in its order).
 type Unit struct {
 	Number   int    `json:"number"`
 	Name     string `json:"name"`
 	AirDate  string `json:"airDate"`
 	Episodes int    `json:"episodes"`
-	// The film on TMDB, for sagas.
+	// The film on TMDB, for sagas and lists.
 	TmdbID int64 `json:"tmdbId,omitempty"`
 	// Every torrent that holds it, the user's and others', best first.
 	Versions []Version `json:"versions"`

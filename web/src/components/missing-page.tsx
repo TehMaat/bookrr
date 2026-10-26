@@ -14,12 +14,15 @@ import {
   Gauge,
   Grid3x3,
   Layers,
+  Library,
   List,
   MoreHorizontal,
+  Plus,
   RefreshCw,
   Search,
   Shuffle,
   ThumbsUp,
+  Trash2,
   TriangleAlert,
   Tv,
   Undo2,
@@ -30,6 +33,16 @@ import { toast } from "sonner"
 
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -59,6 +72,7 @@ import {
   api,
   type GapGroup,
   type GapKind,
+  type GapListSource,
   type GapMarkInput,
   type GapMarkState,
   type GapPartState,
@@ -73,29 +87,30 @@ import {
   type Quality,
 } from "@/lib/api"
 import { formatDate, formatRelative } from "@/lib/format"
-import { useAction, useMissingSagas, useMissingSeries } from "@/lib/queries"
+import { useAction, useMissingLists, useMissingSagas, useMissingSeries } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 30
 
-export type MissingView = "series" | "sagas"
+export type MissingView = "series" | "sagas" | "lists"
 
 /**
- * How a series or a saga is shown: one cell per season or film with its best version against the
+ * How a series, a saga or a collection is shown: one cell per season or film with its best version against the
  * minimum quality ("parts"), or one row per quality the user uploaded it in ("grid").
  */
 type Layout = "parts" | "grid"
 
-/** What changes between the series and the sagas. */
+/** What changes between the series, the sagas and the collections. */
 type KindText = {
   icon: React.ElementType
-  /** Plural noun of the stat card and the pager: "Serie", "Saghe". */
+  /** Plural noun of the stat card and the pager: "Serie", "Saghe", "Collezioni". */
   noun: string
-  /** Singular noun in the menus: "serie", "saga". */
+  /** Singular noun in the menus: "serie", "saga", "collezione". */
   one: string
   /** Name of the view by part: "Per stagione", "Per film". */
   byPart: string
   search: string
+  /** The group on TMDB, for series and sagas. */
   tmdbUrl: (id: number) => string
   units: (n: number) => string
   mine: (n: number) => string
@@ -107,6 +122,12 @@ type KindText = {
   noMatch: string
   unverifiableTitle: string
   unverifiableHint: string
+}
+
+/** "La compagnia dell'anello (2001)": the name of a film without the start shared by the group. */
+function filmLabel(u: GapUnit, prefix: number) {
+  const name = u.name.slice(prefix)
+  return u.airDate ? `${name} (${u.airDate.slice(0, 4)})` : name
 }
 
 const kinds: Record<GapKind, KindText> = {
@@ -138,10 +159,7 @@ const kinds: Record<GapKind, KindText> = {
     tmdbUrl: (id) => `https://www.themoviedb.org/collection/${id}`,
     units: (n) => (n === 1 ? "film uscito" : "film usciti"),
     mine: (n) => (n === 1 ? "tuo upload" : "tuoi upload"),
-    cellLabel: (u, prefix) => {
-      const name = u.name.slice(prefix)
-      return u.airDate ? `${name} (${u.airDate.slice(0, 4)})` : name
-    },
+    cellLabel: filmLabel,
     intro:
       "Per ogni film che hai caricato e che su TMDB appartiene a una saga: gli altri film della saga che mancano e se sul tracker li hanno caricati altri. Per film: la versione migliore di ogni film, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità (tipo, risoluzione, HDR e lingue audio) in cui hai caricato la saga. I film non ancora usciti non contano.",
     empty: "Nessuno dei tuoi film appartiene a una saga su TMDB.",
@@ -151,6 +169,25 @@ const kinds: Record<GapKind, KindText> = {
     unverifiableHint:
       "Film di cui non si sa se appartengono a una saga: sul tracker manca l'id TMDB (e quello IMDb non porta a nessun film su TMDB), oppure TMDB non lo conosce.",
   },
+  list: {
+    icon: Library,
+    noun: "Collezioni",
+    one: "collezione",
+    byPart: "Per film",
+    search: "Cerca una collezione o un film…",
+    tmdbUrl: (id) => `https://www.themoviedb.org/movie/${id}`,
+    units: (n) => (n === 1 ? "film uscito" : "film usciti"),
+    mine: (n) => (n === 1 ? "tuo upload" : "tuoi upload"),
+    cellLabel: filmLabel,
+    intro:
+      "Per ogni collezione che segui (una lista di film su MDBList: un universo come l'MCU, i film Pixar, i classici Disney): i film che mancano e se sul tracker li hanno caricati altri, anche se non ne hai caricato nessuno. Per film: la versione migliore di ogni film, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità in cui hai caricato film della collezione. I film non ancora usciti non contano. Le collezioni sono indipendenti dalle saghe: le scelte fatte qui valgono solo qui.",
+    empty: "Nessuna collezione: aggiungine una qui sopra con il link di una lista MDBList.",
+    checking: "Sto controllando le tue collezioni…",
+    noMatch: "Nessuna collezione corrisponde ai filtri.",
+    unverifiableTitle: "Liste non trovate",
+    unverifiableHint:
+      "Collezioni la cui lista non c'è più su MDBList (cancellata o resa privata): correggi il link o smetti di seguirle.",
+  },
 }
 
 const phases: Record<MissingCheckState["phase"], string> = {
@@ -158,6 +195,7 @@ const phases: Record<MissingCheckState["phase"], string> = {
   series: "serie",
   movies: "film",
   sagas: "saghe",
+  lists: "collezioni",
 }
 
 type Look = { label: string; hint: string; icon: React.ElementType; className: string }
@@ -242,7 +280,7 @@ function shortQuality(q: Quality) {
 }
 
 /**
- * Length of the start the names of the films of a saga share up to a separator
+ * Length of the start the names of the films of a saga (or a collection) share up to a separator
  * ("Il Signore degli Anelli - "), to leave out of the cells; 0 if none.
  */
 function sharedPrefix(names: string[]): number {
@@ -292,7 +330,11 @@ function useLayouts() {
       return "parts"
     }
   }
-  const [layouts, setLayouts] = useState<Record<GapKind, Layout>>(() => ({ series: read("series"), saga: read("saga") }))
+  const [layouts, setLayouts] = useState<Record<GapKind, Layout>>(() => ({
+    series: read("series"),
+    saga: read("saga"),
+    list: read("list"),
+  }))
   const set = (kind: GapKind, l: Layout) => {
     setLayouts((v) => ({ ...v, [kind]: l }))
     try {
@@ -346,7 +388,7 @@ function CellButton({
           onClick={onOpen}
           className={cn(
             "flex h-8 min-w-12 items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-medium tabular-nums transition-opacity hover:opacity-80",
-            kind === "saga" && "max-w-80 min-w-0 px-2",
+            kind !== "series" && "max-w-80 min-w-0 px-2",
             look.className
           )}
           aria-label={`${unit.name}: ${look.label}`}
@@ -555,7 +597,7 @@ function GroupCard({
 }) {
   const k = kinds[s.kind]
   const parts = byPart(s, layout)
-  const prefix = s.kind === "saga" ? sharedPrefix(s.units.map((u) => u.name)) : 0
+  const prefix = s.kind !== "series" ? sharedPrefix(s.units.map((u) => u.name)) : 0
   const inFilter = s.rows.filter((r) => inGroup(r.quality.label, group))
   const rows = inFilter.filter((r) => !r.hidden)
   const hiddenRows = inFilter.filter((r) => r.hidden)
@@ -570,7 +612,9 @@ function GroupCard({
           <k.icon className="text-muted-foreground size-4" />
           <span>{s.title}</span>
           {s.year && <span className="text-muted-foreground font-normal">({s.year})</span>}
-          {t.missing > 0 ? (
+          {!parts && s.rows.length === 0 ? (
+            <Badge variant="secondary">Nessun tuo upload</Badge>
+          ) : t.missing > 0 ? (
             <Badge variant="warning">
               {t.missing} {t.missing === 1 ? "mancante" : "mancanti"}
             </Badge>
@@ -592,11 +636,20 @@ function GroupCard({
                 </a>
               </Button>
             )}
-            <Button variant="ghost" size="sm" asChild>
-              <a href={k.tmdbUrl(s.tmdbId)} target="_blank" rel="noreferrer">
-                <ExternalLink /> TMDB
-              </a>
-            </Button>
+            {s.sourceUrl && (
+              <Button variant="ghost" size="sm" asChild>
+                <a href={s.sourceUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink /> MDBList
+                </a>
+              </Button>
+            )}
+            {s.tmdbId > 0 && (
+              <Button variant="ghost" size="sm" asChild>
+                <a href={k.tmdbUrl(s.tmdbId)} target="_blank" rel="noreferrer">
+                  <ExternalLink /> TMDB
+                </a>
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-sm" aria-label="Altre azioni">
@@ -701,6 +754,12 @@ function GroupCard({
               </div>
             </div>
           ))
+        )}
+        {!parts && s.rows.length === 0 && (
+          <p className="text-muted-foreground text-sm">
+            Non hai ancora caricato film di questa {k.one}: le righe per qualità compaiono dal primo. La vista{" "}
+            {k.byPart.toLowerCase()} mostra già cosa c'è sul tracker.
+          </p>
         )}
         {!parts && hiddenRows.length > 0 && (
           <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
@@ -826,6 +885,125 @@ function CellDialog({
   )
 }
 
+/** The collections followed: add one from its address on MDBList, see whether it was checked, stop following it. */
+function ListSources({
+  sources,
+  groups,
+  enabled,
+  disabledReason,
+}: {
+  sources: GapListSource[]
+  groups: GapGroup[]
+  enabled: boolean
+  disabledReason: string
+}) {
+  const [url, setUrl] = useState("")
+  const [removing, setRemoving] = useState<GapListSource | null>(null)
+  const add = useAction((u: string) => api.addGapList(u))
+  const remove = useAction((id: number) => api.removeGapList(id), "Collezione rimossa")
+  const byKey = new Map(groups.map((g) => [g.key, g]))
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!url.trim()) return
+    add.mutate(url.trim(), {
+      onSuccess: (l) => {
+        setUrl("")
+        toast.success(`Collezione "${l.title || l.path}" aggiunta`, {
+          description: "La controllo subito: tra poco compaiono i suoi film.",
+        })
+      },
+    })
+  }
+
+  return (
+    <Card className="gap-3">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Library className="text-muted-foreground size-4" /> Collezioni seguite ({sources.length})
+        </CardTitle>
+        <CardDescription>
+          Incolla il link di una lista pubblica di MDBList: una fatta da te o da altri, anche copiata da IMDb o Trakt.
+          Ogni controllo la rilegge, quindi se cambia su MDBList cambia anche qui.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {enabled ? (
+          <form onSubmit={submit} className="flex flex-wrap gap-2">
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://mdblist.com/lists/utente/nome-lista"
+              aria-label="Link della lista su MDBList"
+              className="min-w-[240px] flex-1"
+            />
+            <Button type="submit" disabled={add.isPending || !url.trim()}>
+              <Plus /> Aggiungi
+            </Button>
+          </form>
+        ) : (
+          <p className="text-muted-foreground text-sm">{disabledReason}</p>
+        )}
+        {sources.length > 0 && (
+          <ul className="max-h-72 divide-y overflow-y-auto rounded-lg border">
+            {sources.map((l) => {
+              const g = byKey.get(`${l.source}:${l.path}`)
+              const status = !g
+                ? "In attesa del controllo"
+                : g.status !== "ok"
+                  ? "Lista non trovata su MDBList"
+                  : `${g.units.length} ${kinds.list.units(g.units.length)} · ${g.mine.length} ${kinds.list.mine(g.mine.length)}${g.hidden ? " · nascosta" : ""}`
+              return (
+                <li key={l.id} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{l.title || l.path}</div>
+                    <div
+                      className={cn(
+                        "truncate text-xs",
+                        g && g.status !== "ok" ? "text-destructive" : "text-muted-foreground"
+                      )}
+                    >
+                      {status}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon-sm" asChild>
+                    <a href={l.url} target="_blank" rel="noreferrer" aria-label="Apri su MDBList">
+                      <ExternalLink />
+                    </a>
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" aria-label="Smetti di seguire" onClick={() => setRemoving(l)}>
+                    <Trash2 />
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+      <AlertDialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Smettere di seguire "{removing?.title || removing?.path}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Spariscono i suoi risultati e le scelte fatte sui suoi film (accettati, ignorati, qualità minima). La
+              lista su MDBList resta com'è.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-white"
+              onClick={() => removing && remove.mutate(removing.id)}
+            >
+              Smetti di seguire
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  )
+}
+
 /** The list of one kind: stats, filters, the cards, the hidden and the unverifiable ones. */
 function GapList({
   kind,
@@ -838,6 +1016,8 @@ function GapList({
   layout,
   onLayout,
   onCheck,
+  header,
+  empty,
 }: {
   kind: GapKind
   all: GapGroup[]
@@ -849,6 +1029,10 @@ function GapList({
   layout: Layout
   onLayout: (l: Layout) => void
   onCheck?: () => void
+  /** Shown under the introduction. */
+  header?: React.ReactNode
+  /** What to say when there is nothing at all, in place of the usual. */
+  empty?: string
 }) {
   const k = kinds[kind]
   const [query, setQuery] = useState("")
@@ -890,8 +1074,10 @@ function GapList({
     const q = query.trim().toLowerCase()
     return visibleGroups.filter((s) => {
       const rows = s.rows.filter((r) => inGroup(r.quality.label, quality))
-      if (rows.length === 0) return false
-      if (onlyMissing) {
+      // A collection with none of the user's films has no rows: shown anyway, with every quality.
+      const noRows = s.rows.length === 0 && quality === "all"
+      if (rows.length === 0 && !noRows) return false
+      if (onlyMissing && !(noRows && !byPart(s, layout))) {
         const missing = byPart(s, layout) ? s.partTotals.missing : totals(rows.filter((r) => !r.hidden)).missing
         if (missing === 0) return false
       }
@@ -899,7 +1085,7 @@ function GapList({
         !q ||
         s.title.toLowerCase().includes(q) ||
         s.mine.some((m) => m.name.toLowerCase().includes(q)) ||
-        (kind === "saga" && s.units.some((u) => u.name.toLowerCase().includes(q)))
+        (kind !== "series" && s.units.some((u) => u.name.toLowerCase().includes(q)))
       )
     })
   }, [visibleGroups, query, quality, onlyMissing, kind, layout])
@@ -961,6 +1147,7 @@ function GapList({
   return (
     <div className="grid gap-4">
       <p className="text-muted-foreground text-sm">{k.intro}</p>
+      {header}
 
       <NavbarStats>
         {statCards.map((s) => (
@@ -1058,7 +1245,9 @@ function GapList({
         <Card>
           <CardContent className="text-muted-foreground py-10 text-center text-sm">
             {all.length === 0
-              ? running
+              ? empty
+                ? empty
+                : running
                 ? k.checking
                 : checkedAt
                   ? k.empty
@@ -1180,7 +1369,7 @@ function GapList({
         title={editing?.title ?? ""}
         description={
           editing?.key === null
-            ? `Sotto questa qualità ${kind === "saga" ? "un film" : "una stagione"} conta come mancante, anche se l'hai caricato tu. Vale per ${k.noun.toLowerCase()} senza una qualità minima propria.`
+            ? `Sotto questa qualità ${kind === "series" ? "una stagione" : "un film"} conta come mancante, anche se l'hai caricato tu. Vale per ${k.noun.toLowerCase()} senza una qualità minima propria.`
             : `Solo per questa ${k.one}, al posto della qualità minima generale (${thresholdLabel(prefs)}).`
         }
         initial={editing?.initial ?? prefs}
@@ -1197,19 +1386,21 @@ function GapList({
   )
 }
 
-/** Missing seasons of the series and films of the sagas, one tab each, with the shared check. */
+/** Missing seasons of the series and films of the sagas and the collections, one tab each, with the shared check. */
 export function MissingPage({ view, onView }: { view: MissingView; onView: (v: MissingView) => void }) {
   const series = useMissingSeries()
   const sagas = useMissingSagas()
+  const lists = useMissingLists()
   const check = useAction(() => api.checkMissing())
 
-  const current = view === "series" ? series : sagas
+  const current = view === "series" ? series : view === "sagas" ? sagas : lists
   const data = current.data
   // The same check fills both tabs.
   const state = data?.state
   const running = !!state?.running || check.isPending
   const seriesAll = useMemo(() => series.data?.series ?? [], [series.data])
   const sagasAll = useMemo(() => sagas.data?.sagas ?? [], [sagas.data])
+  const listsAll = useMemo(() => lists.data?.lists ?? [], [lists.data])
   const [layouts, setLayout] = useLayouts()
   const missingOf = (all: GapGroup[], kind: GapKind) =>
     all.filter((g) => g.status === "ok" && !g.hidden && missingIn(g, layouts[kind]) > 0).length
@@ -1218,12 +1409,12 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
     check.mutate(undefined, {
       onSuccess: () =>
         toast.success("Controllo avviato", {
-          description: "Stagioni e saghe da TMDB e torrent dal tracker vengono letti in background.",
+          description: "Stagioni, saghe e collezioni da TMDB e MDBList e torrent dal tracker vengono letti in background.",
         }),
     })
 
-  if (series.isLoading || sagas.isLoading) return <Skeleton className="h-48 w-full" />
-  const failed = series.error ?? sagas.error
+  if (series.isLoading || sagas.isLoading || lists.isLoading) return <Skeleton className="h-48 w-full" />
+  const failed = series.error ?? sagas.error ?? lists.error
   if (failed)
     return (
       <Card>
@@ -1231,7 +1422,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
       </Card>
     )
 
-  if (data && !data.enabled && seriesAll.length === 0 && sagasAll.length === 0)
+  if (data && !data.enabled && seriesAll.length === 0 && sagasAll.length === 0 && listsAll.length === 0)
     return (
       <Card>
         <CardHeader>
@@ -1240,7 +1431,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
           </CardTitle>
           <CardDescription>
             {data.disabledReason} Poi riavvia bookrr: ogni notte verranno controllate le serie di cui hai caricato almeno una
-            stagione e le saghe di cui hai caricato almeno un film.
+            stagione, le saghe di cui hai caricato almeno un film e le collezioni che segui.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -1265,6 +1456,14 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
             {missingOf(sagasAll, "saga") > 0 && (
               <Badge variant="warning" className="ml-1 px-1.5">
                 {missingOf(sagasAll, "saga")}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="lists">
+            <Library /> Collezioni
+            {missingOf(listsAll, "list") > 0 && (
+              <Badge variant="warning" className="ml-1 px-1.5">
+                {missingOf(listsAll, "list")}
               </Badge>
             )}
           </TabsTrigger>
@@ -1334,6 +1533,29 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
           layout={layouts.saga}
           onLayout={(l) => setLayout("saga", l)}
           onCheck={data?.enabled && !running ? run : undefined}
+        />
+      </TabsContent>
+      <TabsContent value="lists">
+        <GapList
+          kind="list"
+          all={listsAll}
+          running={running}
+          checkedAt={lists.data?.checkedAt}
+          prefs={lists.data?.prefs ?? noPrefs}
+          types={lists.data?.types ?? []}
+          resolutions={lists.data?.resolutions ?? []}
+          layout={layouts.list}
+          onLayout={(l) => setLayout("list", l)}
+          onCheck={data?.enabled && !running ? run : undefined}
+          header={
+            <ListSources
+              sources={lists.data?.sources ?? []}
+              groups={listsAll}
+              enabled={!!lists.data?.listsEnabled}
+              disabledReason={lists.data?.listsDisabledReason ?? ""}
+            />
+          }
+          empty={lists.data?.sources.length === 0 ? kinds.list.empty : undefined}
         />
       </TabsContent>
     </Tabs>

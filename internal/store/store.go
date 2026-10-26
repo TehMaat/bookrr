@@ -265,6 +265,19 @@ CREATE TABLE gap_marks (
 -- them (see archivable.go).
 ALTER TABLE torrents ADD COLUMN never_archive INTEGER NOT NULL DEFAULT 0;
 `,
+	`
+-- The collections the user follows beyond the sagas (a universe, a studio):
+-- lists of films on MDBList (source "mdblist", path "user/slug"), checked
+-- with the gaps checks (kind "list").
+CREATE TABLE gap_lists (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	source TEXT NOT NULL,
+	path TEXT NOT NULL,
+	title TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	UNIQUE (source, path)
+);
+`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

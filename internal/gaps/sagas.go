@@ -2,7 +2,6 @@ package gaps
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/tmdb"
@@ -52,7 +50,6 @@ func (c *Checker) checkSagas(ctx context.Context) (string, error) {
 		return "", err
 	}
 	// By TMDB id of the film; the rest cannot be checked.
-	byMovie := map[int64][]store.TrackerUpload{}
 	var unverifiable []*Group
 	unknown := map[string]*Group{}
 	addUnknown := func(key, title, note string, u store.TrackerUpload) {
@@ -64,32 +61,9 @@ func (c *Checker) checkSagas(ctx context.Context) (string, error) {
 		}
 		g.Mine = append(g.Mine, c.ref(u.ID, u.Name, u.DetailsLink, unit3d.QualityOf(u.Name, u.Type, u.Resolution, ""), true))
 	}
-	imdbCache := map[int64]int64{}
-	for _, u := range ups {
-		if !isMovie(u) {
-			continue
-		}
-		id := u.TmdbID
-		if id == 0 && u.ImdbID != 0 {
-			found, ok := imdbCache[u.ImdbID]
-			if !ok {
-				found, err = tmdbRetry(ctx, func() (int64, error) { return c.tmdb.FindMovieByIMDB(ctx, u.ImdbID) })
-				if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
-					return "", fmt.Errorf("ricerca su TMDB dell'id IMDb tt%07d: %w", u.ImdbID, err)
-				}
-				imdbCache[u.ImdbID] = found
-			}
-			id = found
-		}
-		if id != 0 {
-			byMovie[id] = append(byMovie[id], u)
-			continue
-		}
-		key, note := "title:"+unit3d.Title(u.Name), "nessun id TMDB né IMDb sul tracker"
-		if u.ImdbID != 0 {
-			key, note = "imdb:"+strconv.FormatInt(u.ImdbID, 10), fmt.Sprintf("l'id IMDb tt%07d non corrisponde a nessun film su TMDB", u.ImdbID)
-		}
-		addUnknown(key, displayTitle(u.Name), note, u)
+	byMovie, err := c.myMovies(ctx, ups, addUnknown)
+	if err != nil {
+		return "", err
 	}
 
 	// The saga of every film, from TMDB.
@@ -129,22 +103,8 @@ func (c *Checker) checkSagas(ctx context.Context) (string, error) {
 	}
 	groups = append(groups, unverifiable...)
 
-	ts := c.now().UTC().Format(time.RFC3339)
-	rows := make([]store.GapGroup, len(groups))
-	missing, unver := 0, 0
-	for i, g := range groups {
-		g.CheckedAt = ts
-		data, err := json.Marshal(g)
-		if err != nil {
-			return "", err
-		}
-		rows[i] = store.GapGroup{Key: g.Key, Title: g.Title, Missing: g.Missing, Data: data, CheckedAt: ts}
-		missing += g.Missing
-		if g.Status == StatusUnverifiable {
-			unver++
-		}
-	}
-	if err := c.store.SaveGapGroups(ctx, KindSaga, rows); err != nil {
+	missing, unver, err := c.save(ctx, KindSaga, groups)
+	if err != nil {
 		return "", err
 	}
 	sagas := len(groups) - unver
@@ -232,6 +192,63 @@ func (c *Checker) saga(ctx context.Context, id int64, mine []movieUpload) (*Grou
 		return nil, err
 	}
 
+	c.fillMovies(g, unitOf, listed, mine)
+	return g, nil
+}
+
+// myMovies sorts the user's films by TMDB id, found from the IMDb id when
+// the tracker lacks it; the others go to unknown, with the reason.
+func (c *Checker) myMovies(ctx context.Context, ups []store.TrackerUpload, unknown func(key, title, note string, u store.TrackerUpload)) (map[int64][]store.TrackerUpload, error) {
+	byMovie := map[int64][]store.TrackerUpload{}
+	for _, u := range ups {
+		if !isMovie(u) {
+			continue
+		}
+		id := u.TmdbID
+		if id == 0 && u.ImdbID != 0 {
+			found, err := c.fromIMDB(ctx, u.ImdbID)
+			if err != nil {
+				return nil, err
+			}
+			id = found
+		}
+		if id != 0 {
+			byMovie[id] = append(byMovie[id], u)
+			continue
+		}
+		if unknown == nil {
+			continue
+		}
+		key, note := "title:"+unit3d.Title(u.Name), "nessun id TMDB né IMDb sul tracker"
+		if u.ImdbID != 0 {
+			key, note = "imdb:"+strconv.FormatInt(u.ImdbID, 10), fmt.Sprintf("l'id IMDb tt%07d non corrisponde a nessun film su TMDB", u.ImdbID)
+		}
+		unknown(key, displayTitle(u.Name), note, u)
+	}
+	return byMovie, nil
+}
+
+// fromIMDB is the TMDB id of the film with this IMDb id, 0 if none: asked
+// to TMDB once per check.
+func (c *Checker) fromIMDB(ctx context.Context, imdbID int64) (int64, error) {
+	if id, ok := c.imdb[imdbID]; ok {
+		return id, nil
+	}
+	found, err := tmdbRetry(ctx, func() (int64, error) { return c.tmdb.FindMovieByIMDB(ctx, imdbID) })
+	if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
+		return 0, fmt.Errorf("ricerca su TMDB dell'id IMDb tt%07d: %w", imdbID, err)
+	}
+	if c.imdb == nil {
+		c.imdb = map[int64]int64{}
+	}
+	c.imdb[imdbID] = found
+	return found, nil
+}
+
+// fillMovies makes the grid of a group of films (a saga, a list) from the
+// tracker's torrents of its films and the user's uploads of them; unitOf
+// numbers the films by TMDB id.
+func (c *Checker) fillMovies(g *Group, unitOf map[int64]int, listed []unit3d.Upload, mine []movieUpload) {
 	myIDs := map[int64]movieUpload{}
 	for _, u := range mine {
 		myIDs[u.ID] = u
@@ -272,7 +289,6 @@ func (c *Checker) saga(ctx context.Context, id int64, mine []movieUpload) (*Grou
 		}
 	}
 	g.buildRows(items)
-	return g, nil
 }
 
 // sagaTorrents lists the tracker's torrents of the films of a saga: one
