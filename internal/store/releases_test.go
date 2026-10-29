@@ -1,8 +1,10 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -50,6 +52,70 @@ INSERT INTO torrents (hash, name, personal_release, manual, first_seen_at, updat
 	// the API only shows them once the uploads have been read.
 	if m, err := s.PersonalReleasesNotOnTracker(ctx); err != nil || len(m) != 1 {
 		t.Fatalf("not on tracker: %+v %v", m, err)
+	}
+}
+
+// The .torrent files stored in the rows of the uploads move to their own
+// table, and the space they took is given back to the disk.
+func TestReleaseFilesMigration(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := len(migrations) - 1
+	for i := 0; i < before; i++ {
+		if _, err := db.ExecContext(ctx, migrations[i]); err != nil {
+			t.Fatalf("migration %d: %v", i+1, err)
+		}
+	}
+	file := bytes.Repeat([]byte("d8:announce"), 50_000)
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", before)); err != nil {
+		t.Fatal(err)
+	}
+	for id := 1; id <= 20; id++ {
+		var data any
+		if id != 2 {
+			data = file
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO tracker_releases (id, name, hash, torrent_file, seen_at, updated_at) VALUES (?, ?, ?, ?, 'x', 'x')`,
+			id, fmt.Sprint("Release ", id), fmt.Sprintf("h%d", id), data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var pagesBefore int64
+	if err := db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pagesBefore); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var pages, free int64
+	s.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages)
+	s.db.QueryRowContext(ctx, "PRAGMA freelist_count").Scan(&free)
+	if free != 0 || pages > pagesBefore*11/10 { // without VACUUM the file would double
+		t.Fatalf("not compacted: %d pages (%d before), %d free", pages, pagesBefore, free)
+	}
+	for id, want := range map[int64]bool{1: true, 2: false, 3: true} {
+		if r, err := s.GetTrackerRelease(ctx, id); err != nil || r.HasTorrentFile != want {
+			t.Fatalf("release %d: %+v %v", id, r, err)
+		}
+	}
+	// The file still reaches the torrent created from the upload.
+	if n, err := s.AddTrackerReleases(ctx, []int64{1}); err != nil || n != 1 {
+		t.Fatalf("added %d %v", n, err)
+	}
+	if got, err := s.TorrentFile(ctx, "h1"); err != nil || !bytes.Equal(got, file) {
+		t.Fatalf("file of h1: %d bytes, %v", len(got), err)
+	}
+	var cols int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('tracker_releases') WHERE name = 'torrent_file'`).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("torrent_file column still there: %d %v", cols, err)
 	}
 }
 

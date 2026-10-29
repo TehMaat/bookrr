@@ -176,18 +176,28 @@ func (s *Store) TrackerReleasesWithoutHash(ctx context.Context) ([]int64, error)
 // SetTrackerReleaseHash records the info hash (and .torrent file) of an
 // upload. The hash never changes, so the file is downloaded only once.
 func (s *Store) SetTrackerReleaseHash(ctx context.Context, id int64, hash string, file []byte) error {
-	var data any
-	if len(file) > 0 {
-		data = file
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
 	}
-	res, err := s.db.ExecContext(ctx, `
-UPDATE tracker_releases SET hash = ?, hash_error = '', torrent_file = COALESCE(?, torrent_file), updated_at = ? WHERE id = ?`,
-		strings.ToLower(hash), data, now(), id)
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE tracker_releases SET hash = ?, hash_error = '', updated_at = ? WHERE id = ?`,
+		strings.ToLower(hash), now(), id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
+	}
+	if len(file) > 0 {
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO tracker_release_files (release_id, data) VALUES (?, ?) ON CONFLICT (release_id) DO UPDATE SET data = excluded.data`,
+			id, file); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	return s.LinkTrackerReleases(ctx)
 }
@@ -210,8 +220,10 @@ WHERE size = 0 AND EXISTS (SELECT 1 FROM tracker_releases r WHERE r.hash = torre
 	}
 	if _, err := s.db.ExecContext(ctx, `
 INSERT OR IGNORE INTO torrent_files (hash, data, created_at)
-SELECT r.hash, r.torrent_file, ? FROM tracker_releases r JOIN torrents t ON t.hash = r.hash
-WHERE r.hash != '' AND r.torrent_file IS NOT NULL`, ts); err != nil {
+SELECT r.hash, f.data, ? FROM tracker_releases r
+	JOIN tracker_release_files f ON f.release_id = r.id
+	JOIN torrents t ON t.hash = r.hash
+WHERE r.hash != '' AND NOT EXISTS (SELECT 1 FROM torrent_files x WHERE x.hash = r.hash)`, ts); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `
@@ -271,7 +283,7 @@ SELECT hash, name, size FROM torrents WHERE substr(hash, 1, length(?)) = ? ORDER
 
 const releaseCols = `r.id, r.name, r.category, r.type, r.type_id, r.resolution, r.resolution_id, r.size, r.seeders, r.leechers,
 	r.times_completed, r.tmdb_id, r.imdb_id, r.tvdb_id, r.personal_release, r.created_at, r.details_link, r.hash, r.hash_error,
-	r.torrent_file IS NOT NULL, r.seen_at, r.removed_at, r.updated_at, r.archivable_since, COALESCE(t.hash, ''), COALESCE(t.never_archive, 0),
+	EXISTS (SELECT 1 FROM tracker_release_files f WHERE f.release_id = r.id), r.seen_at, r.removed_at, r.updated_at, r.archivable_since, COALESCE(t.hash, ''), COALESCE(t.never_archive, 0),
 	CASE
 		WHEN t.hash IS NULL THEN '` + ReleaseUntracked + `'
 		WHEN EXISTS (SELECT 1 FROM locations l WHERE l.hash = t.hash) THEN '` + StatusClient + `'
@@ -387,7 +399,9 @@ SELECT id FROM tracker_releases r WHERE hash != '' AND NOT EXISTS (SELECT 1 FROM
 		var name, hash, link string
 		var size int64
 		var file []byte
-		err := tx.QueryRowContext(ctx, `SELECT name, size, hash, details_link, torrent_file FROM tracker_releases WHERE id = ?`, id).
+		err := tx.QueryRowContext(ctx, `
+SELECT r.name, r.size, r.hash, r.details_link, f.data
+FROM tracker_releases r LEFT JOIN tracker_release_files f ON f.release_id = r.id WHERE r.id = ?`, id).
 			Scan(&name, &size, &hash, &link, &file)
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, ErrNotFound
