@@ -3,6 +3,7 @@ package unit3d
 import (
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -173,6 +174,34 @@ func Episodic(name string) bool {
 // Title is the title a release name starts with, in lower case
 // ("Criminal.Minds.S19.2160p…" → "criminal minds").
 func Title(name string) string { return parseRelease(name).title }
+
+// Year is the year a release name gives after the title, "" if none.
+func Year(name string) string { return parseRelease(name).year }
+
+// movieCategoryRe tells the tracker categories of films ("Movie",
+// "Movies", "Film").
+var movieCategoryRe = regexp.MustCompile(`(?i)movie|film`)
+
+// MovieCategory reports whether a tracker category is one of films.
+func MovieCategory(category string) bool { return movieCategoryRe.MatchString(category) }
+
+// IsMovie reports whether an upload is a film: in a category of films or,
+// without a category, a name with no seasons nor episodes and no TVDB id.
+// TMDB numbers films and series separately: the TMDB id of a series is
+// not that of a film.
+func IsMovie(category, name string, tvdbID int64) bool {
+	if MovieCategory(category) {
+		return true
+	}
+	return strings.TrimSpace(category) == "" && tvdbID == 0 && !Episodic(name)
+}
+
+// ResolutionRank orders resolutions ("2160p" > "1080p" > "720p"); an
+// unknown one is 0.
+func ResolutionRank(r string) int {
+	n, _ := strconv.Atoi(strings.TrimRight(strings.ToLower(strings.TrimSpace(r)), "pi"))
+	return n
+}
 
 // ReleaseGroup is the group that made a release, after the last "-" of its
 // name, as the name writes it ("…H.265-MaTiTa" → "MaTiTa"); "" if none.

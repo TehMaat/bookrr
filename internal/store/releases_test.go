@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,7 +65,11 @@ func TestReleaseFilesMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := len(migrations) - 1
+	// The database as it was before the migration that moved the files out.
+	before := 0
+	for !strings.Contains(migrations[before], "CREATE TABLE tracker_release_files") {
+		before++
+	}
 	for i := 0; i < before; i++ {
 		if _, err := db.ExecContext(ctx, migrations[i]); err != nil {
 			t.Fatalf("migration %d: %v", i+1, err)

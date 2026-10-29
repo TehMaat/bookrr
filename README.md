@@ -19,6 +19,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
 - 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. E per le **collezioni** che segui (liste di film su MDBList: l'MCU, i film Pixar, i classici Disney), anche se non ne hai caricato nessuno. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate**, parti **ignorate** e **gruppi bannati** (le loro release non bastano: la parte resta mancante, in rosa e con meno priorità). Controllo ogni notte, stagioni e saghe da TMDB.
+- 📺 **Risoluzione massima dei film**: con [Prowlarr](https://prowlarr.com), per ogni film che hai caricato bookrr cerca su tutti i tuoi indexer la risoluzione migliore che esiste (in qualsiasi lingua) e ti segnala i film che esistono in 2160p mentre tu li hai in 1080p, da rifare con un mux.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
@@ -70,6 +71,8 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_UNIT3D_RELEASES_INTERVAL` | `6h` | Ogni quanto rileggere i tuoi upload sul tracker per lo storico release (minimo `15m`). |
 | `BOOKRR_TMDB_API_KEY` | — | Chiave API (v3) o token di lettura (v4) di [TMDB](https://www.themoviedb.org/settings/api): con il tracker UNIT3D attiva il controllo delle **stagioni mancanti** e dei **film mancanti delle saghe**. |
 | `BOOKRR_MDBLIST_API_KEY` | — | Chiave API di [MDBList](https://mdblist.com) (gratuita, nelle preferenze del tuo account): con il tracker e TMDB attiva le **collezioni** (liste di film da seguire oltre le saghe). |
+| `BOOKRR_PROWLARR_URL` / `BOOKRR_PROWLARR_API_KEY` | — | Indirizzo di [Prowlarr](https://prowlarr.com) (es. `http://prowlarr:9696`) e la sua API key (Settings → General): con il tracker UNIT3D attiva la **risoluzione massima** dei film caricati. |
+| `BOOKRR_PROWLARR_RECHECK` | `7d` | Ogni quanto cercare di nuovo ogni film su Prowlarr (minimo `1d`; anche in ore, es. `36h`). |
 | `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno delle stagioni e dei film mancanti (ora locale, `TZ`). |
 | `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
@@ -237,6 +240,23 @@ In cima alla pagina sono evidenziate le **Personal Release di bookrr che non ris
 Se non sono tue release, **togli il flag** a una (icona accanto al nome) o a tutte (**Togli il flag a tutte**): bookrr toglie il tag `Personal Release` anche dai torrent sui client qBittorrent (solo il tag: torrent e file restano dove sono) e non le segnala più quando spariscono. Se un client non risponde, i torrent che ha restano Personal Release e puoi riprovare.
 
 API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/releases/add` con `{"ids": [123]}` o `{"all": true}`, `POST /api/releases/unflag` con `{"hashes": ["…"]}` o `{"all": true}` (toglie il flag).
+
+### Risoluzione massima dei film
+
+Con `BOOKRR_PROWLARR_URL` e `BOOKRR_PROWLARR_API_KEY` (e il tracker UNIT3D, da cui vengono i film), la scheda **Release** ha la colonna **Max**: la risoluzione migliore che esiste di ogni film che hai caricato, **in qualsiasi lingua** (l'audio italiano lo aggiungi tu con un mux). Mostra:
+
+- **↑ 2160p** (in giallo): il film esiste in una risoluzione migliore della tua migliore release di quel film; il tooltip dice quale release e su quale indexer, e cliccando si apre la sua pagina. La casella **Migliorabili** in alto filtra questi film;
+- **✓**: hai già la risoluzione migliore che esiste (i film che hai già in 2160p non vengono cercati);
+- **Non trovata**: Prowlarr non ha trovato release del film con una risoluzione nota;
+- **—**: non è un film (le serie non vengono cercate) o non è ancora stato cercato.
+
+Come funziona:
+
+1. una volta al giorno (la prima 15 minuti dopo l'avvio) bookrr prende i tuoi upload sul tracker che sono **film** con un id TMDB o IMDb, tranne quelli che hai già in 2160p, e cerca quelli mai cercati o cercati più di `BOOKRR_PROWLARR_RECHECK` fa (7 giorni);
+2. per ogni film chiede a Prowlarr `GET /api/v1/search?type=movie&query={ImdbId:tt…}{TmdbId:…}` nella categoria Film (2000): Prowlarr lo cerca su **tutti i tuoi indexer**. Le ricerche sono lente apposta: una alla volta, con 30 secondi di pausa tra una e l'altra, per non pesare sui tracker (i limiti di richieste che hai impostato in Prowlarr per ogni indexer valgono comunque);
+3. dei risultati contano solo quelli del film: con lo stesso id TMDB o IMDb oppure, se l'indexer non li indica, con lo stesso titolo e anno (±1) di una tua release. Gli **upscale** non contano. La risoluzione è letta dal nome della release; vince la più alta, a parità la più seminata.
+
+Se Prowlarr non risponde o rifiuta la chiave, la ricerca si ferma (l'errore compare in cima alla scheda) e i film rimasti vengono cercati il giorno dopo.
 
 ### Stagioni mancanti e saghe
 

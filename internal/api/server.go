@@ -24,6 +24,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/bucket"
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/gaps"
+	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/qbit"
 	"github.com/tehmaat/bookrr/internal/smart"
 	"github.com/tehmaat/bookrr/internal/store"
@@ -39,12 +40,13 @@ type Server struct {
 	hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
 	history *unit3d.History  // nil when no UNIT3D tracker is configured
 	missing *gaps.Checker    // nil without UNIT3D tracker or TMDB key
+	best    *prowlarr.Finder // nil without UNIT3D tracker or Prowlarr
 	web     fs.FS
 	version string
 }
 
-func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, missing *gaps.Checker, web fs.FS, version string) *Server {
-	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, history: history, missing: missing, web: web, version: version}
+func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, missing *gaps.Checker, best *prowlarr.Finder, web fs.FS, version string) *Server {
+	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, history: history, missing: missing, best: best, web: web, version: version}
 }
 
 func (s *Server) Handler() http.Handler {

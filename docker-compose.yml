@@ -35,5 +35,11 @@ services:
       # Chiave API MDBList (gratuita): con TMDB attiva le collezioni da seguire
       # (liste di film come l'MCU o i film Pixar, scheda Mancanti)
       # BOOKRR_MDBLIST_API_KEY: la-tua-chiave-mdblist
+      # Prowlarr: con il tracker UNIT3D cerca la risoluzione massima che esiste
+      # dei film caricati (scheda Release, colonna Max)
+      # BOOKRR_PROWLARR_URL: http://prowlarr:9696
+      # BOOKRR_PROWLARR_API_KEY: la-tua-api-key-prowlarr
+      # Ogni quanto cercare di nuovo ogni film (min 1d)
+      # BOOKRR_PROWLARR_RECHECK: 7d
       # Ora del controllo notturno delle stagioni mancanti (ora locale)
       # BOOKRR_MISSING_CHECK_AT: "04:00"

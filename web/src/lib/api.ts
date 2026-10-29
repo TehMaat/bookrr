@@ -257,6 +257,38 @@ export type TrackerRelease = {
   status: ReleaseStatus
   /** Null when the linked torrent is on no client. */
   archivable: Archivability | null
+  /** For films, the best resolution found with Prowlarr; null when not searched yet or Prowlarr is not configured. */
+  best: BestResolution | null
+}
+
+/** The best resolution found with Prowlarr for a film, whatever the language. */
+export type BestResolution = {
+  film: string
+  /** "" when no release of the film with a resolution was found. */
+  resolution: string
+  name: string
+  indexer: string
+  url: string
+  results: number
+  /** "" when it was not searched: the user already has the film in 2160p. */
+  checkedAt: string
+  /** Best resolution of the user's uploads of the film. */
+  mine: string
+  /** The resolution found is better than the user's. */
+  better: boolean
+}
+
+/** The daily search of the best resolutions with Prowlarr. */
+export type BestState = {
+  running: boolean
+  lastRunAt: string | null
+  lastResult: string
+  lastError: string
+  nextRunAt: string | null
+  done: number
+  total: number
+  /** How often each film is searched again ("7d"). */
+  recheck: string
 }
 
 export type ReleasesState = {
@@ -278,6 +310,8 @@ export type Releases = {
   releases: TrackerRelease[]
   /** Personal releases of bookrr missing from the uploads on the tracker. */
   notOnTracker: { hash: string; name: string; tracker: string }[]
+  /** Null when Prowlarr is not configured. */
+  best: BestState | null
 }
 
 /**

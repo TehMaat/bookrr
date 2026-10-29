@@ -6,30 +6,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/tmdb"
 	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
-// movieCategoryRe tells the tracker categories of films ("Movie",
-// "Movies", "Film").
-var movieCategoryRe = regexp.MustCompile(`(?i)movie|film`)
-
-// isMovie reports whether an upload is a film: in a category of films or,
-// without a category, a name with no seasons nor episodes and no TVDB id.
-// TMDB numbers films and series separately: the TMDB id of a series is
-// not that of a film.
-func isMovie(u store.TrackerUpload) bool {
-	if movieCategoryRe.MatchString(u.Category) {
-		return true
-	}
-	return strings.TrimSpace(u.Category) == "" && u.TvdbID == 0 && !unit3d.Episodic(u.Name)
-}
+// isMovie reports whether an upload is a film (see unit3d.IsMovie).
+func isMovie(u store.TrackerUpload) bool { return unit3d.IsMovie(u.Category, u.Name, u.TvdbID) }
 
 // movieUpload is an upload of the user that is a film of a saga.
 type movieUpload struct {
@@ -266,7 +252,7 @@ func (c *Checker) fillMovies(g *Group, unitOf map[int64]int, listed []unit3d.Upl
 			continue // a film of the saga not out yet
 		}
 		// TMDB numbers films and series separately: only films count.
-		if !isMine && (!movieCategoryRe.MatchString(t.Category) || unit3d.Episodic(t.Name)) {
+		if !isMine && (!unit3d.MovieCategory(t.Category) || unit3d.Episodic(t.Name)) {
 			continue
 		}
 		q := unit3d.QualityOf(t.Name, t.Type, t.Resolution, t.MediaInfo)

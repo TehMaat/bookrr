@@ -293,6 +293,20 @@ INSERT INTO tracker_release_files (release_id, data)
 SELECT id, torrent_file FROM tracker_releases WHERE torrent_file IS NOT NULL;
 ALTER TABLE tracker_releases DROP COLUMN torrent_file;
 `,
+	`
+-- The best resolution found with Prowlarr for each film the user uploaded
+-- (film: "tmdb:603", or "imdb:133093" without a TMDB id): the release
+-- that has it, or resolution '' when nothing was found.
+CREATE TABLE best_resolutions (
+	film TEXT PRIMARY KEY,
+	resolution TEXT NOT NULL DEFAULT '',
+	name TEXT NOT NULL DEFAULT '',
+	indexer TEXT NOT NULL DEFAULT '',
+	url TEXT NOT NULL DEFAULT '',
+	results INTEGER NOT NULL DEFAULT 0,
+	checked_at TEXT NOT NULL
+);
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

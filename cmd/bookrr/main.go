@@ -17,6 +17,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/gaps"
 	"github.com/tehmaat/bookrr/internal/mdblist"
+	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/syncer"
 	"github.com/tehmaat/bookrr/internal/tmdb"
@@ -62,6 +63,7 @@ func main() {
 	var hashes *unit3d.Resolver
 	var releases *unit3d.History
 	var missing *gaps.Checker
+	var best *prowlarr.Finder
 	if cfg.Unit3DURL != "" {
 		// One client for both, so together they respect the tracker's rate limit.
 		tracker := unit3d.New(cfg.Unit3DURL, cfg.Unit3DAPIKey)
@@ -76,11 +78,16 @@ func main() {
 			}
 			go missing.Run(ctx)
 		}
+		// The films searched are the user's uploads on the tracker.
+		if cfg.ProwlarrURL != "" {
+			best = prowlarr.NewFinder(st, prowlarr.New(cfg.ProwlarrURL, cfg.ProwlarrAPIKey), cfg.ProwlarrRecheck)
+			go best.Run(ctx)
+		}
 	}
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           api.New(cfg, st, sy, buckets, hashes, releases, missing, web.FS(), version).Handler(),
+		Handler:           api.New(cfg, st, sy, buckets, hashes, releases, missing, best, web.FS(), version).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
@@ -91,7 +98,7 @@ func main() {
 	}()
 
 	slog.Info("bookrr avviato", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
-		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasonsAndSagas", missing != nil, "missingLists", missing != nil && missing.MDBList != nil)
+		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasonsAndSagas", missing != nil, "missingLists", missing != nil && missing.MDBList != nil, "prowlarr", best != nil)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server", "err", err)
 		os.Exit(1)

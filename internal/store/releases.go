@@ -60,6 +60,9 @@ type TrackerRelease struct {
 	Status string `json:"status"`
 	// How it stands against the archive rule; nil when it is on no client.
 	Archivable *Archivability `json:"archivable"`
+	// For films, the best resolution found with Prowlarr; nil when it was
+	// not searched yet or Prowlarr is not configured (set by the caller).
+	Best *BestResolution `json:"best"`
 }
 
 // ReleaseUntracked is the status of an upload bookrr knows no torrent for.
