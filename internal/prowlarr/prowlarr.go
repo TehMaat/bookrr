@@ -109,6 +109,17 @@ func (c *Client) SearchMovie(ctx context.Context, imdbID, tmdbID int64) ([]Relea
 	return out, nil
 }
 
+// Version verifies address and key: GET /api/v1/system/status.
+func (c *Client) Version(ctx context.Context) (string, error) {
+	var res struct {
+		Version string `json:"version"`
+	}
+	if err := c.get(ctx, "/api/v1/system/status", nil, &res); err != nil {
+		return "", err
+	}
+	return res.Version, nil
+}
+
 func (c *Client) get(ctx context.Context, path string, q url.Values, out any) error {
 	if err := c.wait(ctx); err != nil {
 		return err

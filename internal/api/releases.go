@@ -24,18 +24,19 @@ type notOnTracker struct {
 // status of the linked torrents, and the personal releases of bookrr that
 // are not among them (once the uploads have been read at least once).
 func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	ctx := r.Context()
-	out := map[string]any{"enabled": s.history != nil, "state": nil, "syncedAt": nil, "notOnTracker": []notOnTracker{}, "best": nil}
-	if s.history != nil {
-		out["state"] = s.history.State()
+	out := map[string]any{"enabled": svc.History != nil, "state": nil, "syncedAt": nil, "notOnTracker": []notOnTracker{}, "best": nil}
+	if svc.History != nil {
+		out["state"] = svc.History.State()
 	}
 	releases, err := s.store.ListTrackerReleases(ctx)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	if s.best != nil {
-		out["best"] = s.best.State()
+	if svc.Best != nil {
+		out["best"] = svc.Best.State()
 		found, err := s.store.BestResolutions(ctx)
 		if err != nil {
 			s.fail(w, err)
@@ -50,7 +51,7 @@ func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out["syncedAt"] = synced
-	if synced != nil && s.history != nil {
+	if synced != nil && svc.History != nil {
 		list, err := s.notOnTracker(ctx)
 		if err != nil {
 			s.fail(w, err)
@@ -64,13 +65,14 @@ func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
 // notOnTracker returns the personal releases of bookrr from this tracker
 // (or from no known tracker) that are not among the uploads.
 func (s *Server) notOnTracker(ctx context.Context) ([]notOnTracker, error) {
+	svc := s.current()
 	missing, err := s.store.PersonalReleasesNotOnTracker(ctx)
 	if err != nil {
 		return nil, err
 	}
 	list := []notOnTracker{}
 	for _, m := range missing {
-		if sameSite(m.Tracker, s.cfg.Unit3DURL) {
+		if sameSite(m.Tracker, svc.Config.Unit3DURL) {
 			list = append(list, notOnTracker{Hash: m.Hash, Name: m.Name, Tracker: m.Tracker})
 		}
 	}
@@ -102,12 +104,13 @@ func baseDomain(host string) string {
 
 // syncReleases starts reading the uploads now, in the background.
 func (s *Server) syncReleases(w http.ResponseWriter, r *http.Request) {
-	if s.history == nil {
-		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato (BOOKRR_UNIT3D_URL)")
+	svc := s.current()
+	if svc.History == nil {
+		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato: impostalo nelle Impostazioni, scheda Tracker")
 		return
 	}
-	s.history.Wake()
-	writeJSON(w, http.StatusAccepted, s.history.State())
+	svc.History.Wake()
+	writeJSON(w, http.StatusAccepted, svc.History.State())
 }
 
 // addReleases creates in bookrr the torrents of uploads it does not know:
@@ -145,6 +148,7 @@ func (s *Server) addReleases(w http.ResponseWriter, r *http.Request) {
 // every personal release not among the uploads on the tracker. A client that
 // fails keeps its tag, and the flag, on the torrents it has.
 func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	var in struct {
 		Hashes []string `json:"hashes"`
 		All    bool     `json:"all"`
@@ -155,7 +159,7 @@ func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if in.All {
 		in.Hashes = nil
-		if s.history != nil {
+		if svc.History != nil {
 			list, err := s.notOnTracker(ctx)
 			if err != nil {
 				s.fail(w, err)
@@ -171,7 +175,7 @@ func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag := s.cfg.ReleaseTag
+	tag := svc.Config.ReleaseTag
 	locs, err := s.store.ReleaseTagLocations(ctx, in.Hashes, tag)
 	if err != nil {
 		s.fail(w, err)
@@ -201,7 +205,7 @@ func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		qctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		err = s.syncer.Qbit(c).RemoveTags(qctx, hashes, tags)
+		err = svc.Syncer.Qbit(c).RemoveTags(qctx, hashes, tags)
 		cancel()
 		if err != nil {
 			slog.Warn("tag non rimosso dal client", "client", c.Name, "count", len(hashes), "err", err)

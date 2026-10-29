@@ -67,6 +67,21 @@ func ParseURL(s string) (string, error) {
 	return p, nil
 }
 
+// User verifies the key and returns the name of its account: GET /user.
+func (c *Client) User(ctx context.Context) (string, error) {
+	var res struct {
+		Username string `json:"username"`
+		Name     string `json:"name"`
+	}
+	if _, err := c.get(ctx, "user", nil, &res); err != nil {
+		return "", err
+	}
+	if res.Username != "" {
+		return res.Username, nil
+	}
+	return res.Name, nil
+}
+
 // PageURL is the address of the list on the site.
 func PageURL(path string) string { return "https://mdblist.com/lists/" + path }
 

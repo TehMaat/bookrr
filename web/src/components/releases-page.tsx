@@ -340,8 +340,8 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
             <CloudOff className="size-4" /> Storico release non attivo
           </CardTitle>
           <CardDescription>
-            Lo storico dei tuoi upload richiede un tracker UNIT3D: imposta <code>BOOKRR_UNIT3D_URL</code> e{" "}
-            <code>BOOKRR_UNIT3D_API_KEY</code> e riavvia bookrr.
+            Lo storico dei tuoi upload richiede un tracker UNIT3D: impostalo nelle Impostazioni (icona in basso a sinistra),
+            scheda Tracker.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -391,7 +391,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
           <CloudOff />
           <AlertTitle>Tracker UNIT3D non configurato</AlertTitle>
           <AlertDescription>
-            Le release non vengono più aggiornate: imposta BOOKRR_UNIT3D_URL e BOOKRR_UNIT3D_API_KEY.
+            Le release non vengono più aggiornate: imposta il tracker nelle Impostazioni, scheda Tracker.
           </AlertDescription>
         </AlertBox>
       )}

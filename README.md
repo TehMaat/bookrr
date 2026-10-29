@@ -42,7 +42,7 @@ curl -O https://raw.githubusercontent.com/TehMaat/bookrr/main/docker-compose.yml
 docker compose up -d
 ```
 
-Apri `http://IP-DEL-SERVER:8080`, vai su **Client** e aggiungi i tuoi qBittorrent (URL della Web UI, utente e password). Il database SQLite viene salvato in `./data`.
+Apri `http://IP-DEL-SERVER:8080`, vai su **Client** e aggiungi i tuoi qBittorrent (URL della Web UI, utente e password). Tracker UNIT3D, TMDB, MDBList e Prowlarr si collegano dalle **Impostazioni** (icona ⚙️ in basso a sinistra). Il database SQLite viene salvato in `./data`.
 
 L'immagine `ghcr.io/tehmaat/bookrr` è multi-architettura: Docker scarica automaticamente quella giusta per la tua macchina. In alternativa puoi compilarla in locale dal repository:
 
@@ -59,7 +59,13 @@ La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubbli
 
 ### Configurazione
 
-Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
+Le opzioni si impostano dalle **Impostazioni** dell'interfaccia (icona ⚙️ in basso a sinistra) oppure come variabili d'ambiente (vedi `docker-compose.yml`):
+
+- dalle Impostazioni, schede **Generale**, **Tracker**, **Mancanti** e **Prowlarr**: tag delle release, intervalli, tracker UNIT3D, TMDB, MDBList, Prowlarr. Si applicano **subito, senza riavviare**: bookrr riavvia solo le letture e i controlli le cui opzioni sono cambiate. Ogni scheda ha un pulsante **Prova** per verificare indirizzo e chiave prima di salvare. Le chiavi non tornano mai al browser: il campo dice solo se è impostata (lascialo vuoto per non cambiarla, ✕ per toglierla);
+- una variabile d'ambiente impostata **ha la precedenza**: nelle Impostazioni l'opzione compare bloccata con il suo valore (le chiavi restano nascoste). Per gestirla dall'interfaccia toglila dal `docker-compose.yml`;
+- `BOOKRR_LISTEN`, `BOOKRR_DATA_DIR`, `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` e `BOOKRR_WEBHOOK_TOKEN` si impostano **solo** come variabili d'ambiente: servono prima di aprire il database, o proteggono l'interfaccia stessa.
+
+API: `GET /api/config` (le opzioni, senza le chiavi), `PUT /api/config` con `{"values": {"BOOKRR_UNIT3D_URL": "https://…", "BOOKRR_UNIT3D_API_KEY": null}}` (`null` lascia il valore com'è, `""` torna al default), `POST /api/config/test` con `{"service": "unit3d" | "tmdb" | "mdblist" | "prowlarr", "values": {…}}`.
 
 | Variabile | Default | Descrizione |
 |---|---|---|
@@ -79,7 +85,7 @@ Tutte le opzioni sono variabili d'ambiente (vedi `docker-compose.yml`):
 | `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
 | `TZ` | — | Fuso orario dei log (es. `Europe/Rome`). |
 
-> Le password dei client qBittorrent e le chiavi dei bucket S3 sono salvate in chiaro nel database in `./data`: proteggi quella cartella.
+> Le password dei client qBittorrent, le chiavi dei bucket S3 e le chiavi impostate dalle Impostazioni (tracker, TMDB, MDBList, Prowlarr) sono salvate in chiaro nel database in `./data`: proteggi quella cartella.
 
 ## Come funziona
 

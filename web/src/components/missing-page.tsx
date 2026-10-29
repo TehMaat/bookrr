@@ -1631,7 +1631,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
             <CloudOff className="size-4" /> Controllo delle stagioni e dei film mancanti non attivo
           </CardTitle>
           <CardDescription>
-            {data.disabledReason} Poi riavvia bookrr: ogni notte verranno controllate le serie di cui hai caricato almeno una
+            {data.disabledReason} Da allora ogni notte verranno controllate le serie di cui hai caricato almeno una
             stagione, le saghe di cui hai caricato almeno un film e le collezioni che segui.
           </CardDescription>
         </CardHeader>

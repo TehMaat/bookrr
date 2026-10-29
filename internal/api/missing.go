@@ -15,15 +15,16 @@ import (
 
 // missingDisabled says why the check of the missing seasons and films is off, "" if on.
 func (s *Server) missingDisabled() string {
+	svc := s.current()
 	switch {
-	case s.missing != nil:
+	case svc.Missing != nil:
 		return ""
-	case s.cfg.Unit3DURL == "" && s.cfg.TMDBAPIKey == "":
-		return "Servono un tracker UNIT3D (BOOKRR_UNIT3D_URL e BOOKRR_UNIT3D_API_KEY) e una chiave TMDB (BOOKRR_TMDB_API_KEY)."
-	case s.cfg.Unit3DURL == "":
-		return "Serve un tracker UNIT3D: imposta BOOKRR_UNIT3D_URL e BOOKRR_UNIT3D_API_KEY."
+	case svc.Config.Unit3DURL == "" && svc.Config.TMDBAPIKey == "":
+		return "Servono un tracker UNIT3D e una chiave TMDB: impostali nelle Impostazioni (schede Tracker e Mancanti)."
+	case svc.Config.Unit3DURL == "":
+		return "Serve un tracker UNIT3D: impostalo nelle Impostazioni, scheda Tracker."
 	default:
-		return "Serve una chiave TMDB: imposta BOOKRR_TMDB_API_KEY."
+		return "Serve una chiave TMDB: impostala nelle Impostazioni, scheda Mancanti."
 	}
 }
 
@@ -43,11 +44,12 @@ func (s *Server) missingSagas(w http.ResponseWriter, r *http.Request) {
 
 // listsDisabled says why the lists the user follows are not checked, "" if they are.
 func (s *Server) listsDisabled() string {
+	svc := s.current()
 	switch {
-	case s.missing == nil:
+	case svc.Missing == nil:
 		return s.missingDisabled()
-	case s.missing.MDBList == nil:
-		return "Serve una chiave MDBList: imposta BOOKRR_MDBLIST_API_KEY (la trovi nelle preferenze del tuo account su mdblist.com)."
+	case svc.Missing.MDBList == nil:
+		return "Serve una chiave MDBList (la trovi nelle preferenze del tuo account su mdblist.com): impostala nelle Impostazioni, scheda Mancanti."
 	}
 	return ""
 }
@@ -94,6 +96,7 @@ func (s *Server) missingGroups(w http.ResponseWriter, r *http.Request, kind, fie
 // missingResult is the stored results of a kind of check, as field, with
 // the user's options and choices applied, and the state of the checker.
 func (s *Server) missingResult(ctx context.Context, kind, field string) (map[string]any, error) {
+	svc := s.current()
 	groups, err := s.store.GapGroups(ctx, kind)
 	if err != nil {
 		return nil, err
@@ -128,11 +131,11 @@ func (s *Server) missingResult(ctx context.Context, kind, field string) (map[str
 		gaps.Apply(&g, prefs, byGroup[g.Key], bannedSet)
 		list = append(list, g)
 	}
-	out := map[string]any{"enabled": s.missing != nil, "disabledReason": s.missingDisabled(), "state": nil,
-		"checkedAt": checked, "checkAt": minutesClock(s.cfg.MissingCheckAt), field: list, "prefs": prefs,
+	out := map[string]any{"enabled": svc.Missing != nil, "disabledReason": s.missingDisabled(), "state": nil,
+		"checkedAt": checked, "checkAt": minutesClock(svc.Config.MissingCheckAt), field: list, "prefs": prefs,
 		"bannedGroups": banned, "types": gaps.TypeLadder, "resolutions": gaps.Resolutions}
-	if s.missing != nil {
-		out["state"] = s.missing.State()
+	if svc.Missing != nil {
+		out["state"] = svc.Missing.State()
 	}
 	return out, nil
 }
@@ -140,6 +143,7 @@ func (s *Server) missingResult(ctx context.Context, kind, field string) (map[str
 // addMissingList adds a list of films to follow, from its address on
 // MDBList, and checks it now.
 func (s *Server) addMissingList(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	if reason := s.listsDisabled(); reason != "" {
 		writeError(w, http.StatusBadRequest, reason)
 		return
@@ -157,7 +161,7 @@ func (s *Server) addMissingList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	info, err := s.missing.MDBList.List(ctx, path)
+	info, err := svc.Missing.MDBList.List(ctx, path)
 	switch {
 	case errors.Is(err, mdblist.ErrNotFound):
 		writeError(w, http.StatusNotFound, "lista non trovata su MDBList: è pubblica?")
@@ -175,7 +179,7 @@ func (s *Server) addMissingList(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.missing.WakeKinds(gaps.KindList)
+	svc.Missing.WakeKinds(gaps.KindList)
 	writeJSON(w, http.StatusCreated, l)
 }
 
@@ -359,12 +363,13 @@ func (s *Server) deleteMissingMark(w http.ResponseWriter, r *http.Request) {
 
 // checkMissing starts a check now, in the background ("Controlla ora").
 func (s *Server) checkMissing(w http.ResponseWriter, r *http.Request) {
-	if s.missing == nil {
+	svc := s.current()
+	if svc.Missing == nil {
 		writeError(w, http.StatusBadRequest, s.missingDisabled())
 		return
 	}
-	s.missing.Wake()
-	writeJSON(w, http.StatusAccepted, s.missing.State())
+	svc.Missing.Wake()
+	writeJSON(w, http.StatusAccepted, svc.Missing.State())
 }
 
 // minutesClock renders 240 as "04:00".

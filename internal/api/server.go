@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tehmaat/bookrr/internal/bucket"
@@ -32,21 +33,41 @@ import (
 	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
+// Services are what runs with the current configuration. They change when
+// the configuration is saved from the web UI (see Reconfigure).
+type Services struct {
+	Config  config.Config
+	Syncer  *syncer.Syncer
+	Buckets *bucket.Scanner
+	Hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
+	History *unit3d.History  // nil when no UNIT3D tracker is configured
+	Missing *gaps.Checker    // nil without UNIT3D tracker or TMDB key
+	Best    *prowlarr.Finder // nil without UNIT3D tracker or Prowlarr
+}
+
 type Server struct {
-	cfg     config.Config
 	store   *store.Store
-	syncer  *syncer.Syncer
-	buckets *bucket.Scanner
-	hashes  *unit3d.Resolver // nil when no UNIT3D tracker is configured
-	history *unit3d.History  // nil when no UNIT3D tracker is configured
-	missing *gaps.Checker    // nil without UNIT3D tracker or TMDB key
-	best    *prowlarr.Finder // nil without UNIT3D tracker or Prowlarr
 	web     fs.FS
 	version string
+	// Reconfigure starts again, with cfg, the services whose options
+	// changed; nil when they cannot be (the tests).
+	Reconfigure func(cfg config.Config) Services
+
+	mu     sync.RWMutex
+	svc    Services
+	saveMu sync.Mutex // one change of the configuration at a time
 }
 
 func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, missing *gaps.Checker, best *prowlarr.Finder, web fs.FS, version string) *Server {
-	return &Server{cfg: cfg, store: s, syncer: sy, buckets: buckets, hashes: hashes, history: history, missing: missing, best: best, web: web, version: version}
+	return &Server{store: s, web: web, version: version,
+		svc: Services{Config: cfg, Syncer: sy, Buckets: buckets, Hashes: hashes, History: history, Missing: missing, Best: best}}
+}
+
+// current returns the services running now.
+func (s *Server) current() Services {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.svc
 }
 
 func (s *Server) Handler() http.Handler {
@@ -111,6 +132,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/clients/{id}", s.deleteClient)
 	mux.HandleFunc("POST /api/clients/test", s.testClient)
 
+	mux.HandleFunc("GET /api/config", s.getConfig)
+	mux.HandleFunc("PUT /api/config", s.saveConfig)
+	mux.HandleFunc("POST /api/config/test", s.testConfig)
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	mux.HandleFunc("PUT /api/settings", s.saveSettings)
 
@@ -127,7 +151,8 @@ func (s *Server) Handler() http.Handler {
 // auth applies optional HTTP basic auth to everything except the health
 // check and the webhook, which has its own token.
 func (s *Server) auth(next http.Handler) http.Handler {
-	if s.cfg.AuthUser == "" {
+	svc := s.current()
+	if svc.Config.AuthUser == "" {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,8 +161,8 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			return
 		}
 		u, p, ok := r.BasicAuth()
-		if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AuthUser)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(p), []byte(s.cfg.AuthPassword)) != 1 {
+		if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(svc.Config.AuthUser)) != 1 ||
+			subtle.ConstantTimeCompare([]byte(p), []byte(svc.Config.AuthPassword)) != 1 {
 			w.Header().Set("WWW-Authenticate", `Basic realm="bookrr"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -237,14 +262,15 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	writeJSON(w, 200, map[string]any{
 		"version":              s.version,
-		"releaseTag":           s.cfg.ReleaseTag,
-		"syncInterval":         shortDuration(s.cfg.SyncInterval),
-		"s3ScanInterval":       shortDuration(s.cfg.S3ScanInterval),
-		"webhookTokenRequired": s.cfg.WebhookToken != "",
-		"unit3d":               s.hashes != nil,
-		"releasesInterval":     shortDuration(s.cfg.Unit3DReleasesInterval),
+		"releaseTag":           svc.Config.ReleaseTag,
+		"syncInterval":         shortDuration(svc.Config.SyncInterval),
+		"s3ScanInterval":       shortDuration(svc.Config.S3ScanInterval),
+		"webhookTokenRequired": svc.Config.WebhookToken != "",
+		"unit3d":               svc.Hashes != nil,
+		"releasesInterval":     shortDuration(svc.Config.Unit3DReleasesInterval),
 	})
 }
 
@@ -329,12 +355,13 @@ func (s *Server) createTorrent(w http.ResponseWriter, r *http.Request) {
 // findHashes starts the background lookup on the tracker if one of the
 // new torrents was added without its info hash.
 func (s *Server) findHashes(hashes ...string) {
-	if s.hashes == nil {
+	svc := s.current()
+	if svc.Hashes == nil {
 		return
 	}
 	for _, h := range hashes {
 		if store.IsManualHash(h) {
-			s.hashes.Wake()
+			svc.Hashes.Wake()
 			return
 		}
 	}
@@ -343,13 +370,14 @@ func (s *Server) findHashes(hashes ...string) {
 // lookupHash looks up on the tracker, right now, the info hash of a torrent
 // added without one, and returns the torrent under its new hash.
 func (s *Server) lookupHash(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	hash, ok := s.placeholder(w, r)
 	if !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	newHash, err := s.hashes.Resolve(ctx, hash)
+	newHash, err := svc.Hashes.Resolve(ctx, hash)
 	s.writeFound(w, r, newHash, err)
 }
 
@@ -357,13 +385,14 @@ func (s *Server) lookupHash(w http.ResponseWriter, r *http.Request) {
 // hash was not found automatically. ?q= searches something else than the
 // torrent's name.
 func (s *Server) trackerCandidates(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	hash, ok := s.placeholder(w, r)
 	if !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	cs, err := s.hashes.Candidates(ctx, hash, r.URL.Query().Get("q"))
+	cs, err := svc.Hashes.Candidates(ctx, hash, r.URL.Query().Get("q"))
 	if err != nil {
 		s.trackerFail(w, err)
 		return
@@ -374,6 +403,7 @@ func (s *Server) trackerCandidates(w http.ResponseWriter, r *http.Request) {
 // trackerMatch gives the torrent the hash of the tracker torrent the user
 // picked ({"id": "123"}), and returns it under its new hash.
 func (s *Server) trackerMatch(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	hash, ok := s.placeholder(w, r)
 	if !ok {
 		return
@@ -386,15 +416,16 @@ func (s *Server) trackerMatch(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
-	newHash, err := s.hashes.Choose(ctx, hash, strings.TrimSpace(in.ID))
+	newHash, err := svc.Hashes.Choose(ctx, hash, strings.TrimSpace(in.ID))
 	s.writeFound(w, r, newHash, err)
 }
 
 // placeholder checks that a tracker is configured and that the torrent in
 // the path still has a placeholder hash.
 func (s *Server) placeholder(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if s.hashes == nil {
-		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato (BOOKRR_UNIT3D_URL)")
+	svc := s.current()
+	if svc.Hashes == nil {
+		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato: impostalo nelle Impostazioni, scheda Tracker")
 		return "", false
 	}
 	hash := r.PathValue("hash")
@@ -618,6 +649,7 @@ func (s *Server) deleteTorrent(w http.ResponseWriter, r *http.Request) {
 // another client keeps a complete copy. ?deleteFiles=1 also deletes the
 // downloaded data on that client.
 func (s *Server) removeFromClient(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	hash := r.PathValue("hash")
 	clientID, err := strconv.ParseInt(r.PathValue("clientId"), 10, 64)
 	if err != nil {
@@ -636,7 +668,7 @@ func (s *Server) removeFromClient(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if err := s.syncer.Qbit(c).DeleteTorrent(ctx, hash, deleteFiles); err != nil {
+	if err := svc.Syncer.Qbit(c).DeleteTorrent(ctx, hash, deleteFiles); err != nil {
 		writeError(w, http.StatusBadGateway, "rimozione da "+c.Name+" non riuscita: "+err.Error())
 		return
 	}
@@ -955,6 +987,7 @@ func (s *Server) updateDisk(w http.ResponseWriter, r *http.Request) {
 
 // scanDisk reads the disk's bucket now and returns what changed.
 func (s *Server) scanDisk(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	id, ok := pathID(w, r)
 	if !ok {
 		return
@@ -964,13 +997,13 @@ func (s *Server) scanDisk(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	if d.S3 == nil || s.buckets == nil {
+	if d.S3 == nil || svc.Buckets == nil {
 		writeError(w, http.StatusBadRequest, "questo archivio non è collegato a un bucket")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Minute)
 	defer cancel()
-	res, err := s.buckets.Scan(ctx, d)
+	res, err := svc.Buckets.Scan(ctx, d)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -1352,13 +1385,15 @@ func (s *Server) testClient(w http.ResponseWriter, r *http.Request) {
 // --- sync ---
 
 func (s *Server) syncState(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, s.syncer.State())
+	svc := s.current()
+	writeJSON(w, 200, svc.Syncer.State())
 }
 
 func (s *Server) syncNow(w http.ResponseWriter, r *http.Request) {
+	svc := s.current()
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Minute)
 	defer cancel()
-	res, err := s.syncer.SyncAll(ctx)
+	res, err := svc.Syncer.SyncAll(ctx)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -1367,10 +1402,11 @@ func (s *Server) syncNow(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) syncInBackground() {
+	svc := s.current()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if _, err := s.syncer.SyncAll(ctx); err != nil {
+		if _, err := svc.Syncer.SyncAll(ctx); err != nil {
 			slog.Error("sync fallito", "err", err)
 		}
 	}()
@@ -1382,7 +1418,8 @@ func (s *Server) syncInBackground() {
 // query parameters, so it can be called from qBittorrent scripts, curl,
 // qbit_manage, n8n and similar tools.
 func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.WebhookToken != "" {
+	svc := s.current()
+	if svc.Config.WebhookToken != "" {
 		tok := r.Header.Get("X-Bookrr-Token")
 		if tok == "" {
 			tok = r.URL.Query().Get("token")
@@ -1390,7 +1427,7 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 		if auth := r.Header.Get("Authorization"); tok == "" && strings.HasPrefix(auth, "Bearer ") {
 			tok = strings.TrimPrefix(auth, "Bearer ")
 		}
-		if subtle.ConstantTimeCompare([]byte(tok), []byte(s.cfg.WebhookToken)) != 1 {
+		if subtle.ConstantTimeCompare([]byte(tok), []byte(svc.Config.WebhookToken)) != 1 {
 			writeError(w, http.StatusUnauthorized, "token non valido")
 			return
 		}
@@ -1422,7 +1459,7 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 		Size:       size,
 		ClientName: pick("client", "client_name", "instance"),
 	}
-	created, err := s.store.HandleWebhookRemoval(r.Context(), ev, s.cfg.ReleaseTag)
+	created, err := s.store.HandleWebhookRemoval(r.Context(), ev, svc.Config.ReleaseTag)
 	if err != nil {
 		s.fail(w, err)
 		return
