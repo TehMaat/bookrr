@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -278,12 +279,58 @@ CREATE TABLE gap_lists (
 	UNIQUE (source, path)
 );
 `,
+	`
+-- The .torrent files of the uploads, out of tracker_releases: in the
+-- middle of its rows they were read from disk by every query on the
+-- columns after them, that is by every list of torrents and of releases.
+-- release_id is not the rowid, so its index answers "is there a file?"
+-- without reading the files.
+CREATE TABLE tracker_release_files (
+	release_id INTEGER NOT NULL UNIQUE REFERENCES tracker_releases(id) ON DELETE CASCADE,
+	data BLOB NOT NULL
+);
+INSERT INTO tracker_release_files (release_id, data)
+SELECT id, torrent_file FROM tracker_releases WHERE torrent_file IS NOT NULL;
+ALTER TABLE tracker_releases DROP COLUMN torrent_file;
+`,
+}
+
+// compact gives back to the disk the space a migration freed (the files
+// moved out of tracker_releases) when it is over a quarter of the
+// database, which also puts the rows of each table next to each other.
+func (s *Store) compact(ctx context.Context) error {
+	var pages, free int64
+	if err := s.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages); err != nil {
+		return err
+	}
+	if err := s.db.QueryRowContext(ctx, "PRAGMA freelist_count").Scan(&free); err != nil {
+		return err
+	}
+	if free*4 <= pages {
+		return nil
+	}
+	var size int64
+	if err := s.db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&size); err != nil {
+		return err
+	}
+	slog.Info("compattazione del database", "MB", pages*size>>20, "liberiMB", free*size>>20)
+	if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
+		return err
+	}
+	// In WAL mode the compacted database is first written to the WAL: move
+	// it into the file now and empty the WAL, or it would take the space
+	// just freed until bookrr stops.
+	_, err := s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
 }
 
 func (s *Store) migrate(ctx context.Context) error {
 	var version int
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
+	}
+	if version == len(migrations) {
+		return nil
 	}
 	for i := version; i < len(migrations); i++ {
 		tx, err := s.db.BeginTx(ctx, nil)
@@ -301,6 +348,10 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+	}
+	if err := s.compact(ctx); err != nil {
+		// Only space is lost, the data is all there: no reason to stop.
+		slog.Warn("compattazione del database", "err", err)
 	}
 	return nil
 }

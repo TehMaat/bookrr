@@ -119,7 +119,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/webhook/qbit", s.webhook)
 
 	mux.Handle("/", s.static())
-	return s.logging(s.auth(mux))
+	return s.logging(s.auth(compress(mux)))
 }
 
 // auth applies optional HTTP basic auth to everything except the health
