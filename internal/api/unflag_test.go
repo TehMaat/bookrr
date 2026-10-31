@@ -56,7 +56,7 @@ func TestUnflagReleases(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := New(config.Config{ReleaseTag: tag}, st, syncer.New(st, tag, time.Minute), nil, nil, nil, nil, fstest.MapFS{}, "test").Handler()
+	h := New(config.Config{ReleaseTag: tag}, st, syncer.New(st, tag, time.Minute), nil, nil, nil, nil, nil, fstest.MapFS{}, "test").Handler()
 	var out struct {
 		Unflagged int      `json:"unflagged"`
 		Errors    []string `json:"errors"`

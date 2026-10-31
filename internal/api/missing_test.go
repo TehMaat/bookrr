@@ -32,7 +32,7 @@ func TestMissingSeriesDisabled(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h := New(tc.cfg, st, nil, nil, nil, nil, nil, fstest.MapFS{}, "test").Handler()
+		h := New(tc.cfg, st, nil, nil, nil, nil, nil, nil, fstest.MapFS{}, "test").Handler()
 		var out struct {
 			Enabled        bool    `json:"enabled"`
 			DisabledReason string  `json:"disabledReason"`
@@ -221,7 +221,7 @@ func TestMissingLists(t *testing.T) {
 	defer st.Close()
 	cfg := config.Config{Unit3DURL: "https://t.example", Unit3DAPIKey: "k", TMDBAPIKey: "k"}
 	checker := gaps.New(st, unit3d.New(cfg.Unit3DURL, "k"), tmdb.New("k"), cfg.Unit3DURL, 0)
-	h := New(cfg, st, nil, nil, nil, nil, checker, fstest.MapFS{}, "test").Handler()
+	h := New(cfg, st, nil, nil, nil, nil, checker, nil, fstest.MapFS{}, "test").Handler()
 
 	type result struct {
 		ListsEnabled        bool         `json:"listsEnabled"`

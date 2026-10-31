@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/store"
 )
 
@@ -24,7 +25,7 @@ type notOnTracker struct {
 // are not among them (once the uploads have been read at least once).
 func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	out := map[string]any{"enabled": s.history != nil, "state": nil, "syncedAt": nil, "notOnTracker": []notOnTracker{}}
+	out := map[string]any{"enabled": s.history != nil, "state": nil, "syncedAt": nil, "notOnTracker": []notOnTracker{}, "best": nil}
 	if s.history != nil {
 		out["state"] = s.history.State()
 	}
@@ -32,6 +33,15 @@ func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, err)
 		return
+	}
+	if s.best != nil {
+		out["best"] = s.best.State()
+		found, err := s.store.BestResolutions(ctx)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		prowlarr.Annotate(releases, found)
 	}
 	out["releases"] = releases
 	synced, err := s.store.TrackerReleasesSyncedAt(ctx)

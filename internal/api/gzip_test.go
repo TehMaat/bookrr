@@ -45,7 +45,7 @@ func TestCompressedResponses(t *testing.T) {
 		"assets/app-1.js":  {Data: []byte(script)},
 		"assets/logo.webp": {Data: []byte(strings.Repeat("x", 4096))},
 	}
-	h := New(config.Config{}, st, nil, nil, nil, nil, nil, web, "test").Handler()
+	h := New(config.Config{}, st, nil, nil, nil, nil, nil, nil, web, "test").Handler()
 
 	get := func(path string, header map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("GET", path, nil)

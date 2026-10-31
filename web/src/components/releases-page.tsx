@@ -6,6 +6,8 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
+  CircleArrowUp,
+  CircleCheck,
   CircleHelp,
   CloudOff,
   ExternalLink,
@@ -16,6 +18,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  SearchX,
   Server,
   TagX,
   TriangleAlert,
@@ -69,12 +72,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { api, type Alert, type ReleaseStatus, type TrackerRelease } from "@/lib/api"
+import { api, type Alert, type BestResolution, type ReleaseStatus, type TrackerRelease } from "@/lib/api"
 import { formatBytes, formatDate, formatRelative } from "@/lib/format"
 import { useAction, useInfo, useReleases, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
-type Filter = "all" | ReleaseStatus | "removed" | "archivable"
+type Filter = "all" | ReleaseStatus | "removed" | "archivable" | "better"
 type SortKey = "date" | "name" | "seeders" | "completed"
 
 const PAGE_SIZE = 50
@@ -87,6 +90,7 @@ const noFilters = {
   seeders: noRange,
   completed: noRange,
   status: [] as string[],
+  best: [] as string[],
 }
 
 const releaseStatuses: ReleaseStatus[] = ["client", "missing", "archived", "adopted", "unknown", "untracked"]
@@ -100,7 +104,65 @@ function matches(r: TrackerRelease, f: Filter) {
   if (f === "all") return true
   if (f === "removed") return r.removedAt !== null
   if (f === "archivable") return !!r.archivable?.archivable
+  if (f === "better") return !!r.best?.better
   return r.status === f
+}
+
+type BestKind = "better" | "max" | "none"
+
+/** How a film stands against the best resolution found; null when it was not searched (or is not a film). */
+function bestKind(b: BestResolution | null): BestKind | null {
+  if (!b) return null
+  if (b.better) return "better"
+  if (b.checkedAt && !b.resolution) return "none"
+  return "max"
+}
+
+/** The best resolution found with Prowlarr for the film of an upload. */
+function BestBadge({ b }: { b: BestResolution | null }) {
+  const kind = bestKind(b)
+  if (!b || !kind) return <span className="text-muted-foreground text-xs">—</span>
+  const searched = b.checkedAt ? ` · cercata ${formatRelative(b.checkedAt)}` : ""
+  const found = b.name && `${b.name}${b.indexer ? ` (${b.indexer})` : ""}`
+  const badge =
+    kind === "better" ? (
+      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+        <CircleArrowUp /> {b.resolution}
+      </Badge>
+    ) : kind === "none" ? (
+      <Badge variant="outline" className="text-muted-foreground border-dashed">
+        <SearchX /> Non trovata
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="text-muted-foreground">
+        <CircleCheck /> {b.mine || b.resolution}
+      </Badge>
+    )
+  const tip =
+    kind === "better"
+      ? `Esiste in ${b.resolution}, tu ce l'hai in ${b.mine || "risoluzione ignota"}: ${found}`
+      : kind === "none"
+        ? "Prowlarr non ha trovato release di questo film con una risoluzione nota"
+        : b.checkedAt
+          ? `Hai già la risoluzione migliore che esiste${found ? `: la migliore trovata è ${found}` : ""}`
+          : `Ce l'hai già in ${b.mine}: non serve cercarla`
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {kind === "better" && b.url ? (
+          <a href={b.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+            {badge}
+          </a>
+        ) : (
+          <span>{badge}</span>
+        )}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-sm break-words">
+        {tip}
+        {searched}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function ReleaseStatusBadge({ status }: { status: ReleaseStatus }) {
@@ -160,6 +222,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
       untracked: 0,
       removed: 0,
       archivable: 0,
+      better: 0,
     }
     for (const r of scoped) for (const f of Object.keys(c) as Filter[]) if (matches(r, f)) c[f]++
     return c
@@ -182,6 +245,8 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
         ...(r.removedAt ? ["removed"] : []),
       ]
       if (!optionsMatch(cf.status, ...flags)) return false
+      const kind = bestKind(r.best)
+      if (!optionsMatch(cf.best, ...(kind ? [kind] : []))) return false
       if (!q) return true
       return (
         r.name.toLowerCase().includes(q) ||
@@ -213,7 +278,8 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
   const picking = filter === "archivable" || cf.status.includes("never")
   const picker = usePicker(picking ? rows.map((r) => ({ hash: r.torrentHash, archivable: r.archivable })) : [])
   const kept = scoped.filter((r) => r.archivable?.neverArchive).length
-  const cols = picking ? 7 : 6
+  const best = data?.best
+  const cols = (picking ? 7 : 6) + (best ? 1 : 0)
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
     fn(v)
@@ -253,9 +319,10 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
     { key: "untracked", label: "Sconosciute", icon: FileWarning, tone: "text-amber-600 dark:text-amber-400" },
     { key: "removed", label: "Rimosse", icon: CloudOff, tone: "text-destructive" },
     { key: "archivable", label: "Archiviabili", icon: Archive, tone: archivableTone },
+    { key: "better", label: "Migliorabili", icon: CircleArrowUp, tone: "text-amber-600 dark:text-amber-400" },
   ]
-  // Dead uploads are still on the tracker: none is removed.
-  const stats = dead ? allStats.filter((s) => s.key !== "removed") : allStats
+  // Dead uploads are still on the tracker: none is removed. Without Prowlarr no film is searched.
+  const stats = allStats.filter((s) => !(dead && s.key === "removed") && (best || s.key !== "better"))
 
   if (releases.isLoading) return <Skeleton className="h-48 w-full" />
   if (releases.isError)
@@ -333,6 +400,14 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
           <TriangleAlert />
           <AlertTitle>Ultimo aggiornamento non riuscito</AlertTitle>
           <AlertDescription>{state.lastError}</AlertDescription>
+        </AlertBox>
+      )}
+
+      {best?.lastError && (
+        <AlertBox variant="destructive">
+          <TriangleAlert />
+          <AlertTitle>Ultima ricerca con Prowlarr non riuscita</AlertTitle>
+          <AlertDescription>{best.lastError}</AlertDescription>
         </AlertBox>
       )}
 
@@ -495,6 +570,37 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                   </ColumnFilter>
                 </div>
               </TableHead>
+              {best && (
+                <TableHead className="hidden md:table-cell">
+                  <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>Max</span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm">
+                        La risoluzione migliore che esiste di ogni film, in qualsiasi lingua, cercata con Prowlarr una volta al
+                        giorno (ogni film ogni {best.recheck}).{" "}
+                        {best.running
+                          ? `Ricerca in corso: ${best.done} di ${best.total} film.`
+                          : best.lastRunAt
+                            ? `Ultima ricerca ${formatRelative(best.lastRunAt)}: ${best.lastResult}.`
+                            : `Prima ricerca ${formatRelative(best.nextRunAt)}.`}
+                      </TooltipContent>
+                    </Tooltip>
+                    <ColumnFilter label="Max" active={isActive(cf.best)} onClear={() => columns.clear("best")}>
+                      <OptionsFilter
+                        options={[
+                          { value: "better", label: "Esiste in una risoluzione migliore" },
+                          { value: "max", label: "Hai già la migliore" },
+                          { value: "none", label: "Non trovata" },
+                        ]}
+                        value={cf.best}
+                        onChange={(v) => columns.set("best", v)}
+                      />
+                    </ColumnFilter>
+                  </div>
+                </TableHead>
+              )}
               <TableHead className="hidden lg:table-cell">
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("date")}>
@@ -630,6 +736,11 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                       {r.resolution && <Badge variant="outline">{r.resolution}</Badge>}
                     </div>
                   </TableCell>
+                  {best && (
+                    <TableCell className="hidden md:table-cell">
+                      <BestBadge b={r.best} />
+                    </TableCell>
+                  )}
                   <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">{formatDate(r.createdAt)}</TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <PeerCounts p={r} />

@@ -6,8 +6,6 @@ package gaps
 
 import (
 	"sort"
-	"strconv"
-	"strings"
 
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/unit3d"
@@ -283,7 +281,4 @@ func better(a, b unit3d.Quality) bool {
 	return a.Label < b.Label
 }
 
-func resolutionRank(r string) int {
-	n, _ := strconv.Atoi(strings.TrimRight(r, "pi"))
-	return n
-}
+func resolutionRank(r string) int { return unit3d.ResolutionRank(r) }
