@@ -43,20 +43,41 @@ type Config struct {
 
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "bookrr.db") }
 
-func Load() (Config, error) {
+// Load reads the configuration from the environment alone.
+func Load() (Config, error) { return Resolve(nil) }
+
+// Resolve reads the configuration from the environment and, for the
+// options that can be set from the web UI (see Options) and are not in the
+// environment, from stored (environment variable → value).
+func Resolve(stored map[string]string) (Config, error) {
+	get := func(key string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		if IsOption(key) {
+			return stored[key]
+		}
+		return ""
+	}
+	env := func(key, def string) string {
+		if v := get(key); v != "" {
+			return v
+		}
+		return def
+	}
 	c := Config{
 		Listen:         env("BOOKRR_LISTEN", ":8080"),
 		DataDir:        env("BOOKRR_DATA_DIR", "/data"),
 		ReleaseTag:     env("BOOKRR_RELEASE_TAG", "Personal Release"),
-		WebhookToken:   os.Getenv("BOOKRR_WEBHOOK_TOKEN"),
-		AuthUser:       os.Getenv("BOOKRR_AUTH_USER"),
-		AuthPassword:   os.Getenv("BOOKRR_AUTH_PASSWORD"),
-		Unit3DURL:      strings.TrimRight(strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_URL")), "/"),
-		Unit3DAPIKey:   strings.TrimSpace(os.Getenv("BOOKRR_UNIT3D_API_KEY")),
-		TMDBAPIKey:     strings.TrimSpace(os.Getenv("BOOKRR_TMDB_API_KEY")),
-		MDBListAPIKey:  strings.TrimSpace(os.Getenv("BOOKRR_MDBLIST_API_KEY")),
-		ProwlarrURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("BOOKRR_PROWLARR_URL")), "/"),
-		ProwlarrAPIKey: strings.TrimSpace(os.Getenv("BOOKRR_PROWLARR_API_KEY")),
+		WebhookToken:   get("BOOKRR_WEBHOOK_TOKEN"),
+		AuthUser:       get("BOOKRR_AUTH_USER"),
+		AuthPassword:   get("BOOKRR_AUTH_PASSWORD"),
+		Unit3DURL:      strings.TrimRight(strings.TrimSpace(get("BOOKRR_UNIT3D_URL")), "/"),
+		Unit3DAPIKey:   strings.TrimSpace(get("BOOKRR_UNIT3D_API_KEY")),
+		TMDBAPIKey:     strings.TrimSpace(get("BOOKRR_TMDB_API_KEY")),
+		MDBListAPIKey:  strings.TrimSpace(get("BOOKRR_MDBLIST_API_KEY")),
+		ProwlarrURL:    strings.TrimRight(strings.TrimSpace(get("BOOKRR_PROWLARR_URL")), "/"),
+		ProwlarrAPIKey: strings.TrimSpace(get("BOOKRR_PROWLARR_API_KEY")),
 	}
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)
@@ -120,11 +141,4 @@ func days(s string) (time.Duration, error) {
 		return time.Duration(v) * 24 * time.Hour, nil
 	}
 	return time.ParseDuration(s)
-}
-
-func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

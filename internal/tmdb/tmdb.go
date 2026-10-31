@@ -182,6 +182,12 @@ func (c *Client) FindMovieByIMDB(ctx context.Context, imdbID int64) (int64, erro
 	return res.MovieResults[0].ID, nil
 }
 
+// Check verifies the key: GET /configuration.
+func (c *Client) Check(ctx context.Context) error {
+	var res struct{}
+	return c.get(ctx, "/configuration", nil, &res)
+}
+
 // bearer: v4 read access tokens are JWTs, sent as a header; v3 keys go in the query.
 func (c *Client) bearer() bool { return strings.Count(c.key, ".") == 2 && len(c.key) > 60 }
 

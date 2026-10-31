@@ -13,6 +13,7 @@ export const keys = {
   info: ["info"] as const,
   sync: ["sync"] as const,
   settings: ["settings"] as const,
+  config: ["config"] as const,
   releases: ["releases"] as const,
   missingSeries: ["missing-series"] as const,
   missingSagas: ["missing-sagas"] as const,
@@ -29,6 +30,7 @@ export const useAdopters = () => useQuery({ queryKey: keys.adopters, queryFn: ap
 export const useClients = () => useQuery({ queryKey: keys.clients, queryFn: api.clients, refetchInterval: 30_000 })
 export const useInfo = () => useQuery({ queryKey: keys.info, queryFn: api.info, staleTime: Infinity })
 export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: api.settings })
+export const useConfig = (enabled = true) => useQuery({ queryKey: keys.config, queryFn: api.config, enabled })
 export const useReleases = () =>
   useQuery({
     queryKey: keys.releases,

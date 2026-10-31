@@ -543,6 +543,32 @@ export type Settings = {
   archiveDays: number
 }
 
+/** Group of the options of the configuration, as shown in the settings. */
+export type ConfigGroup = "general" | "unit3d" | "missing" | "prowlarr"
+
+/** An option of the configuration that can be set from the web UI, unless its environment variable is set. */
+export type ConfigOption = {
+  /** The environment variable. */
+  key: string
+  group: ConfigGroup
+  label: string
+  default: string
+  help: string
+  /** Never sent back: only set says whether it has a value. */
+  secret: boolean
+  /** As typed in the UI, or the environment's when locked; always "" for secrets. */
+  value: string
+  set: boolean
+  /** Set in the environment: shown, not changeable. */
+  locked: boolean
+}
+
+/** A value for each option changed: null keeps it (a secret not retyped), "" goes back to the default. */
+export type ConfigValues = Record<string, string | null>
+
+/** Services whose connection can be tried from the settings. */
+export type ConfigService = "unit3d" | "tmdb" | "mdblist" | "prowlarr"
+
 export type SyncState = {
   running: boolean
   lastRunAt: string | null
@@ -722,6 +748,12 @@ export const api = {
   deleteClient: (id: number) => request<void>("DELETE", `/api/clients/${id}`),
   testClient: (c: ClientInput) =>
     request<{ ok: boolean; error?: string; version?: string; torrents?: number }>("POST", "/api/clients/test", c),
+
+  config: () => request<{ options: ConfigOption[] }>("GET", "/api/config"),
+  /** Saves the options and starts again, without restarting bookrr, the services whose options changed. */
+  saveConfig: (values: ConfigValues) => request<{ options: ConfigOption[] }>("PUT", "/api/config", { values }),
+  testConfig: (service: ConfigService, values: ConfigValues) =>
+    request<{ ok: boolean; message?: string; error?: string }>("POST", "/api/config/test", { service, values }),
 
   settings: () => request<Settings>("GET", "/api/settings"),
   /** Options left out keep their value. */

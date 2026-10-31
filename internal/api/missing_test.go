@@ -24,9 +24,9 @@ func TestMissingSeriesDisabled(t *testing.T) {
 		cfg  config.Config
 		want string
 	}{
-		{config.Config{}, "BOOKRR_UNIT3D_URL"},
-		{config.Config{TMDBAPIKey: "k"}, "BOOKRR_UNIT3D_URL"},
-		{config.Config{Unit3DURL: "https://t.example", Unit3DAPIKey: "k", MissingCheckAt: 4 * 60}, "BOOKRR_TMDB_API_KEY"},
+		{config.Config{}, "tracker UNIT3D e una chiave TMDB"},
+		{config.Config{TMDBAPIKey: "k"}, "Serve un tracker UNIT3D"},
+		{config.Config{Unit3DURL: "https://t.example", Unit3DAPIKey: "k", MissingCheckAt: 4 * 60}, "Serve una chiave TMDB"},
 	} {
 		st, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 		if err != nil {
@@ -234,7 +234,7 @@ func TestMissingLists(t *testing.T) {
 	}
 	var out result
 	if code := call(t, h, "GET", "/api/missing/lists", nil, &out); code != http.StatusOK || out.ListsEnabled ||
-		!strings.Contains(out.ListsDisabledReason, "BOOKRR_MDBLIST_API_KEY") || out.Lists == nil || out.Sources == nil {
+		!strings.Contains(out.ListsDisabledReason, "chiave MDBList") || out.Lists == nil || out.Sources == nil {
 		t.Fatalf("without key: %d %+v", code, out)
 	}
 	add := map[string]string{"url": "https://mdblist.com/lists/me/mcu"}

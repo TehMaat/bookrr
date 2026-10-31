@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 )
 
-// Settings are the options changed from the web UI, as opposed to the
-// environment variables read at startup.
+// Settings are the preferences changed from the web UI (the options of the
+// configuration set from it are apart, see ConfigValues).
 type Settings struct {
 	// Address of bookrr as seen from other devices (e.g. http://192.168.1.10:8080),
 	// used in the QR codes of the disks. Empty means the address of the browser.
@@ -94,4 +95,49 @@ func (s *Store) SaveSettings(ctx context.Context, in Settings) (Settings, error)
 		return in, err
 	}
 	return s.GetSettings(ctx)
+}
+
+// configPrefix marks, among the settings, the options of the configuration
+// set from the web UI: "env:BOOKRR_UNIT3D_URL".
+const configPrefix = "env:"
+
+// ConfigValues returns the options of the configuration set from the web
+// UI, by environment variable.
+func (s *Store) ConfigValues(ctx context.Context) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM settings WHERE substr(key, 1, length(?)) = ?`, configPrefix, configPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		out[strings.TrimPrefix(k, configPrefix)] = v
+	}
+	return out, rows.Err()
+}
+
+// SaveConfigValues replaces the options of the configuration set from the
+// web UI: an empty value goes back to the default.
+func (s *Store) SaveConfigValues(ctx context.Context, values map[string]string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE substr(key, 1, length(?)) = ?`, configPrefix, configPrefix); err != nil {
+		return err
+	}
+	for k, v := range values {
+		if v == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)`, configPrefix+k, v); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
