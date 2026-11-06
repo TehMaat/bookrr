@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, ScrollText, Server, Skull } from "lucide-react"
+import { BellRing, CloudUpload, HandHeart, HardDrive, ListTodo, ListTree, Puzzle, ScrollText, Server, Skull } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -10,6 +10,7 @@ import { Header } from "@/components/header"
 import { LogsPage } from "@/components/logs-page"
 import { MissingPage, type MissingView } from "@/components/missing-page"
 import { NavbarSlot } from "@/components/navbar-stats"
+import { PlanPage } from "@/components/plan-page"
 import { ReleasesPage } from "@/components/releases-page"
 import { ResolveDialog } from "@/components/resolve-dialog"
 import { Sidebar, type NavItem } from "@/components/sidebar"
@@ -18,7 +19,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
 
-const tabs = ["torrents", "releases", "dead", "missing", "alerts", "disks", "adopters", "clients", "logs"] as const
+const tabs = ["torrents", "releases", "dead", "missing", "plan", "alerts", "disks", "adopters", "clients", "logs"] as const
 type Tab = (typeof tabs)[number]
 
 type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
@@ -60,6 +61,7 @@ export default function App() {
     { id: "releases", label: "Release", icon: CloudUpload },
     { id: "dead", label: "Morte", icon: Skull },
     { id: "missing", label: "Mancanti", icon: Puzzle },
+    { id: "plan", label: "Piano", icon: ListTodo },
     { id: "alerts", label: "Segnalazioni", icon: BellRing, count: openCount },
     { id: "disks", label: "Dischi", icon: HardDrive },
     { id: "adopters", label: "Adottatori", icon: HandHeart },
@@ -106,6 +108,7 @@ export default function App() {
             {tab === "missing" && (
               <MissingPage view={missingView} onView={(v) => go(v === "series" ? "missing" : `missing/${v}`)} />
             )}
+            {tab === "plan" && <PlanPage />}
             {tab === "alerts" && <AlertsPage onResolve={setResolving} />}
             {tab === "disks" && (
               <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={resolveOne} />

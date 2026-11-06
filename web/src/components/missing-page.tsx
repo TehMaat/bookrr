@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { createContext, useContext, useMemo, useState } from "react"
 import {
   ArrowDown,
   Ban,
@@ -17,6 +17,8 @@ import {
   Layers,
   Library,
   List,
+  ListPlus,
+  ListTodo,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -33,6 +35,7 @@ import {
 import { toast } from "sonner"
 
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
+import { PlanStatusBadge } from "@/components/plan-page"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -85,10 +88,11 @@ import {
   type GapUnit,
   type GapVersion,
   type MissingCheckState,
+  type PlanEntry,
   type Quality,
 } from "@/lib/api"
 import { formatDate, formatRelative } from "@/lib/format"
-import { useAction, useMissingLists, useMissingSagas, useMissingSeries } from "@/lib/queries"
+import { useAction, useMissingLists, useMissingSagas, useMissingSeries, usePlan } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 30
@@ -391,6 +395,35 @@ function Legend({ layout }: { layout: Layout }) {
 }
 
 /** A cell of either layout: a season or a film, how it stands, and the quality shown when there is one. */
+/** The films of the release plan, by TMDB id. */
+const Planned = createContext<Map<number, PlanEntry>>(new Map())
+
+/** Where the films of a saga or list come from, in the plan. */
+const planSource = (s: GapGroup) => ({ source: `${s.kind}:${s.key}`, sourceTitle: s.title })
+
+/**
+ * The TMDB ids of the films of a saga or list still missing and not chosen otherwise (ignored, a torrent of others
+ * accepted); those others uploaded in the minimum quality are not missing for the tracker.
+ */
+function missingFilms(s: GapGroup): number[] {
+  if (s.kind === "series") return []
+  const ids = new Set<number>()
+  if (s.parts) {
+    for (const p of s.parts) {
+      const u = s.units.find((x) => x.number === p.unit)
+      if (u?.tmdbId && p.state !== "mine" && p.state !== "available" && !p.mark) ids.add(u.tmdbId)
+    }
+    return [...ids]
+  }
+  for (const u of s.units) {
+    if (!u.tmdbId) continue
+    const cells = s.rows.filter((r) => !r.hidden).map((r) => r.cells.find((c) => c.unit === u.number))
+    const missing = (c?: GapRow["cells"][number]) => !!c && c.state !== "mine" && c.state !== "available" && !c.mark
+    if (cells.length > 0 && cells.every(missing)) ids.add(u.tmdbId)
+  }
+  return [...ids]
+}
+
 function CellButton({
   kind,
   look,
@@ -408,6 +441,8 @@ function CellButton({
   hint?: React.ReactNode
   onOpen: () => void
 }) {
+  const plan = useContext(Planned)
+  const planned = unit.tmdbId ? plan.get(unit.tmdbId) : undefined
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -424,6 +459,7 @@ function CellButton({
           <look.icon className="size-3 shrink-0" />
           <span className="truncate">{label}</span>
           {quality && <span className="shrink-0 font-normal opacity-75">· {quality}</span>}
+          {planned && <ListTodo className="size-3 shrink-0 opacity-75" aria-label="Nel piano release" />}
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">
@@ -433,6 +469,7 @@ function CellButton({
         </div>
         <div>{look.hint}</div>
         {hint && <div className="opacity-80">{hint}</div>}
+        {planned && <div className="opacity-80">Nel piano release</div>}
         <div className="opacity-80">Clic per i link al tracker e le scelte</div>
       </TooltipContent>
     </Tooltip>
@@ -667,6 +704,17 @@ function GroupCard({
     : (({ missing, available, banned }) => ({ missing, available, banned }))(totals(rows))
   const urgent = t.missing - t.banned
   const unitOf = (n: number) => s.units.find((u) => u.number === n)
+  const planned = useContext(Planned)
+  const toPlan = missingFilms(s).filter((id) => !planned.has(id))
+  const addToPlan = useAction((ids: number[]) =>
+    api.addPlanBulk(ids, planSource(s)).then((r) => {
+      toast.success(
+        r.added.length === 1 ? "1 film aggiunto al piano" : `${r.added.length} film aggiunti al piano`,
+        r.errors.length ? { description: r.errors.join(" · ") } : undefined
+      )
+      return r
+    })
+  )
   return (
     <Card className="gap-3 py-4">
       <CardHeader className="px-4">
@@ -736,6 +784,17 @@ function GroupCard({
                 <DropdownMenuItem onClick={() => onThreshold(s)}>
                   <Gauge /> Qualità minima di questa {k.one}…
                 </DropdownMenuItem>
+                {s.kind !== "series" && (
+                  <DropdownMenuItem
+                    disabled={toPlan.length === 0 || addToPlan.isPending}
+                    onClick={() => addToPlan.mutate(toPlan)}
+                  >
+                    <ListPlus />{" "}
+                    {toPlan.length > 0
+                      ? `Aggiungi i mancanti al piano (${toPlan.length})`
+                      : "Nessun mancante da aggiungere al piano"}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "hide" })}>
                   <EyeOff /> Nascondi questa {k.one}
@@ -860,6 +919,28 @@ function GroupCard({
   )
 }
 
+/** A film of a saga or list in the release plan, or the button that adds it. */
+function PlanPart({ s, tmdbId }: { s: GapGroup; tmdbId: number }) {
+  const entry = useContext(Planned).get(tmdbId)
+  const add = useAction(() => api.addPlan(String(tmdbId), "", planSource(s)), "Film aggiunto al piano")
+  if (entry)
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <PlanStatusBadge status={entry.status} />
+        <a href="#plan" className="text-muted-foreground text-xs hover:underline">
+          Apri il piano
+        </a>
+      </div>
+    )
+  return (
+    <div>
+      <Button variant="outline" size="sm" disabled={add.isPending} onClick={() => add.mutate(undefined)}>
+        <ListPlus /> Aggiungi al piano release
+      </Button>
+    </div>
+  )
+}
+
 /** The dialog of a cell: its torrents, accepting one of others, ignoring it. */
 function CellDialog({
   opened,
@@ -933,6 +1014,7 @@ function CellDialog({
               : `"Va bene questa" e "Ignora" valgono per tutte le qualità, anche nella vista per qualità.`}
           </p>
         )}
+        {unit.tmdbId && !mine ? <PlanPart s={s} tmdbId={unit.tmdbId} /> : null}
         <DialogFooter className="sm:justify-between">
           {unit.tmdbId ? (
             <Button variant="ghost" size="sm" asChild>
@@ -1592,6 +1674,8 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
   const sagas = useMissingSagas()
   const lists = useMissingLists()
   const check = useAction(() => api.checkMissing())
+  const plan = usePlan()
+  const planned = useMemo(() => new Map((plan.data?.entries ?? []).map((e) => [e.tmdbId, e as PlanEntry])), [plan.data])
 
   const current = view === "series" ? series : view === "sagas" ? sagas : lists
   const data = current.data
@@ -1641,127 +1725,129 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
   const phase = state?.phase ? phases[state.phase] : ""
 
   return (
-    <Tabs value={view} onValueChange={(v) => onView(v as MissingView)} className="gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <TabsList>
-          <TabsTrigger value="series">
-            <Tv /> Serie TV
-            {missingOf(seriesAll, "series") > 0 && (
-              <Badge variant="warning" className="ml-1 px-1.5">
-                {missingOf(seriesAll, "series")}
-              </Badge>
+    <Planned.Provider value={planned}>
+      <Tabs value={view} onValueChange={(v) => onView(v as MissingView)} className="gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <TabsList>
+            <TabsTrigger value="series">
+              <Tv /> Serie TV
+              {missingOf(seriesAll, "series") > 0 && (
+                <Badge variant="warning" className="ml-1 px-1.5">
+                  {missingOf(seriesAll, "series")}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="sagas">
+              <Clapperboard /> Saghe
+              {missingOf(sagasAll, "saga") > 0 && (
+                <Badge variant="warning" className="ml-1 px-1.5">
+                  {missingOf(sagasAll, "saga")}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="lists">
+              <Library /> Collezioni
+              {missingOf(listsAll, "list") > 0 && (
+                <Badge variant="warning" className="ml-1 px-1.5">
+                  {missingOf(listsAll, "list")}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <div className="ml-auto flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-muted-foreground text-xs">
+                  {running
+                    ? state?.total
+                      ? `Controllo in corso: ${phase} (${state.done}/${state.total})…`
+                      : "Controllo in corso…"
+                    : `Controllato ${formatRelative(data?.checkedAt)}`}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {state?.lastResult || "Nessun controllo ancora"}
+                {data?.checkAt && ` · ogni notte alle ${data.checkAt}`}
+              </TooltipContent>
+            </Tooltip>
+            {data?.enabled && (
+              <Button variant="outline" size="sm" disabled={running} onClick={run}>
+                <RefreshCw className={cn(running && "animate-spin")} /> Controlla ora
+              </Button>
             )}
-          </TabsTrigger>
-          <TabsTrigger value="sagas">
-            <Clapperboard /> Saghe
-            {missingOf(sagasAll, "saga") > 0 && (
-              <Badge variant="warning" className="ml-1 px-1.5">
-                {missingOf(sagasAll, "saga")}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="lists">
-            <Library /> Collezioni
-            {missingOf(listsAll, "list") > 0 && (
-              <Badge variant="warning" className="ml-1 px-1.5">
-                {missingOf(listsAll, "list")}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-        <div className="ml-auto flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-muted-foreground text-xs">
-                {running
-                  ? state?.total
-                    ? `Controllo in corso: ${phase} (${state.done}/${state.total})…`
-                    : "Controllo in corso…"
-                  : `Controllato ${formatRelative(data?.checkedAt)}`}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {state?.lastResult || "Nessun controllo ancora"}
-              {data?.checkAt && ` · ogni notte alle ${data.checkAt}`}
-            </TooltipContent>
-          </Tooltip>
-          {data?.enabled && (
-            <Button variant="outline" size="sm" disabled={running} onClick={run}>
-              <RefreshCw className={cn(running && "animate-spin")} /> Controlla ora
-            </Button>
-          )}
+          </div>
         </div>
-      </div>
 
-      {data && !data.enabled && (
-        <AlertBox variant="warning">
-          <CloudOff />
-          <AlertTitle>Controllo non attivo</AlertTitle>
-          <AlertDescription>Questi risultati non vengono più aggiornati. {data.disabledReason}</AlertDescription>
-        </AlertBox>
-      )}
-      {state?.lastError && (
-        <AlertBox variant="destructive">
-          <TriangleAlert />
-          <AlertTitle>Ultimo controllo non riuscito</AlertTitle>
-          <AlertDescription>{state.lastError}</AlertDescription>
-        </AlertBox>
-      )}
+        {data && !data.enabled && (
+          <AlertBox variant="warning">
+            <CloudOff />
+            <AlertTitle>Controllo non attivo</AlertTitle>
+            <AlertDescription>Questi risultati non vengono più aggiornati. {data.disabledReason}</AlertDescription>
+          </AlertBox>
+        )}
+        {state?.lastError && (
+          <AlertBox variant="destructive">
+            <TriangleAlert />
+            <AlertTitle>Ultimo controllo non riuscito</AlertTitle>
+            <AlertDescription>{state.lastError}</AlertDescription>
+          </AlertBox>
+        )}
 
-      <TabsContent value="series">
-        <GapList
-          kind="series"
-          all={seriesAll}
-          running={running}
-          checkedAt={series.data?.checkedAt}
-          prefs={series.data?.prefs ?? noPrefs}
-          bannedGroups={series.data?.bannedGroups ?? noGroups}
-          types={series.data?.types ?? []}
-          resolutions={series.data?.resolutions ?? []}
-          layout={layouts.series}
-          onLayout={(l) => setLayout("series", l)}
-          onCheck={data?.enabled && !running ? run : undefined}
-        />
-      </TabsContent>
-      <TabsContent value="sagas">
-        <GapList
-          kind="saga"
-          all={sagasAll}
-          running={running}
-          checkedAt={sagas.data?.checkedAt}
-          prefs={sagas.data?.prefs ?? noPrefs}
-          bannedGroups={sagas.data?.bannedGroups ?? noGroups}
-          types={sagas.data?.types ?? []}
-          resolutions={sagas.data?.resolutions ?? []}
-          layout={layouts.saga}
-          onLayout={(l) => setLayout("saga", l)}
-          onCheck={data?.enabled && !running ? run : undefined}
-        />
-      </TabsContent>
-      <TabsContent value="lists">
-        <GapList
-          kind="list"
-          all={listsAll}
-          running={running}
-          checkedAt={lists.data?.checkedAt}
-          prefs={lists.data?.prefs ?? noPrefs}
-          bannedGroups={lists.data?.bannedGroups ?? noGroups}
-          types={lists.data?.types ?? []}
-          resolutions={lists.data?.resolutions ?? []}
-          layout={layouts.list}
-          onLayout={(l) => setLayout("list", l)}
-          onCheck={data?.enabled && !running ? run : undefined}
-          header={
-            <ListSources
-              sources={lists.data?.sources ?? []}
-              groups={listsAll}
-              enabled={!!lists.data?.listsEnabled}
-              disabledReason={lists.data?.listsDisabledReason ?? ""}
-            />
-          }
-          empty={lists.data?.sources.length === 0 ? kinds.list.empty : undefined}
-        />
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="series">
+          <GapList
+            kind="series"
+            all={seriesAll}
+            running={running}
+            checkedAt={series.data?.checkedAt}
+            prefs={series.data?.prefs ?? noPrefs}
+            bannedGroups={series.data?.bannedGroups ?? noGroups}
+            types={series.data?.types ?? []}
+            resolutions={series.data?.resolutions ?? []}
+            layout={layouts.series}
+            onLayout={(l) => setLayout("series", l)}
+            onCheck={data?.enabled && !running ? run : undefined}
+          />
+        </TabsContent>
+        <TabsContent value="sagas">
+          <GapList
+            kind="saga"
+            all={sagasAll}
+            running={running}
+            checkedAt={sagas.data?.checkedAt}
+            prefs={sagas.data?.prefs ?? noPrefs}
+            bannedGroups={sagas.data?.bannedGroups ?? noGroups}
+            types={sagas.data?.types ?? []}
+            resolutions={sagas.data?.resolutions ?? []}
+            layout={layouts.saga}
+            onLayout={(l) => setLayout("saga", l)}
+            onCheck={data?.enabled && !running ? run : undefined}
+          />
+        </TabsContent>
+        <TabsContent value="lists">
+          <GapList
+            kind="list"
+            all={listsAll}
+            running={running}
+            checkedAt={lists.data?.checkedAt}
+            prefs={lists.data?.prefs ?? noPrefs}
+            bannedGroups={lists.data?.bannedGroups ?? noGroups}
+            types={lists.data?.types ?? []}
+            resolutions={lists.data?.resolutions ?? []}
+            layout={layouts.list}
+            onLayout={(l) => setLayout("list", l)}
+            onCheck={data?.enabled && !running ? run : undefined}
+            header={
+              <ListSources
+                sources={lists.data?.sources ?? []}
+                groups={listsAll}
+                enabled={!!lists.data?.listsEnabled}
+                disabledReason={lists.data?.listsDisabledReason ?? ""}
+              />
+            }
+            empty={lists.data?.sources.length === 0 ? kinds.list.empty : undefined}
+          />
+        </TabsContent>
+      </Tabs>
+    </Planned.Provider>
   )
 }

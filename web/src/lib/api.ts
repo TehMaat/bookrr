@@ -321,6 +321,63 @@ export type Releases = {
  * How a season, or a film of a saga or a collection, stands in one of the user's qualities. banned: uploaded by others
  * in this quality, but only by release groups the user banned (still missing, with less priority).
  */
+/** Where a film of the release plan stands. */
+export type PlanStatus = "todo" | "doing" | "done" | "dropped"
+
+/** A film the user plans to release, from TMDB. */
+export type PlanEntry = {
+  id: number
+  tmdbId: number
+  imdbId: number
+  title: string
+  originalTitle: string
+  /** "1999-03-31", "" when unknown. */
+  releaseDate: string
+  posterPath: string
+  status: PlanStatus
+  /** Where it was added from: "" by hand, "saga:collection:119", "list:mdblist:user/slug". */
+  source: string
+  /** Name of the saga or list it was added from. */
+  sourceTitle: string
+  note: string
+  /** The upload of the user that completed it, 0 if none. */
+  releaseId: number
+  createdAt: string
+  doneAt: string | null
+}
+
+/** An upload of the user of a film of the plan, still on the tracker. */
+export type PlanUpload = { id: number; name: string; url: string; quality: string }
+
+export type PlanItem = PlanEntry & {
+  /** Out on the day: the films not out yet are not searched. */
+  released: boolean
+  /** The best release found with Prowlarr, null when not searched yet. */
+  best: BestResolution | null
+  /** Being searched on Prowlarr now. */
+  searching: boolean
+  uploads: PlanUpload[]
+  /** Torrents of others on the tracker, from the last check of sagas and lists. */
+  others: GapRef[]
+  /** The film on the tracker, "" without tracker. */
+  trackerUrl: string
+}
+
+export type Plan = {
+  /** Films can be added (a TMDB key is set). */
+  enabled: boolean
+  disabledReason: string
+  /** The films are searched on Prowlarr. */
+  searchEnabled: boolean
+  searchDisabledReason: string
+  best: BestState | null
+  entries: PlanItem[]
+}
+
+export type PlanLookup = { movie: PlanEntry; inPlan: number }
+export type PlanBulkResult = { added: PlanEntry[]; skipped: number; errors: string[] }
+export type PlanSource = { source: string; sourceTitle: string }
+
 export type GapState = "mine" | "available" | "banned" | "other_quality" | "absent"
 
 /** Quality of a release: type, resolution, HDR formats and audio languages. */
@@ -736,6 +793,17 @@ export const api = {
   deleteArchive: (id: number) => request<void>("DELETE", `/api/archives/${id}`),
   addAdoption: (hash: string, a: AdoptionInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/adoptions`, a),
   deleteAdoption: (id: number) => request<void>("DELETE", `/api/adoptions/${id}`),
+
+  plan: () => request<Plan>("GET", "/api/plan"),
+  /** Reads a film from TMDB, by id, link or IMDb id, before adding it. */
+  lookupPlan: (q: string) => request<PlanLookup>("GET", `/api/plan/lookup?q=${enc(q)}`),
+  addPlan: (tmdb: string, note = "", from?: PlanSource) => request<PlanEntry>("POST", "/api/plan", { tmdb, note, ...from }),
+  addPlanBulk: (tmdbIds: number[], from: PlanSource) =>
+    request<PlanBulkResult>("POST", "/api/plan/bulk", { tmdbIds, ...from }),
+  updatePlan: (id: number, p: { status?: PlanStatus; note?: string }) => request<PlanEntry>("PATCH", `/api/plan/${id}`, p),
+  deletePlan: (id: number) => request<void>("DELETE", `/api/plan/${id}`),
+  /** Searches the film on Prowlarr now, in the background. */
+  searchPlan: (id: number) => request<{ searching: boolean }>("POST", `/api/plan/${id}/search`),
 
   releases: () => request<Releases>("GET", "/api/releases"),
   /** Starts reading the uploads on the tracker now, in the background. */

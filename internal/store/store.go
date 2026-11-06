@@ -313,6 +313,28 @@ CREATE TABLE best_resolutions (
 -- are searched again first.
 ALTER TABLE best_resolutions ADD COLUMN ranking INTEGER NOT NULL DEFAULT 0;
 `,
+	`
+-- The films the user plans to release (status: todo, doing, done,
+-- dropped), from TMDB; source is where they were added from ('' by hand,
+-- 'saga:collection:119', 'list:mdblist:user/slug'). release_id is the
+-- upload that completed it. Their best resolution is in best_resolutions.
+CREATE TABLE release_plan (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	tmdb_id INTEGER NOT NULL UNIQUE,
+	imdb_id INTEGER NOT NULL DEFAULT 0,
+	title TEXT NOT NULL DEFAULT '',
+	original_title TEXT NOT NULL DEFAULT '',
+	release_date TEXT NOT NULL DEFAULT '',
+	poster_path TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'todo',
+	source TEXT NOT NULL DEFAULT '',
+	source_title TEXT NOT NULL DEFAULT '',
+	note TEXT NOT NULL DEFAULT '',
+	release_id INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL,
+	done_at TEXT
+);
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

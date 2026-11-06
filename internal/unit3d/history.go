@@ -147,6 +147,11 @@ func (h *History) sync(ctx context.Context) (string, error) {
 	if added > 0 {
 		parts = append(parts, fmt.Sprintf("%d nuove", added))
 	}
+	if done, err := CompletePlan(ctx, h.store, rows); err != nil {
+		return strings.Join(parts, ", "), fmt.Errorf("piano release: %w", err)
+	} else if done > 0 {
+		parts = append(parts, fmt.Sprintf("%d film del piano completati", done))
+	}
 
 	hashed, failed, herr := h.fetchHashes(ctx, byID)
 	if hashed > 0 {

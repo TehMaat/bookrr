@@ -74,6 +74,7 @@ func main() {
 	runner.Logs = logFiles
 	svc := runner.Apply(cfg)
 	server := api.New(cfg, st, svc.Syncer, svc.Buckets, svc.Hashes, svc.History, svc.Missing, svc.Best, web.FS(), version)
+	server.SetServices(svc)
 	server.Reconfigure = runner.Apply
 	server.Logs = logFiles
 

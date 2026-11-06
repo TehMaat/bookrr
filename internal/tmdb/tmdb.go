@@ -109,7 +109,10 @@ type Movie struct {
 	Title         string `json:"title"`
 	OriginalTitle string `json:"original_title"`
 	ReleaseDate   string `json:"release_date"`
-	Collection    *struct {
+	// "tt0133093", "" when unknown.
+	ImdbID     string `json:"imdb_id"`
+	PosterPath string `json:"poster_path"`
+	Collection *struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
 	} `json:"belongs_to_collection"`
@@ -124,6 +127,13 @@ func (m Movie) Year() string {
 		return m.ReleaseDate[:4]
 	}
 	return ""
+}
+
+// IMDbNumber is the number of the IMDb id of the film (133093 for
+// "tt0133093"), 0 if unknown.
+func (m Movie) IMDbNumber() int64 {
+	n, _ := strconv.ParseInt(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(m.ImdbID)), "tt"), 10, 64)
+	return n
 }
 
 // Movie returns a film: GET /movie/{id}.
