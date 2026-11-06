@@ -354,7 +354,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
     )
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-sm">
           {dead ? "Your uploads still on the tracker" : "All the torrents you uploaded to the tracker"}
@@ -555,7 +555,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
               </TableHead>
               <TableHead className="hidden md:table-cell">
                 <div className="flex items-center gap-1">
-                  Tipo
+                  Type
                   <ColumnFilter
                     label="Type"
                     active={isActive(cf.type) || isActive(cf.resolution)}
@@ -644,7 +644,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
               </TableHead>
               <TableHead>
                 <div className="flex items-center gap-1">
-                  Stato
+                  Status
                   <ColumnFilter label="Status" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
                     <OptionsFilter
                       options={[

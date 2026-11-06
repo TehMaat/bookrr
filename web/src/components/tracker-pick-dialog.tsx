@@ -68,7 +68,7 @@ export function TrackerPickDialog({
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Search the tracker for something else (empty = by name, e.g. Ad Astra 2019)"
+            placeholder="Search the tracker for something else (empty = by name, e.g. Starfall Courier 2019)"
           />
           <Button type="submit" variant="outline">
             <Search /> Search

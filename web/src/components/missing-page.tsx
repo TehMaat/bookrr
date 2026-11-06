@@ -185,7 +185,7 @@ const kinds: Record<GapKind, KindText> = {
     mine: () => "uploaded by you",
     cellLabel: filmLabel,
     intro:
-      "For every collection you follow (a list of films on MDBList: a universe like the MCU, the Pixar films, the Disney classics): the missing films and whether others uploaded them to the tracker, even if you uploaded none. By film: the best version of each film, missing only when below the minimum quality. By quality: a row for each quality you uploaded films of the collection in. Films not out yet don't count. Collections are independent of sagas: the choices made here only apply here.",
+      "For every collection you follow (a list of films on MDBList: a cinematic universe, a studio's animated films, a list of classics): the missing films and whether others uploaded them to the tracker, even if you uploaded none. By film: the best version of each film, missing only when below the minimum quality. By quality: a row for each quality you uploaded films of the collection in. Films not out yet don't count. Collections are independent of sagas: the choices made here only apply here.",
     empty: "No collections: add one above with the link of an MDBList list.",
     checking: "Checking your collections…",
     noMatch: "No collections match the filters.",
