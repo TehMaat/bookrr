@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,6 +72,8 @@ type Finder struct {
 
 	stateMu sync.RWMutex
 	state   State
+	// Films of the release plan being searched out of the rounds, by key.
+	searching map[string]bool
 }
 
 type State struct {
@@ -87,7 +90,7 @@ type State struct {
 }
 
 func NewFinder(s *store.Store, c *Client, recheck time.Duration) *Finder {
-	f := &Finder{store: s, client: c, recheck: recheck, now: time.Now, StartDelay: 15 * time.Minute}
+	f := &Finder{store: s, client: c, recheck: recheck, now: time.Now, StartDelay: 15 * time.Minute, searching: map[string]bool{}}
 	f.state.Recheck = days(recheck)
 	return f
 }
@@ -129,14 +132,15 @@ func (f *Finder) Run(ctx context.Context) {
 	}
 }
 
-// film is a film the user uploaded, with what is needed to search it and
-// to tell its releases from those of other films.
+// film is a film the user uploaded, or plans to release, with what is
+// needed to search it and to tell its releases from those of other films.
 type film struct {
 	key        string
 	imdb, tmdb int64
 	titles     map[string]bool
 	years      map[int]bool
 	mine       grade // best of the user's uploads
+	uploaded   bool  // false for a film of the plan only
 }
 
 // FilmKey identifies a film: by TMDB id, else by IMDb id; "" if neither.
@@ -161,7 +165,7 @@ func films(ups []store.TrackerUpload) []*film {
 		}
 		f := byKey[key]
 		if f == nil {
-			f = &film{key: key, titles: map[string]bool{}, years: map[int]bool{}}
+			f = &film{key: key, titles: map[string]bool{}, years: map[int]bool{}, uploaded: true}
 			byKey[key] = f
 			out = append(out, f)
 		}
@@ -182,6 +186,32 @@ func films(ups []store.TrackerUpload) []*film {
 		}
 	}
 	return out
+}
+
+// accents folds the accented letters of the titles of TMDB, which the
+// names of the releases mostly write without ("Amélie" → "Amelie").
+var accents = strings.NewReplacer(
+	"à", "a", "á", "a", "â", "a", "ä", "a", "ã", "a", "å", "a", "æ", "ae", "ç", "c",
+	"è", "e", "é", "e", "ê", "e", "ë", "e", "ì", "i", "í", "i", "î", "i", "ï", "i",
+	"ñ", "n", "ò", "o", "ó", "o", "ô", "o", "ö", "o", "õ", "o", "ø", "o", "œ", "oe",
+	"ù", "u", "ú", "u", "û", "u", "ü", "u", "ý", "y", "ÿ", "y", "ß", "ss")
+
+// planFilm is a film of the release plan, known by its titles on TMDB
+// (in Italian and the original one) and its year.
+func planFilm(e store.PlanEntry) *film {
+	f := &film{key: FilmKey(e.TmdbID, e.ImdbID), imdb: e.ImdbID, tmdb: e.TmdbID, titles: map[string]bool{}, years: map[int]bool{}}
+	year := e.Year()
+	for _, t := range []string{e.Title, e.OriginalTitle} {
+		for _, n := range []string{t, accents.Replace(strings.ToLower(t))} {
+			if n = unit3d.Title(n + " " + year); n != "" {
+				f.titles[n] = true
+			}
+		}
+	}
+	if y, err := strconv.Atoi(year); err == nil {
+		f.years[y] = true
+	}
+	return f
 }
 
 // matches reports whether a release found is of the film: by the ids the
@@ -258,9 +288,27 @@ func (f *Finder) check(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	plan, err := f.store.PlanEntries(ctx)
+	if err != nil {
+		return "", err
+	}
 	now := f.now()
+	all := films(ups)
+	known := map[string]bool{}
+	for _, fm := range all {
+		known[fm.key] = true
+	}
+	// The films of the plan still to do, once out; those the user uploaded
+	// already are among their uploads.
+	today := now.Format("2006-01-02")
+	for _, e := range plan {
+		if fm := planFilm(e); e.Open() && e.Released(today) && !known[fm.key] {
+			known[fm.key] = true
+			all = append(all, fm)
+		}
+	}
 	var due []*film
-	for _, fm := range films(ups) {
+	for _, fm := range all {
 		if fm.mine.top() {
 			continue
 		}
@@ -282,27 +330,80 @@ func (f *Finder) check(ctx context.Context) (string, error) {
 		return a.CheckedAt < b.CheckedAt
 	})
 	f.update(func(s *State) { s.Total = len(due) })
-	better := 0
+	better, planned := 0, 0
 	for i, fm := range due {
-		found, err := f.client.SearchMovie(ctx, fm.imdb, fm.tmdb)
+		if !fm.uploaded {
+			planned++
+		}
+		b, err := f.search(ctx, fm)
 		if err != nil {
-			return summary(i, better), err
+			return summary(i, better, planned), err
 		}
-		b := fm.best(found)
-		b.CheckedAt = f.now().UTC().Format(time.RFC3339)
-		if err := f.store.SaveBestResolution(ctx, b); err != nil {
-			return summary(i, better), err
-		}
-		if fm.found(b).better(fm.mine) {
+		if fm.uploaded && fm.found(b).better(fm.mine) {
 			better++
 		}
 		f.update(func(s *State) { s.Done = i + 1 })
 	}
-	return summary(len(due), better), nil
+	return summary(len(due), better, planned), nil
 }
 
-func summary(searched, better int) string {
-	return fmt.Sprintf("%d film cercati, %d in una versione migliore della tua", searched, better)
+// search searches a film on Prowlarr and stores the best release found.
+func (f *Finder) search(ctx context.Context, fm *film) (store.BestResolution, error) {
+	found, err := f.client.SearchMovie(ctx, fm.imdb, fm.tmdb)
+	if err != nil {
+		return store.BestResolution{}, err
+	}
+	b := fm.best(found)
+	b.CheckedAt = f.now().UTC().Format(time.RFC3339)
+	return b, f.store.SaveBestResolution(ctx, b)
+}
+
+func summary(searched, better, planned int) string {
+	s := fmt.Sprintf("%d film cercati, %d in una versione migliore della tua", searched, better)
+	if planned > 0 {
+		s += fmt.Sprintf(", %d del piano release", planned)
+	}
+	return s
+}
+
+// SearchPlan searches now films of the release plan, one after the
+// other, out of the rounds (the client keeps its searches spaced out all
+// the same). A failing search stops: the films left are searched in the
+// next round.
+func (f *Finder) SearchPlan(ctx context.Context, entries ...store.PlanEntry) error {
+	fms := make([]*film, len(entries))
+	f.stateMu.Lock()
+	for i, e := range entries {
+		fms[i] = planFilm(e)
+		f.searching[fms[i].key] = true
+	}
+	f.stateMu.Unlock()
+	defer func() {
+		f.stateMu.Lock()
+		for _, fm := range fms {
+			delete(f.searching, fm.key)
+		}
+		f.stateMu.Unlock()
+	}()
+	for i, fm := range fms {
+		if _, err := f.search(ctx, fm); err != nil {
+			if ctx.Err() == nil {
+				slog.Warn("ricerca su Prowlarr dei film del piano", "film", entries[i].Title, "err", err)
+			}
+			return err
+		}
+		f.stateMu.Lock()
+		delete(f.searching, fm.key)
+		f.stateMu.Unlock()
+	}
+	return nil
+}
+
+// Searching reports whether a film of the plan is being searched now.
+func (f *Finder) Searching(e store.PlanEntry) bool {
+	f.stateMu.RLock()
+	defer f.stateMu.RUnlock()
+	return f.searching[FilmKey(e.TmdbID, e.ImdbID)]
 }
 
 // found is the grade of the release found, none if nothing was.
@@ -353,4 +454,41 @@ func Annotate(releases []store.TrackerRelease, found map[string]store.BestResolu
 		b.Better = g.better(fm.mine)
 		releases[i].Best = &b
 	}
+}
+
+// AnnotatePlan gives the films of the release plan the best release found
+// for them, by id of the entry, with the best of the user's uploads of the
+// film still on the tracker and whether the one found is better. A film
+// not searched yet has none, unless the user has it in a 2160p Remux.
+func AnnotatePlan(entries []store.PlanEntry, ups []store.TrackerUpload, found map[string]store.BestResolution) map[int64]*store.BestResolution {
+	mine := map[string]*film{}
+	for _, fm := range films(ups) {
+		mine[fm.key] = fm
+	}
+	out := map[int64]*store.BestResolution{}
+	for _, e := range entries {
+		key := FilmKey(e.TmdbID, e.ImdbID)
+		fm := mine[key]
+		if fm == nil && e.ImdbID != 0 {
+			// Uploads with no TMDB id are known by their IMDb id.
+			fm = mine[FilmKey(0, e.ImdbID)]
+		}
+		if fm == nil {
+			fm = &film{key: key}
+		}
+		b, ok := found[key]
+		switch {
+		case ok:
+		case fm.mine.top():
+			b = store.BestResolution{Film: key}
+		default:
+			continue
+		}
+		g := fm.found(b)
+		b.Type = g.typ
+		b.Mine, b.MineType = fm.mine.res, fm.mine.typ
+		b.Better = g.better(fm.mine)
+		out[e.ID] = &b
+	}
+	return out
 }

@@ -100,7 +100,14 @@ func (r *Runner) Apply(cfg config.Config) api.Services {
 			r.start("missing", svc.Missing.Run)
 		}
 	}
-	// The films searched are the user's uploads on the tracker.
+	if changed(func(c config.Config) any { return c.TMDBAPIKey }) {
+		svc.TMDB = nil
+		if cfg.TMDBAPIKey != "" {
+			svc.TMDB = tmdb.New(cfg.TMDBAPIKey)
+		}
+	}
+	// The films searched are the user's uploads on the tracker and the
+	// films of the release plan.
 	if tracker || changed(func(c config.Config) any { return [3]any{c.ProwlarrURL, c.ProwlarrAPIKey, c.ProwlarrRecheck} }) {
 		r.stop("best")
 		svc.Best = nil

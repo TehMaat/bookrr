@@ -19,6 +19,7 @@ export const keys = {
   missingSagas: ["missing-sagas"] as const,
   missingLists: ["missing-lists"] as const,
   logFiles: ["log-files"] as const,
+  plan: ["plan"] as const,
 }
 
 export const useTorrents = () => useQuery({ queryKey: keys.torrents, queryFn: api.torrents, refetchInterval: 30_000 })
@@ -56,6 +57,13 @@ export const useMissingLists = () =>
     queryKey: keys.missingLists,
     queryFn: api.missingLists,
     refetchInterval: (q) => (q.state.data?.state?.running ? 3_000 : 60_000),
+  })
+export const usePlan = () =>
+  useQuery({
+    queryKey: keys.plan,
+    queryFn: api.plan,
+    // Poll quickly while films are being searched.
+    refetchInterval: (q) => (q.state.data?.entries.some((e) => e.searching) || q.state.data?.best?.running ? 3_000 : 60_000),
   })
 export const useLogFiles = () => useQuery({ queryKey: keys.logFiles, queryFn: api.logFiles, refetchInterval: 60_000 })
 export const useSyncState = () => useQuery({ queryKey: keys.sync, queryFn: api.syncState, refetchInterval: 5_000 })

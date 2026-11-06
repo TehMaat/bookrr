@@ -31,6 +31,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/smart"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/syncer"
+	"github.com/tehmaat/bookrr/internal/tmdb"
 	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
@@ -44,6 +45,7 @@ type Services struct {
 	History *unit3d.History  // nil when no UNIT3D tracker is configured
 	Missing *gaps.Checker    // nil without UNIT3D tracker or TMDB key
 	Best    *prowlarr.Finder // nil without UNIT3D tracker or Prowlarr
+	TMDB    *tmdb.Client     // nil without TMDB key
 }
 
 type Server struct {
@@ -64,6 +66,15 @@ type Server struct {
 func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, missing *gaps.Checker, best *prowlarr.Finder, web fs.FS, version string) *Server {
 	return &Server{store: s, web: web, version: version,
 		svc: Services{Config: cfg, Syncer: sy, Buckets: buckets, Hashes: hashes, History: history, Missing: missing, Best: best}}
+}
+
+// SetServices replaces the services running now (keeping the configuration).
+func (s *Server) SetServices(svc Services) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg := s.svc.Config
+	s.svc = svc
+	s.svc.Config = cfg
 }
 
 // current returns the services running now.
@@ -110,6 +121,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/missing/{kind}/prefs", s.saveMissingPrefs)
 	mux.HandleFunc("POST /api/missing/{kind}/marks", s.setMissingMark)
 	mux.HandleFunc("DELETE /api/missing/{kind}/marks", s.deleteMissingMark)
+
+	mux.HandleFunc("GET /api/plan", s.listPlan)
+	mux.HandleFunc("GET /api/plan/lookup", s.lookupPlan)
+	mux.HandleFunc("POST /api/plan", s.addPlan)
+	mux.HandleFunc("POST /api/plan/bulk", s.addPlanBulk)
+	mux.HandleFunc("PATCH /api/plan/{id}", s.updatePlan)
+	mux.HandleFunc("DELETE /api/plan/{id}", s.deletePlan)
+	mux.HandleFunc("POST /api/plan/{id}/search", s.searchPlanNow)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)

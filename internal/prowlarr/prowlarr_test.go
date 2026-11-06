@@ -251,3 +251,85 @@ func TestCheckOlderRanking(t *testing.T) {
 		t.Fatalf("queries %v", queries)
 	}
 }
+
+// The films of the plan still to do and out are searched with the uploads,
+// once; those uploaded are searched as uploads.
+func TestCheckPlan(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "bookrr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.SaveTrackerReleases(ctx, []store.TrackerUpload{
+		{ID: 1, Name: "The.Matrix.1999.1080p.BluRay.REMUX-ME", Category: "Movie", Type: "Remux", Resolution: "1080p", TmdbID: 603},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	add := func(e store.PlanEntry) store.PlanEntry {
+		t.Helper()
+		e, err := st.AddPlanEntry(ctx, e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	matrix := add(store.PlanEntry{TmdbID: 603, ImdbID: 133093, Title: "Matrix", ReleaseDate: "1999-03-31"})
+	amelie := add(store.PlanEntry{TmdbID: 194, Title: "Il favoloso mondo di Amélie", OriginalTitle: "Le Fabuleux Destin d'Amélie Poulain", ReleaseDate: "2001-04-25"})
+	future := add(store.PlanEntry{TmdbID: 999, Title: "Futuro", ReleaseDate: "2030-01-01"})
+	dropped := add(store.PlanEntry{TmdbID: 998, Title: "Scartato", ReleaseDate: "2000-01-01"})
+	drop := store.PlanDropped
+	if _, err := st.UpdatePlanEntry(ctx, dropped.ID, store.PlanUpdate{Status: &drop}); err != nil {
+		t.Fatal(err)
+	}
+	var queries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("query")
+		queries = append(queries, q)
+		var out []map[string]any
+		switch q {
+		case "{TmdbId:194}":
+			// No ids from this indexer: told by title and year, accents folded.
+			out = append(out,
+				map[string]any{"title": "Le.Fabuleux.Destin.d.Amelie.Poulain.2001.2160p.UHD.BluRay.REMUX-X", "indexer": "A"},
+				map[string]any{"title": "Altro.Film.2001.2160p.UHD.BluRay.REMUX-X", "indexer": "A"})
+		case "{TmdbId:603}":
+			out = append(out, map[string]any{"title": "The.Matrix.1999.2160p.BluRay.REMUX", "tmdbId": 603})
+		}
+		json.NewEncoder(w).Encode(out)
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "k")
+	c.MinInterval = 0
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	f := NewFinder(st, c, 7*24*time.Hour)
+	f.now = func() time.Time { return now }
+	f.Check(ctx)
+	if strings.Join(queries, " ") != "{TmdbId:603} {TmdbId:194}" {
+		t.Fatalf("queries %v", queries)
+	}
+	if s := f.State(); s.LastResult != "2 film cercati, 1 in una versione migliore della tua, 1 del piano release" {
+		t.Fatalf("state %+v", s)
+	}
+
+	// Searched now, out of the rounds, even if not out yet.
+	if err := f.SearchPlan(ctx, future); err != nil || queries[len(queries)-1] != "{TmdbId:999}" || f.Searching(future) {
+		t.Fatalf("search now: %v %v", err, queries)
+	}
+
+	ups, _ := st.ActiveTrackerUploads(ctx)
+	found, _ := st.BestResolutions(ctx)
+	best := AnnotatePlan([]store.PlanEntry{matrix, amelie, future, dropped}, ups, found)
+	if b := best[matrix.ID]; b == nil || b.Resolution != "2160p" || b.Mine != "1080p" || b.MineType != "Remux" || !b.Better {
+		t.Fatalf("matrix %+v", b)
+	}
+	if b := best[amelie.ID]; b == nil || b.Resolution != "2160p" || b.Type != "Remux" || b.Results != 1 || b.Mine != "" || !b.Better {
+		t.Fatalf("amelie %+v", b)
+	}
+	if b := best[future.ID]; b == nil || b.Resolution != "" || b.CheckedAt == "" || b.Better {
+		t.Fatalf("future %+v", b)
+	}
+	if b := best[dropped.ID]; b != nil {
+		t.Fatalf("dropped searched: %+v", b)
+	}
+}
