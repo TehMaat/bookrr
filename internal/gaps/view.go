@@ -39,17 +39,8 @@ var TypeLadder = []string{"Full Disc", "Remux", "Encode", "WEB-DL", "WEBRip", "H
 // Resolutions the minimum quality can ask for.
 var Resolutions = []string{"480p", "576p", "720p", "1080p", "2160p", "4320p"}
 
-var typeRanks = map[string]int{"fulldisc": 6, "remux": 5, "encode": 4, "webdl": 3, "web": 3, "webrip": 2, "hdtv": 1}
-
 // typeRank orders the types ("WEB-DL" = "WebDL"); unknown ones are lowest.
-func typeRank(t string) int {
-	return typeRanks[strings.Map(func(r rune) rune {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			return unicode.ToLower(r)
-		}
-		return -1
-	}, t)]
-}
+func typeRank(t string) int { return unit3d.TypeRank(t) }
 
 // hdrRank: Dolby Vision is worth more than the other formats.
 func hdrRank(hdr []string) int {

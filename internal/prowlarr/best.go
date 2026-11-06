@@ -15,8 +15,41 @@ import (
 )
 
 // MaxRank is the resolution past which a film is not searched: the user
-// who has it in 2160p already has the best there is.
+// who has it in a 2160p Remux (or Full Disc) already has the best there is.
 var MaxRank = unit3d.ResolutionRank("2160p")
+
+// Ranking is the version of the order that chose the stored releases: the
+// films searched with an older one are searched again first.
+// 1: type, then resolution (a 1080p Remux is better than a 2160p WEB-DL).
+const Ranking = 1
+
+// grade is what makes a release of a film better than another: its type
+// first (Remux > Encode > WEB-DL > WEBRip > HDTV), then its resolution.
+type grade struct{ typ, res string }
+
+func gradeOf(name, typ, resolution string) grade {
+	q := unit3d.QualityOf(name, typ, resolution, "")
+	return grade{q.Type, q.Resolution}
+}
+
+// typeTier is the rank of a type, a Full Disc counting as a Remux: same
+// video and audio, and the names on the indexers do not tell them apart.
+func typeTier(t string) int {
+	return min(unit3d.TypeRank(t), unit3d.TypeRank("Remux"))
+}
+
+// better reports whether g is better than h.
+func (g grade) better(h grade) bool {
+	if x, y := typeTier(g.typ), typeTier(h.typ); x != y {
+		return x > y
+	}
+	return unit3d.ResolutionRank(g.res) > unit3d.ResolutionRank(h.res)
+}
+
+// top reports whether nothing can be better than g.
+func (g grade) top() bool {
+	return typeTier(g.typ) >= typeTier("Remux") && unit3d.ResolutionRank(g.res) >= MaxRank
+}
 
 // An upscale is not a real release in that resolution.
 var upscaleRe = regexp.MustCompile(`(?i)upscal`)
@@ -103,7 +136,7 @@ type film struct {
 	imdb, tmdb int64
 	titles     map[string]bool
 	years      map[int]bool
-	mine       string // best resolution of the user's uploads
+	mine       grade // best of the user's uploads
 }
 
 // FilmKey identifies a film: by TMDB id, else by IMDb id; "" if neither.
@@ -115,10 +148,6 @@ func FilmKey(tmdbID, imdbID int64) string {
 		return "imdb:" + strconv.FormatInt(imdbID, 10)
 	}
 	return ""
-}
-
-func resolutionOf(name, resolution string) string {
-	return unit3d.QualityOf(name, "", resolution, "").Resolution
 }
 
 // films groups the user's uploads that are films by film.
@@ -148,8 +177,8 @@ func films(ups []store.TrackerUpload) []*film {
 		if y, err := strconv.Atoi(unit3d.Year(u.Name)); err == nil {
 			f.years[y] = true
 		}
-		if r := resolutionOf(u.Name, u.Resolution); unit3d.ResolutionRank(r) > unit3d.ResolutionRank(f.mine) {
-			f.mine = r
+		if g := gradeOf(u.Name, u.Type, u.Resolution); g.better(f.mine) {
+			f.mine = g
 		}
 	}
 	return out
@@ -172,22 +201,27 @@ func (f *film) matches(r Release) bool {
 	return err == nil && (f.years[y] || f.years[y-1] || f.years[y+1])
 }
 
-// best is the release of the film with the highest resolution (the most
-// seeded among them), and how many releases of the film were found.
+// best is the best release of the film with a known resolution (by type,
+// then resolution; the most seeded among the equal ones), and how many
+// releases of the film were found.
 func (f *film) best(found []Release) store.BestResolution {
-	b := store.BestResolution{Film: f.key}
+	b := store.BestResolution{Film: f.key, Ranking: Ranking}
+	var top grade
 	var seeders int64
 	for _, r := range found {
 		if !f.matches(r) || upscaleRe.MatchString(r.Title) {
 			continue
 		}
 		b.Results++
-		res := resolutionOf(r.Title, "")
-		x, y := unit3d.ResolutionRank(res), unit3d.ResolutionRank(b.Resolution)
-		if x == 0 || x < y || (x == y && r.Seeders <= seeders) {
+		g := gradeOf(r.Title, "", "")
+		if unit3d.ResolutionRank(g.res) == 0 {
 			continue
 		}
-		b.Resolution, b.Name, b.Indexer, b.URL, seeders = res, r.Title, r.Indexer, r.InfoURL, r.Seeders
+		if b.Resolution != "" && (top.better(g) || (!g.better(top) && r.Seeders <= seeders)) {
+			continue
+		}
+		top, seeders = g, r.Seeders
+		b.Resolution, b.Type, b.Name, b.Indexer, b.URL = g.res, g.typ, r.Title, r.Indexer, r.InfoURL
 	}
 	return b
 }
@@ -227,15 +261,26 @@ func (f *Finder) check(ctx context.Context) (string, error) {
 	now := f.now()
 	var due []*film
 	for _, fm := range films(ups) {
-		if unit3d.ResolutionRank(fm.mine) >= MaxRank {
+		if fm.mine.top() {
 			continue
 		}
 		p, ok := prev[fm.key]
-		if t, err := time.Parse(time.RFC3339, p.CheckedAt); !ok || err != nil || now.Sub(t) >= f.recheck {
+		if t, err := time.Parse(time.RFC3339, p.CheckedAt); !ok || err != nil || p.Ranking < Ranking || now.Sub(t) >= f.recheck {
 			due = append(due, fm)
 		}
 	}
-	sort.SliceStable(due, func(i, j int) bool { return prev[due[i].key].CheckedAt < prev[due[j].key].CheckedAt })
+	// Never searched first, then searched with an older ranking, then the
+	// oldest searches.
+	sort.SliceStable(due, func(i, j int) bool {
+		a, b := prev[due[i].key], prev[due[j].key]
+		if (a.CheckedAt == "") != (b.CheckedAt == "") {
+			return a.CheckedAt == ""
+		}
+		if (a.Ranking < Ranking) != (b.Ranking < Ranking) {
+			return a.Ranking < Ranking
+		}
+		return a.CheckedAt < b.CheckedAt
+	})
 	f.update(func(s *State) { s.Total = len(due) })
 	better := 0
 	for i, fm := range due {
@@ -248,7 +293,7 @@ func (f *Finder) check(ctx context.Context) (string, error) {
 		if err := f.store.SaveBestResolution(ctx, b); err != nil {
 			return summary(i, better), err
 		}
-		if unit3d.ResolutionRank(b.Resolution) > unit3d.ResolutionRank(fm.mine) {
+		if fm.found(b).better(fm.mine) {
 			better++
 		}
 		f.update(func(s *State) { s.Done = i + 1 })
@@ -257,45 +302,55 @@ func (f *Finder) check(ctx context.Context) (string, error) {
 }
 
 func summary(searched, better int) string {
-	return fmt.Sprintf("%d film cercati, %d in una risoluzione migliore della tua", searched, better)
+	return fmt.Sprintf("%d film cercati, %d in una versione migliore della tua", searched, better)
 }
 
-// Annotate gives the releases that are films the best resolution found
-// for them, and whether it is better than the best of the user's uploads
-// of the film still on the tracker. A film the user has in 2160p is not
-// searched: it gets its own resolution, with no CheckedAt.
+// found is the grade of the release found, none if nothing was.
+func (f *film) found(b store.BestResolution) grade {
+	if b.Resolution == "" {
+		return grade{}
+	}
+	return gradeOf(b.Name, "", b.Resolution)
+}
+
+// Annotate gives the releases that are films the best release found for
+// them, and whether it is better than the best of the user's uploads of
+// the film still on the tracker. A film the user has in a 2160p Remux is
+// not searched: it gets its own resolution and type, with no CheckedAt.
 func Annotate(releases []store.TrackerRelease, found map[string]store.BestResolution) {
 	var active []store.TrackerUpload
 	for _, r := range releases {
 		if r.RemovedAt == nil {
-			active = append(active, store.TrackerUpload{Name: r.Name, Category: r.Category, Resolution: r.Resolution,
+			active = append(active, store.TrackerUpload{Name: r.Name, Category: r.Category, Type: r.Type, Resolution: r.Resolution,
 				TmdbID: r.TmdbID, ImdbID: r.ImdbID, TvdbID: r.TvdbID})
 		}
 	}
-	mine := map[string]string{}
+	mine := map[string]*film{}
 	for _, fm := range films(active) {
-		mine[fm.key] = fm.mine
+		mine[fm.key] = fm
 	}
 	for i, r := range releases {
 		key := FilmKey(r.TmdbID, r.ImdbID)
 		if key == "" || !unit3d.IsMovie(r.Category, r.Name, r.TvdbID) {
 			continue
 		}
-		m, ok := mine[key]
+		fm, ok := mine[key]
 		if !ok {
 			// Every upload of the film was removed from the tracker.
-			m = resolutionOf(r.Name, r.Resolution)
+			fm = &film{key: key, mine: gradeOf(r.Name, r.Type, r.Resolution)}
 		}
 		b, ok := found[key]
 		switch {
 		case ok:
-		case unit3d.ResolutionRank(m) >= MaxRank:
+		case fm.mine.top():
 			b = store.BestResolution{Film: key}
 		default:
 			continue
 		}
-		b.Mine = m
-		b.Better = unit3d.ResolutionRank(b.Resolution) > unit3d.ResolutionRank(m)
+		g := fm.found(b)
+		b.Type = g.typ
+		b.Mine, b.MineType = fm.mine.res, fm.mine.typ
+		b.Better = g.better(fm.mine)
 		releases[i].Best = &b
 	}
 }

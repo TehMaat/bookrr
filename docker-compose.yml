@@ -20,6 +20,12 @@ services:
       # BOOKRR_S3_SCAN_INTERVAL: 1h
       # Tag che identifica le tue release
       # BOOKRR_RELEASE_TAG: Personal Release
+      # Log: un file al giorno in ./data/logs (pagina Log). Per quanti giorni
+      # tenerli (min 1d, 0 per sempre), dimensione massima di un file (0 senza
+      # limite) e livello minimo (debug, info, warn, error)
+      # BOOKRR_LOG_RETENTION: 30d
+      # BOOKRR_LOG_MAX_SIZE: 50MB
+      # BOOKRR_LOG_LEVEL: info
       # Token richiesto dal webhook (consigliato se bookrr è esposto)
       # BOOKRR_WEBHOOK_TOKEN: cambiami
       # Login opzionale per l'interfaccia web
@@ -37,8 +43,8 @@ services:
       # Chiave API MDBList (gratuita): con TMDB attiva le collezioni da seguire
       # (liste di film come l'MCU o i film Pixar, scheda Mancanti)
       # BOOKRR_MDBLIST_API_KEY: la-tua-chiave-mdblist
-      # Prowlarr: con il tracker UNIT3D cerca la risoluzione massima che esiste
-      # dei film caricati (scheda Release, colonna Max)
+      # Prowlarr: con il tracker UNIT3D cerca la versione migliore che esiste
+      # dei film caricati, per tipo e risoluzione (scheda Release, colonna Max)
       # BOOKRR_PROWLARR_URL: http://prowlarr:9696
       # BOOKRR_PROWLARR_API_KEY: la-tua-api-key-prowlarr
       # Ogni quanto cercare di nuovo ogni film (min 1d)

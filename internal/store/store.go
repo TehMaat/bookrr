@@ -307,6 +307,12 @@ CREATE TABLE best_resolutions (
 	checked_at TEXT NOT NULL
 );
 `,
+	`
+-- The order that chose the release of best_resolutions: 0 by resolution
+-- alone, 1 by type and then resolution. Films chosen with an older order
+-- are searched again first.
+ALTER TABLE best_resolutions ADD COLUMN ranking INTEGER NOT NULL DEFAULT 0;
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

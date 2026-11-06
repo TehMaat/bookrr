@@ -19,8 +19,9 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate (e puoi togliere loro il flag, anche su qBittorrent).
 - 🚀 **Storico release**: tutti i torrent che hai caricato sul tracker UNIT3D (anche anonimi), con seeder, leecher e completati, collegati al torrent di bookrr corrispondente e al suo stato (su client, archiviato, adottato); le release che bookrr non conosce si aggiungono con un clic, e le tue Personal Release sparite dal tracker vengono evidenziate.
 - 🧩 **Stagioni mancanti**: per ogni serie TV di cui hai caricato almeno un season pack, una griglia delle stagioni per ognuna delle tue qualità (tipo, risoluzione, HDR, lingue audio): quali sono tue, quali ha già caricato qualcun altro nella stessa qualità, quali esistono solo in un'altra qualità e quali mancano del tutto dal tracker. Lo stesso per le **saghe di film**: per ogni film caricato che fa parte di una saga, gli altri film della saga nella stessa qualità. E per le **collezioni** che segui (liste di film su MDBList: l'MCU, i film Pixar, i classici Disney), anche se non ne hai caricato nessuno. Vista **per stagione / per film** con la versione migliore di ognuna contro una **qualità minima** (es. «almeno Remux»), saghe e qualità **nascondibili**, saghe **segnate complete**, release di altri **accettate**, parti **ignorate** e **gruppi bannati** (le loro release non bastano: la parte resta mancante, in rosa e con meno priorità). Controllo ogni notte, stagioni e saghe da TMDB.
-- 📺 **Risoluzione massima dei film**: con [Prowlarr](https://prowlarr.com), per ogni film che hai caricato bookrr cerca su tutti i tuoi indexer la risoluzione migliore che esiste (in qualsiasi lingua) e ti segnala i film che esistono in 2160p mentre tu li hai in 1080p, da rifare con un mux.
+- 📺 **Risoluzione massima dei film**: con [Prowlarr](https://prowlarr.com), per ogni film che hai caricato bookrr cerca su tutti i tuoi indexer la versione migliore che esiste (in qualsiasi lingua: prima il tipo, poi la risoluzione) e ti segnala i film che esistono in una versione migliore della tua (es. in 2160p Remux mentre tu li hai in 1080p Remux), da rifare con un mux.
 - 📦 **Archiviabili**: le tue release ancora su un client che altri stanno già seminando (soglie di seeder, completati e giorni scelte nelle impostazioni), da togliere dai client e archiviare.
+- 📜 **Log**: la pagina **Log** mostra cosa sta facendo bookrr e cosa ha fatto nei giorni passati (sync dei client, tracker, controlli, errori), con filtri, ricerca e aggiornamento automatico; i log restano in un file al giorno nella cartella dati, anche dopo riavvii e aggiornamenti del container.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
 Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro e **colore a scelta** (icona 🎨 in alto a destra): il logo, l'icona della scheda e il colore dei pulsanti seguono il colore della spada laser che scegli. La scelta viene ricordata dal browser.
@@ -61,7 +62,7 @@ La versione in uso è mostrata accanto al nome, in alto. Ogni versione è pubbli
 
 Le opzioni si impostano dalle **Impostazioni** dell'interfaccia (icona ⚙️ in basso a sinistra) oppure come variabili d'ambiente (vedi `docker-compose.yml`):
 
-- dalle Impostazioni, schede **Generale**, **Tracker**, **Mancanti** e **Prowlarr**: tag delle release, intervalli, tracker UNIT3D, TMDB, MDBList, Prowlarr. Si applicano **subito, senza riavviare**: bookrr riavvia solo le letture e i controlli le cui opzioni sono cambiate. Ogni scheda ha un pulsante **Prova** per verificare indirizzo e chiave prima di salvare. Le chiavi non tornano mai al browser: il campo dice solo se è impostata (lascialo vuoto per non cambiarla, ✕ per toglierla);
+- dalle Impostazioni, schede **Generale**, **Tracker**, **Mancanti** e **Prowlarr**: tag delle release, intervalli, log, tracker UNIT3D, TMDB, MDBList, Prowlarr. Si applicano **subito, senza riavviare**: bookrr riavvia solo le letture e i controlli le cui opzioni sono cambiate. Ogni scheda ha un pulsante **Prova** per verificare indirizzo e chiave prima di salvare. Le chiavi non tornano mai al browser: il campo dice solo se è impostata (lascialo vuoto per non cambiarla, ✕ per toglierla);
 - una variabile d'ambiente impostata **ha la precedenza**: nelle Impostazioni l'opzione compare bloccata con il suo valore (le chiavi restano nascoste). Per gestirla dall'interfaccia toglila dal `docker-compose.yml`;
 - `BOOKRR_LISTEN`, `BOOKRR_DATA_DIR`, `BOOKRR_AUTH_USER` / `BOOKRR_AUTH_PASSWORD` e `BOOKRR_WEBHOOK_TOKEN` si impostano **solo** come variabili d'ambiente: servono prima di aprire il database, o proteggono l'interfaccia stessa.
 
@@ -81,9 +82,12 @@ API: `GET /api/config` (le opzioni, senza le chiavi), `PUT /api/config` con `{"v
 | `BOOKRR_PROWLARR_RECHECK` | `7d` | Ogni quanto cercare di nuovo ogni film su Prowlarr (minimo `1d`; anche in ore, es. `36h`). |
 | `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno delle stagioni e dei film mancanti (ora locale, `TZ`). |
 | `BOOKRR_S3_SCAN_INTERVAL` | `1h` | Ogni quanto leggere i bucket S3 degli archivi cloud (minimo `1m`). |
+| `BOOKRR_LOG_RETENTION` | `30d` | Per quanti giorni tenere i file di log in `logs/` nella cartella dati (oggi compreso; minimo `1d`, `0` = per sempre). |
+| `BOOKRR_LOG_MAX_SIZE` | `50MB` | Dimensione massima di un file di log: oltre, il giorno prosegue in `bookrr-AAAA-MM-GG.2.log` (minimo `1MB`, `0` = senza limite). |
+| `BOOKRR_LOG_LEVEL` | `info` | Livello minimo dei messaggi scritti, sullo stderr e nei file: `debug`, `info`, `warn` o `error`. |
 | `BOOKRR_LISTEN` | `:8080` | Indirizzo di ascolto. |
-| `BOOKRR_DATA_DIR` | `/data` | Cartella del database. |
-| `TZ` | — | Fuso orario dei log (es. `Europe/Rome`). |
+| `BOOKRR_DATA_DIR` | `/data` | Cartella del database e dei log (`logs/`). |
+| `TZ` | — | Fuso orario dei log e del cambio di file a mezzanotte (es. `Europe/Rome`). |
 
 > Le password dei client qBittorrent, le chiavi dei bucket S3 e le chiavi impostate dalle Impostazioni (tracker, TMDB, MDBList, Prowlarr) sono salvate in chiaro nel database in `./data`: proteggi quella cartella.
 
@@ -249,18 +253,18 @@ API: `GET /api/releases`, `POST /api/releases/sync` (aggiorna ora), `POST /api/r
 
 ### Risoluzione massima dei film
 
-Con `BOOKRR_PROWLARR_URL` e `BOOKRR_PROWLARR_API_KEY` (e il tracker UNIT3D, da cui vengono i film), la scheda **Release** ha la colonna **Max**: la risoluzione migliore che esiste di ogni film che hai caricato, **in qualsiasi lingua** (l'audio italiano lo aggiungi tu con un mux). Mostra:
+Con `BOOKRR_PROWLARR_URL` e `BOOKRR_PROWLARR_API_KEY` (e il tracker UNIT3D, da cui vengono i film), la scheda **Release** ha la colonna **Max**: la versione migliore che esiste di ogni film che hai caricato, **in qualsiasi lingua** (l'audio italiano lo aggiungi tu con un mux). «Migliore» vuol dire prima il **tipo** (Remux > Encode > WEB-DL > WEBRip > HDTV; un Full Disc conta come un Remux), poi la **risoluzione**: un 1080p Remux è migliore di un 2160p WEB-DL. Mostra:
 
-- **↑ 2160p** (in giallo): il film esiste in una risoluzione migliore della tua migliore release di quel film; il tooltip dice quale release e su quale indexer, e cliccando si apre la sua pagina. La casella **Migliorabili** in alto filtra questi film;
-- **✓**: hai già la risoluzione migliore che esiste (i film che hai già in 2160p non vengono cercati);
+- **↑ 2160p Remux** (in giallo): il film esiste in una versione migliore della tua migliore release di quel film (un tipo migliore, o lo stesso tipo in una risoluzione più alta); il tooltip dice quale release e su quale indexer, e cliccando si apre la sua pagina. La casella **Migliorabili** in alto filtra questi film;
+- **✓**: hai già la versione migliore che esiste (i film che hai già in 2160p Remux o Full Disc non vengono cercati);
 - **Non trovata**: Prowlarr non ha trovato release del film con una risoluzione nota;
 - **—**: non è un film (le serie non vengono cercate) o non è ancora stato cercato.
 
 Come funziona:
 
-1. una volta al giorno (la prima 15 minuti dopo l'avvio) bookrr prende i tuoi upload sul tracker che sono **film** con un id TMDB o IMDb, tranne quelli che hai già in 2160p, e cerca quelli mai cercati o cercati più di `BOOKRR_PROWLARR_RECHECK` fa (7 giorni);
+1. una volta al giorno (la prima 15 minuti dopo l'avvio) bookrr prende i tuoi upload sul tracker che sono **film** con un id TMDB o IMDb, tranne quelli che hai già in 2160p Remux o Full Disc, e cerca quelli mai cercati o cercati più di `BOOKRR_PROWLARR_RECHECK` fa (7 giorni);
 2. per ogni film chiede a Prowlarr `GET /api/v1/search?type=movie&query={ImdbId:tt…}{TmdbId:…}` nella categoria Film (2000): Prowlarr lo cerca su **tutti i tuoi indexer**. Le ricerche sono lente apposta: una alla volta, con 30 secondi di pausa tra una e l'altra, per non pesare sui tracker (i limiti di richieste che hai impostato in Prowlarr per ogni indexer valgono comunque);
-3. dei risultati contano solo quelli del film: con lo stesso id TMDB o IMDb oppure, se l'indexer non li indica, con lo stesso titolo e anno (±1) di una tua release. Gli **upscale** non contano. La risoluzione è letta dal nome della release; vince la più alta, a parità la più seminata.
+3. dei risultati contano solo quelli del film: con lo stesso id TMDB o IMDb oppure, se l'indexer non li indica, con lo stesso titolo e anno (±1) di una tua release. Gli **upscale** non contano. Tipo e risoluzione sono letti dal nome della release (`REMUX`, `WEB-DL`, `WEBRip`, `BluRay` = Encode, `HDTV`); vince il tipo migliore, poi la risoluzione più alta, a parità la più seminata. I tuoi film sono confrontati col tipo che indica il tracker.
 
 Se Prowlarr non risponde o rifiuta la chiave, la ricerca si ferma (l'errore compare in cima alla scheda) e i film rimasti vengono cercati il giorno dopo.
 
@@ -373,9 +377,23 @@ Nella lista **Torrent** la colonna **Archiviabile** mostra *Sì · da N giorni* 
 
 API: `GET`/`PUT /api/settings` con `archiveMinSeeders`, `archiveMinCompleted`, `archiveDays` (le opzioni non inviate restano invariate); ogni torrent e ogni release hanno il campo `archivable` (`null` se non su un client), con `neverArchive` per quelli da non archiviare. `POST /api/torrents/never-archive` con `{"hashes": ["…"], "never": true}` li segna da non archiviare (`false` annulla) e risponde `{"updated": N}`.
 
+### Log
+
+Ogni messaggio di bookrr va sullo stderr del container (`docker logs bookrr`, come sempre) e nel **file del giorno** nella cartella dati: `./data/logs/bookrr-AAAA-MM-GG.log` (data locale, vedi `TZ`), così resta dopo i riavvii e gli aggiornamenti del container. I file sono in formato [JSON Lines](https://jsonlines.org): una riga per messaggio con data e ora, livello (`DEBUG`, `INFO`, `WARN`, `ERROR`), messaggio e attributi (`err`, `client`, `hash`…), leggibili anche da fuori:
+
+```bash
+tail -f data/logs/bookrr-$(date +%F).log | jq -c '{time, level, msg}'
+```
+
+A mezzanotte bookrr passa al file nuovo; se un file supera `BOOKRR_LOG_MAX_SIZE` il giorno prosegue in `bookrr-AAAA-MM-GG.2.log`, `.3.log`… All'avvio e a ogni cambio di giorno cancella i file più vecchi di `BOOKRR_LOG_RETENTION` (30 giorni). Retention, dimensione e livello si cambiano anche dalle Impostazioni → **Generale** e si applicano subito. I messaggi scritti prima che la cartella dati sia pronta (errori di configurazione o della cartella stessa) vanno solo sullo stderr. Le chiavi API e le password non finiscono nei log.
+
+La pagina **Log** mostra i messaggi di un giorno (di default oggi), dal più recente: ora, livello, messaggio e attributi, con il filtro su ogni colonna, il **livello minimo** e la **ricerca** nel testo (fatti dal server, su tutto il file). Sul giorno corrente la pagina si aggiorna da sola ogni 5 secondi con le righe nuove (pulsante **Pausa** per fermarla); **Scarica** scarica il file del giorno così com'è. Se un giorno ha più di 5000 messaggi che corrispondono alla ricerca, la pagina mostra gli ultimi.
+
+API: `GET /api/logs/files` (i file: nome, giorno, dimensione), `GET /api/logs?day=AAAA-MM-GG&level=warn&q=testo` (le righe del giorno, filtrate; risponde con `next`: con `&after=<next>` legge solo le righe aggiunte da allora), `GET /api/logs/files/{nome}` (scarica il file). Sono protette dallo stesso login delle altre API.
+
 ## API
 
-Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/releases`, `/api/missing`, `/api/sync`, …). Vedi `internal/api/server.go`.
+Tutto ciò che fa l'interfaccia è disponibile via REST (`/api/torrents`, `/api/disks`, `/api/adopters`, `/api/clients`, `/api/alerts`, `/api/releases`, `/api/missing`, `/api/logs`, `/api/sync`, …). Vedi `internal/api/server.go`.
 
 ## Sviluppo
 

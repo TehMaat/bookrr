@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -39,7 +40,16 @@ type Config struct {
 	ProwlarrURL     string
 	ProwlarrAPIKey  string
 	ProwlarrRecheck time.Duration
+	// The log files in the data folder: how many days to keep them (0 =
+	// forever), the size past which a day goes on in a new file (0 = no
+	// limit) and the minimum level written.
+	LogRetentionDays int
+	LogMaxSize       int64
+	LogLevel         slog.Level
 }
+
+// LogDir is the folder of the log files.
+func (c Config) LogDir() string { return filepath.Join(c.DataDir, "logs") }
 
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "bookrr.db") }
 
@@ -103,6 +113,23 @@ func Resolve(stored map[string]string) (Config, error) {
 		return c, fmt.Errorf("BOOKRR_PROWLARR_RECHECK %q non valido (es. 7d o 36h): %w", interval, err)
 	}
 	c.ProwlarrRecheck = max(d, 24*time.Hour)
+	retention := env("BOOKRR_LOG_RETENTION", "30d")
+	if d, err = days(retention); err != nil || d < 0 {
+		return c, fmt.Errorf("BOOKRR_LOG_RETENTION %q non valido (es. 30d, 0 per sempre)", retention)
+	}
+	// Whole days, at least one.
+	c.LogRetentionDays = int((d + 24*time.Hour - 1) / (24 * time.Hour))
+	size := env("BOOKRR_LOG_MAX_SIZE", "50MB")
+	if c.LogMaxSize, err = bytesize(size); err != nil {
+		return c, fmt.Errorf("BOOKRR_LOG_MAX_SIZE %q non valido (es. 50MB, 0 senza limite)", size)
+	}
+	if c.LogMaxSize > 0 {
+		c.LogMaxSize = max(c.LogMaxSize, 1<<20)
+	}
+	level := env("BOOKRR_LOG_LEVEL", "info")
+	if err := c.LogLevel.UnmarshalText([]byte(strings.TrimSpace(level))); err != nil {
+		return c, fmt.Errorf("BOOKRR_LOG_LEVEL %q non valido (debug, info, warn o error)", level)
+	}
 	at := env("BOOKRR_MISSING_CHECK_AT", "04:00")
 	t, err := time.Parse("15:04", at)
 	if err != nil {
@@ -129,6 +156,27 @@ func Resolve(stored map[string]string) (Config, error) {
 		}
 	}
 	return c, nil
+}
+
+// bytesize reads a size in bytes, also with a unit ("50MB", "1GB", "512KB";
+// powers of 1024).
+func bytesize(s string) (int64, error) {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	mult := int64(1)
+	for _, u := range []struct {
+		suffix string
+		n      int64
+	}{{"GB", 1 << 30}, {"MB", 1 << 20}, {"KB", 1 << 10}, {"G", 1 << 30}, {"M", 1 << 20}, {"K", 1 << 10}, {"B", 1}} {
+		if n, ok := strings.CutSuffix(s, u.suffix); ok {
+			s, mult = strings.TrimSpace(n), u.n
+			break
+		}
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || v < 0 {
+		return 0, fmt.Errorf("dimensione %q non valida", s)
+	}
+	return int64(v * float64(mult)), nil
 }
 
 // days reads a duration that may also be in days ("7d").

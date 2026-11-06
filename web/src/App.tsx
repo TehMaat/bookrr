@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, Server, Skull } from "lucide-react"
+import { BellRing, CloudUpload, HandHeart, HardDrive, ListTree, Puzzle, ScrollText, Server, Skull } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -7,6 +7,7 @@ import { AlertsPage } from "@/components/alerts-page"
 import { ClientsPage } from "@/components/clients-page"
 import { DisksPage } from "@/components/disks-page"
 import { Header } from "@/components/header"
+import { LogsPage } from "@/components/logs-page"
 import { MissingPage, type MissingView } from "@/components/missing-page"
 import { NavbarSlot } from "@/components/navbar-stats"
 import { ReleasesPage } from "@/components/releases-page"
@@ -17,7 +18,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
 
-const tabs = ["torrents", "releases", "dead", "missing", "alerts", "disks", "adopters", "clients"] as const
+const tabs = ["torrents", "releases", "dead", "missing", "alerts", "disks", "adopters", "clients", "logs"] as const
 type Tab = (typeof tabs)[number]
 
 type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
@@ -63,6 +64,7 @@ export default function App() {
     { id: "disks", label: "Dischi", icon: HardDrive },
     { id: "adopters", label: "Adottatori", icon: HandHeart },
     { id: "clients", label: "Client", icon: Server },
+    { id: "logs", label: "Log", icon: ScrollText },
   ]
   const current = nav.find((n) => n.id === tab)!
   const sidebar = (
@@ -110,6 +112,7 @@ export default function App() {
             )}
             {tab === "adopters" && <AdoptersPage onResolve={resolveOne} />}
             {tab === "clients" && <ClientsPage />}
+            {tab === "logs" && <LogsPage />}
           </main>
         </NavbarSlot.Provider>
       </div>

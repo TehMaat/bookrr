@@ -25,6 +25,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/bucket"
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/gaps"
+	"github.com/tehmaat/bookrr/internal/logs"
 	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/qbit"
 	"github.com/tehmaat/bookrr/internal/smart"
@@ -52,6 +53,8 @@ type Server struct {
 	// Reconfigure starts again, with cfg, the services whose options
 	// changed; nil when they cannot be (the tests).
 	Reconfigure func(cfg config.Config) Services
+	// The log files; nil when they are not written.
+	Logs *logs.Writer
 
 	mu     sync.RWMutex
 	svc    Services
@@ -137,6 +140,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/config/test", s.testConfig)
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	mux.HandleFunc("PUT /api/settings", s.saveSettings)
+
+	mux.HandleFunc("GET /api/logs", s.readLogs)
+	mux.HandleFunc("GET /api/logs/files", s.logFiles)
+	mux.HandleFunc("GET /api/logs/files/{name}", s.downloadLog)
 
 	mux.HandleFunc("GET /api/sync", s.syncState)
 	mux.HandleFunc("POST /api/sync", s.syncNow)

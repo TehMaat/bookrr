@@ -18,6 +18,7 @@ export const keys = {
   missingSeries: ["missing-series"] as const,
   missingSagas: ["missing-sagas"] as const,
   missingLists: ["missing-lists"] as const,
+  logFiles: ["log-files"] as const,
 }
 
 export const useTorrents = () => useQuery({ queryKey: keys.torrents, queryFn: api.torrents, refetchInterval: 30_000 })
@@ -56,6 +57,7 @@ export const useMissingLists = () =>
     queryFn: api.missingLists,
     refetchInterval: (q) => (q.state.data?.state?.running ? 3_000 : 60_000),
   })
+export const useLogFiles = () => useQuery({ queryKey: keys.logFiles, queryFn: api.logFiles, refetchInterval: 60_000 })
 export const useSyncState = () => useQuery({ queryKey: keys.sync, queryFn: api.syncState, refetchInterval: 5_000 })
 
 /** Invalidates every query: data in bookrr is small and highly interrelated. */

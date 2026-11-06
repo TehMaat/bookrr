@@ -203,6 +203,14 @@ func ResolutionRank(r string) int {
 	return n
 }
 
+// typeRanks orders the types of release, best first: Full Disc, Remux,
+// Encode, WEB-DL, WEBRip, HDTV.
+var typeRanks = map[string]int{"fulldisc": 6, "remux": 5, "encode": 4, "webdl": 3, "web": 3, "webrip": 2, "hdtv": 1}
+
+// TypeRank orders the types of release ("WEB-DL" = "WebDL"); an unknown
+// one is 0.
+func TypeRank(t string) int { return typeRanks[typeKey(t)] }
+
 // ReleaseGroup is the group that made a release, after the last "-" of its
 // name, as the name writes it ("…H.265-MaTiTa" → "MaTiTa"); "" if none.
 func ReleaseGroup(name string) string {
