@@ -1,7 +1,7 @@
 import type { ArchiveInput, TorrentInput } from "@/lib/api"
 import { parseBytes } from "@/lib/format"
 
-/** A hand-entered torrent as typed in the "Aggiungi" form or read from an import file. */
+/** A hand-entered torrent as typed in the "Add" form or read from an import file. */
 export type ManualFields = {
   name: string
   hash: string

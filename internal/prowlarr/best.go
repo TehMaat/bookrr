@@ -273,9 +273,9 @@ func (f *Finder) Check(ctx context.Context) {
 	})
 	switch {
 	case err != nil && ctx.Err() == nil:
-		slog.Warn("risoluzione massima con Prowlarr", "err", err)
+		slog.Warn("max resolution with Prowlarr", "err", err)
 	case err == nil:
-		slog.Info("risoluzione massima con Prowlarr", "result", res)
+		slog.Info("max resolution with Prowlarr", "result", res)
 	}
 }
 
@@ -359,9 +359,9 @@ func (f *Finder) search(ctx context.Context, fm *film) (store.BestResolution, er
 }
 
 func summary(searched, better, planned int) string {
-	s := fmt.Sprintf("%d film cercati, %d in una versione migliore della tua", searched, better)
+	s := fmt.Sprintf("%d films searched, %d in a better version than yours", searched, better)
 	if planned > 0 {
-		s += fmt.Sprintf(", %d del piano release", planned)
+		s += fmt.Sprintf(", %d of the release plan", planned)
 	}
 	return s
 }
@@ -388,7 +388,7 @@ func (f *Finder) SearchPlan(ctx context.Context, entries ...store.PlanEntry) err
 	for i, fm := range fms {
 		if _, err := f.search(ctx, fm); err != nil {
 			if ctx.Err() == nil {
-				slog.Warn("ricerca su Prowlarr dei film del piano", "film", entries[i].Title, "err", err)
+				slog.Warn("Prowlarr search of the plan films", "film", entries[i].Title, "err", err)
 			}
 			return err
 		}

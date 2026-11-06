@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var ErrNotFound = errors.New("lista non trovata su MDBList")
+var ErrNotFound = errors.New("list not found on MDBList")
 
 type Client struct {
 	// BaseURL is the API root, replaced by the tests.
@@ -54,7 +54,7 @@ func ParseURL(s string) (string, error) {
 	if strings.Contains(p, "://") {
 		u, err := url.Parse(p)
 		if err != nil || !strings.HasSuffix(strings.ToLower(u.Hostname()), "mdblist.com") {
-			return "", fmt.Errorf("%q non è l'indirizzo di una lista di MDBList", s)
+			return "", fmt.Errorf("%q is not the address of an MDBList list", s)
 		}
 		p = u.Path
 	}
@@ -62,7 +62,7 @@ func ParseURL(s string) (string, error) {
 	p = strings.TrimPrefix(p, "lists/")
 	p = strings.TrimSuffix(p, "/json")
 	if !pathRe.MatchString(p) || strings.HasPrefix(p, "official/") {
-		return "", fmt.Errorf("%q non è l'indirizzo di una lista di MDBList (es. https://mdblist.com/lists/utente/nome-lista)", s)
+		return "", fmt.Errorf("%q is not the address of an MDBList list (e.g. https://mdblist.com/lists/user/list-name)", s)
 	}
 	return p, nil
 }
@@ -118,7 +118,7 @@ func (c *Client) List(ctx context.Context, path string) (List, error) {
 	}
 	var l List
 	if err := json.Unmarshal(raw, &l); err != nil {
-		return List{}, fmt.Errorf("risposta di MDBList non valida: %w", err)
+		return List{}, fmt.Errorf("invalid MDBList response: %w", err)
 	}
 	return l, nil
 }
@@ -155,7 +155,7 @@ func (c *Client) Items(ctx context.Context, path string) ([]Item, error) {
 	var out []Item
 	for page := 0; ; page++ {
 		if page >= maxPages {
-			return nil, fmt.Errorf("lista troppo lunga (oltre %d film)", maxPages*pageSize)
+			return nil, fmt.Errorf("list too long (over %d films)", maxPages*pageSize)
 		}
 		var raw json.RawMessage
 		h, err := c.get(ctx, itemsPath, url.Values{"limit": {strconv.Itoa(pageSize)}, "offset": {strconv.Itoa(len(out))}}, &raw)
@@ -197,7 +197,7 @@ func parseItems(raw json.RawMessage) ([]Item, error) {
 		Items  []Item `json:"items"`
 	}
 	if err := json.Unmarshal(raw, &res); err != nil {
-		return nil, fmt.Errorf("risposta di MDBList non valida: %w", err)
+		return nil, fmt.Errorf("invalid MDBList response: %w", err)
 	}
 	if len(res.Movies) == 0 {
 		return res.Items, nil
@@ -241,16 +241,16 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) (h
 	_ = json.Unmarshal(body, &fail)
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return nil, errors.New("limite di richieste di MDBList raggiunto: riprova più tardi")
+		return nil, errors.New("MDBList rate limit reached: try again later")
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, ErrNotFound
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, errors.New("MDBList ha rifiutato la chiave: controlla BOOKRR_MDBLIST_API_KEY")
+		return nil, errors.New("MDBList rejected the key: check BOOKRR_MDBLIST_API_KEY")
 	case resp.StatusCode != http.StatusOK:
 		if fail.Error != "" {
-			return nil, fmt.Errorf("MDBList ha risposto HTTP %d: %s", resp.StatusCode, fail.Error)
+			return nil, fmt.Errorf("MDBList answered HTTP %d: %s", resp.StatusCode, fail.Error)
 		}
-		return nil, fmt.Errorf("MDBList ha risposto HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("MDBList answered HTTP %d", resp.StatusCode)
 	case fail.Response != nil && !*fail.Response:
 		if strings.Contains(strings.ToLower(fail.Error), "not found") {
 			return nil, ErrNotFound
@@ -258,7 +258,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) (h
 		return nil, fmt.Errorf("MDBList: %s", fail.Error)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return nil, fmt.Errorf("risposta di MDBList non valida: %w", err)
+		return nil, fmt.Errorf("invalid MDBList response: %w", err)
 	}
 	return resp.Header, nil
 }

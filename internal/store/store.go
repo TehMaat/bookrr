@@ -13,7 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var ErrNotFound = errors.New("non trovato")
+var ErrNotFound = errors.New("not found")
 
 type Store struct {
 	db *sql.DB
@@ -335,6 +335,16 @@ CREATE TABLE release_plan (
 	done_at TEXT
 );
 `,
+	// The interface went from Italian to English: so did the disk kinds and the texts bookrr saved on the alerts.
+	`
+UPDATE disks SET kind = 'Tape' WHERE kind = 'Nastro';
+UPDATE disks SET kind = 'Other' WHERE kind = 'Altro';
+UPDATE alerts SET message = 'Removed from the client' WHERE message = 'Rimosso dal client';
+UPDATE alerts SET message = 'Removed from ' || substr(message, 12) WHERE message LIKE 'Rimosso da %';
+UPDATE alerts SET resolution = replace(replace(replace(replace(resolution,
+	'Spostato su archivio', 'Moved to archive'), 'Spostato su ', 'Moved to '), 'Adottato da ', 'Adopted by '),
+	'Eliminato definitivamente', 'Permanently deleted');
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files
@@ -355,7 +365,7 @@ func (s *Store) compact(ctx context.Context) error {
 	if err := s.db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&size); err != nil {
 		return err
 	}
-	slog.Info("compattazione del database", "MB", pages*size>>20, "liberiMB", free*size>>20)
+	slog.Info("database compaction", "MB", pages*size>>20, "freeMB", free*size>>20)
 	if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
 		return err
 	}
@@ -381,7 +391,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("migrazione %d: %w", i+1, err)
+			return fmt.Errorf("migration %d: %w", i+1, err)
 		}
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
 			tx.Rollback()
@@ -393,7 +403,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	if err := s.compact(ctx); err != nil {
 		// Only space is lost, the data is all there: no reason to stop.
-		slog.Warn("compattazione del database", "err", err)
+		slog.Warn("database compaction", "err", err)
 	}
 	return nil
 }

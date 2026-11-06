@@ -15,10 +15,10 @@ import { cn } from "@/lib/utils"
 type Kind = "disk" | "adopted" | "deleted" | "other"
 
 const kinds: { value: Kind; label: string; icon: React.ElementType }[] = [
-  { value: "disk", label: "Spostato su disco", icon: Archive },
-  { value: "adopted", label: "Adottato da qualcuno", icon: HandHeart },
-  { value: "deleted", label: "Eliminato", icon: Trash2 },
-  { value: "other", label: "Altro", icon: MessageSquareText },
+  { value: "disk", label: "Moved to a disk", icon: Archive },
+  { value: "adopted", label: "Adopted by someone", icon: HandHeart },
+  { value: "deleted", label: "Deleted", icon: Trash2 },
+  { value: "other", label: "Other", icon: MessageSquareText },
 ]
 
 /** Asks where the torrents of one or more alerts went; `alerts` empty means closed. */
@@ -45,7 +45,7 @@ export function ResolveDialog({ alerts, onClose }: { alerts: Alert[]; onClose: (
   const resolve = useAction(
     (r: ResolveInput) =>
       alerts.length === 1 ? api.resolveAlert(alerts[0].id, r) : api.resolveAlerts(alerts.map((a) => a.id), r),
-    alerts.length === 1 ? "Posizione registrata" : `Posizione registrata per ${alerts.length} release`
+    alerts.length === 1 ? "Location saved" : `Location saved for ${alerts.length} releases`
   )
 
   const disk = disks.data?.find((d) => d.id === archive.diskId)
@@ -62,13 +62,13 @@ export function ResolveDialog({ alerts, onClose }: { alerts: Alert[]; onClose: (
     const r: ResolveInput = { resolution: "" }
     if (kind === "disk") {
       r.archive = archive
-      parts.push(`Spostato su ${disk ? `${disk.label}${disk.serial ? ` (SN ${disk.serial})` : ""}` : "archivio"}${archive.path ? ` · ${archive.path}` : ""}`)
+      parts.push(`Moved to ${disk ? `${disk.label}${disk.serial ? ` (SN ${disk.serial})` : ""}` : "archive"}${archive.path ? ` · ${archive.path}` : ""}`)
     }
     if ((kind === "disk" || kind === "adopted") && adopter) {
       r.adoption = { adopterId: adopter.id, notes: "" }
-      parts.push(`Adottato da ${adopter.name}`)
+      parts.push(`Adopted by ${adopter.name}`)
     }
-    if (kind === "deleted") parts.push("Eliminato definitivamente")
+    if (kind === "deleted") parts.push("Permanently deleted")
     if (note.trim()) parts.push(note.trim())
     r.resolution = parts.join(" — ")
     resolve.mutate(r, { onSuccess: onClose })
@@ -79,17 +79,17 @@ export function ResolveDialog({ alerts, onClose }: { alerts: Alert[]; onClose: (
       <DialogContent className="sm:max-w-xl">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>{alert ? "Dove è stato spostato?" : `Dove sono state spostate ${alerts.length} release?`}</DialogTitle>
+            <DialogTitle>{alert ? "Where was it moved?" : `Where were ${alerts.length} releases moved?`}</DialogTitle>
             {alert ? (
               <DialogDescription className="break-all">
                 <span className="text-foreground font-medium">{alert.torrentName}</span>
                 <br />
-                {alert.message} · {formatDate(alert.createdAt)} · via {alert.source === "s3" ? "lettura del bucket" : alert.source === "webhook" ? "webhook" : "sincronizzazione"}
+                {alert.message} · {formatDate(alert.createdAt)} · via {alert.source === "s3" ? "bucket read" : alert.source === "webhook" ? "webhook" : "sync"}
               </DialogDescription>
             ) : (
               <DialogDescription asChild>
                 <div>
-                  La stessa posizione verrà registrata per tutte:
+                  The same location will be saved for all of them:
                   <ul className="mt-1.5 max-h-32 overflow-y-auto rounded-md border px-3 py-1.5">
                     {alerts.map((a) => (
                       <li key={a.id} className="text-foreground truncate text-xs font-medium" title={a.torrentName}>
@@ -123,22 +123,22 @@ export function ResolveDialog({ alerts, onClose }: { alerts: Alert[]; onClose: (
 
           {(kind === "disk" || kind === "adopted") && (
             <div className="grid gap-2">
-              <Label htmlFor="adopted-by">{kind === "adopted" ? "Chi l'ha adottato? *" : "Adottato anche da (opzionale)"}</Label>
+              <Label htmlFor="adopted-by">{kind === "adopted" ? "Who adopted it? *" : "Also adopted by (optional)"}</Label>
               <AdopterSelect id="adopted-by" value={adopterId} onChange={setAdopterId} />
             </div>
           )}
 
           <div className="grid gap-2">
-            <Label htmlFor="resolve-note">{kind === "other" ? "Cosa è successo? *" : "Note"}</Label>
+            <Label htmlFor="resolve-note">{kind === "other" ? "What happened? *" : "Notes"}</Label>
             <Textarea id="resolve-note" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Più tardi
+              Later
             </Button>
             <Button type="submit" disabled={!valid || resolve.isPending}>
-              Conferma
+              Confirm
             </Button>
           </DialogFooter>
         </form>

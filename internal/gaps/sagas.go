@@ -25,7 +25,7 @@ type movieUpload struct {
 
 // errNoCollectionFilter means the tracker answered the search by saga with
 // torrents of other films: it does not know the filter.
-var errNoCollectionFilter = errors.New("il tracker non filtra per saga")
+var errNoCollectionFilter = errors.New("the tracker does not filter by saga")
 
 // checkSagas finds, for every saga (TMDB collection) the user uploaded at
 // least a film of, which films are missing in each quality they uploaded
@@ -61,10 +61,10 @@ func (c *Checker) checkSagas(ctx context.Context) (string, error) {
 		switch {
 		case errors.Is(err, tmdb.ErrNotFound):
 			for _, u := range byMovie[id] {
-				addUnknown("tmdb:"+strconv.FormatInt(id, 10), displayTitle(u.Name), fmt.Sprintf("film con id TMDB %d non trovato su TMDB", id), u)
+				addUnknown("tmdb:"+strconv.FormatInt(id, 10), displayTitle(u.Name), fmt.Sprintf("film with TMDB id %d not found on TMDB", id), u)
 			}
 		case err != nil:
-			return "", fmt.Errorf("film %d su TMDB: %w", id, err)
+			return "", fmt.Errorf("film %d on TMDB: %w", id, err)
 		case m.Collection != nil && m.Collection.ID != 0:
 			if m.ID == 0 {
 				m.ID = id
@@ -94,12 +94,12 @@ func (c *Checker) checkSagas(ctx context.Context) (string, error) {
 		return "", err
 	}
 	sagas := len(groups) - unver
-	res := fmt.Sprintf("%d %s, %d film mancanti", sagas, plural(sagas, "saga", "saghe"), missing)
+	res := fmt.Sprintf("%d %s, %d missing %s", sagas, plural(sagas, "saga", "sagas"), missing, plural(missing, "film", "films"))
 	switch {
 	case unver == 1:
-		res += ", 1 film non verificabile"
+		res += ", 1 film that can't be checked"
 	case unver > 1:
-		res += fmt.Sprintf(", %d film non verificabili", unver)
+		res += fmt.Sprintf(", %d films that can't be checked", unver)
 	}
 	return res, nil
 }
@@ -120,11 +120,11 @@ func (c *Checker) saga(ctx context.Context, id int64, mine []movieUpload) (*Grou
 
 	col, err := tmdbRetry(ctx, func() (tmdb.Collection, error) { return c.tmdb.Collection(ctx, id) })
 	if errors.Is(err, tmdb.ErrNotFound) {
-		g.Status, g.Note = StatusUnverifiable, fmt.Sprintf("saga con id TMDB %d non trovata su TMDB", id)
+		g.Status, g.Note = StatusUnverifiable, fmt.Sprintf("saga with TMDB id %d not found on TMDB", id)
 		return g, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("saga %d su TMDB: %w", id, err)
+		return nil, fmt.Errorf("saga %d on TMDB: %w", id, err)
 	}
 	if col.Name != "" {
 		g.Title = col.Name
@@ -205,9 +205,9 @@ func (c *Checker) myMovies(ctx context.Context, ups []store.TrackerUpload, unkno
 		if unknown == nil {
 			continue
 		}
-		key, note := "title:"+unit3d.Title(u.Name), "nessun id TMDB né IMDb sul tracker"
+		key, note := "title:"+unit3d.Title(u.Name), "no TMDB or IMDb id on the tracker"
 		if u.ImdbID != 0 {
-			key, note = "imdb:"+strconv.FormatInt(u.ImdbID, 10), fmt.Sprintf("l'id IMDb tt%07d non corrisponde a nessun film su TMDB", u.ImdbID)
+			key, note = "imdb:"+strconv.FormatInt(u.ImdbID, 10), fmt.Sprintf("the IMDb id tt%07d matches no film on TMDB", u.ImdbID)
 		}
 		unknown(key, displayTitle(u.Name), note, u)
 	}
@@ -222,7 +222,7 @@ func (c *Checker) fromIMDB(ctx context.Context, imdbID int64) (int64, error) {
 	}
 	found, err := tmdbRetry(ctx, func() (int64, error) { return c.tmdb.FindMovieByIMDB(ctx, imdbID) })
 	if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
-		return 0, fmt.Errorf("ricerca su TMDB dell'id IMDb tt%07d: %w", imdbID, err)
+		return 0, fmt.Errorf("TMDB lookup of IMDb id tt%07d: %w", imdbID, err)
 	}
 	if c.imdb == nil {
 		c.imdb = map[int64]int64{}
@@ -283,7 +283,7 @@ func (c *Checker) fillMovies(g *Group, unitOf map[int64]int, listed []unit3d.Upl
 func (c *Checker) sagaTorrents(ctx context.Context, id int64, units []Unit, known map[int64]bool) ([]unit3d.Upload, error) {
 	user, err := c.user(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("nome utente sul tracker: %w", err)
+		return nil, fmt.Errorf("username on the tracker: %w", err)
 	}
 	check := func(page []unit3d.Upload) error {
 		for _, t := range page {
@@ -296,10 +296,10 @@ func (c *Checker) sagaTorrents(ctx context.Context, id int64, units []Unit, know
 	listed, err := unit3d.WithRetry(ctx, func() ([]unit3d.Upload, error) { return c.tracker.ByCollection(ctx, id, user, check) })
 	switch {
 	case errors.Is(err, errNoCollectionFilter):
-		slog.Debug("ricerca per saga ignorata dal tracker, cerco film per film", "saga", id)
+		slog.Debug("search by saga ignored by the tracker, searching film by film", "saga", id)
 		listed = nil
 	case err != nil:
-		return nil, fmt.Errorf("torrent della saga %d sul tracker: %w", id, err)
+		return nil, fmt.Errorf("torrents of saga %d on the tracker: %w", id, err)
 	}
 	if len(listed) > 0 {
 		return listed, nil
@@ -307,7 +307,7 @@ func (c *Checker) sagaTorrents(ctx context.Context, id int64, units []Unit, know
 	for _, u := range units {
 		ts, err := unit3d.WithRetry(ctx, func() ([]unit3d.Upload, error) { return c.tracker.ByTmdb(ctx, u.TmdbID, user) })
 		if err != nil {
-			return nil, fmt.Errorf("torrent del film %d sul tracker: %w", u.TmdbID, err)
+			return nil, fmt.Errorf("torrents of film %d on the tracker: %w", u.TmdbID, err)
 		}
 		for _, t := range ts {
 			t.TmdbID = u.TmdbID // what the search asked for

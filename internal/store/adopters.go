@@ -27,7 +27,7 @@ type Adoption struct {
 	hash        string
 }
 
-var ErrAlreadyAdopted = errors.New("il torrent è già adottato da questo utente")
+var ErrAlreadyAdopted = errors.New("the torrent is already adopted by this adopter")
 
 const adopterSelect = `
 SELECT ad.id, ad.name, ad.contact, ad.notes, ad.created_at, COUNT(a.id), COALESCE(SUM(t.size), 0)
@@ -168,7 +168,7 @@ func describeAdoption(ctx context.Context, q txLike, in AdoptionInput) (string, 
 	if err := q.QueryRowContext(ctx, `SELECT name FROM adopters WHERE id = ?`, in.AdopterID).Scan(&name); err != nil {
 		return "", err
 	}
-	return "Adottato da " + name, nil
+	return "Adopted by " + name, nil
 }
 
 func (s *Store) DeleteAdoption(ctx context.Context, id int64) error {

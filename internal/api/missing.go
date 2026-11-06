@@ -20,11 +20,11 @@ func (s *Server) missingDisabled() string {
 	case svc.Missing != nil:
 		return ""
 	case svc.Config.Unit3DURL == "" && svc.Config.TMDBAPIKey == "":
-		return "Servono un tracker UNIT3D e una chiave TMDB: impostali nelle Impostazioni (schede Tracker e Mancanti)."
+		return "A UNIT3D tracker and a TMDB key are needed: set them in Settings (Tracker and Missing tabs)."
 	case svc.Config.Unit3DURL == "":
-		return "Serve un tracker UNIT3D: impostalo nelle Impostazioni, scheda Tracker."
+		return "A UNIT3D tracker is needed: set it in Settings, Tracker tab."
 	default:
-		return "Serve una chiave TMDB: impostala nelle Impostazioni, scheda Mancanti."
+		return "A TMDB key is needed: set it in Settings, Missing tab."
 	}
 }
 
@@ -49,7 +49,7 @@ func (s *Server) listsDisabled() string {
 	case svc.Missing == nil:
 		return s.missingDisabled()
 	case svc.Missing.MDBList == nil:
-		return "Serve una chiave MDBList (la trovi nelle preferenze del tuo account su mdblist.com): impostala nelle Impostazioni, scheda Mancanti."
+		return "An MDBList key is needed (find it in your account preferences on mdblist.com): set it in Settings, Missing tab."
 	}
 	return ""
 }
@@ -126,7 +126,7 @@ func (s *Server) missingResult(ctx context.Context, kind, field string) (map[str
 	for _, row := range groups {
 		var g gaps.Group
 		if err := json.Unmarshal(row.Data, &g); err != nil {
-			return nil, fmt.Errorf("risultato di %q: %w", row.Key, err)
+			return nil, fmt.Errorf("result of %q: %w", row.Key, err)
 		}
 		gaps.Apply(&g, prefs, byGroup[g.Key], bannedSet)
 		list = append(list, g)
@@ -164,7 +164,7 @@ func (s *Server) addMissingList(w http.ResponseWriter, r *http.Request) {
 	info, err := svc.Missing.MDBList.List(ctx, path)
 	switch {
 	case errors.Is(err, mdblist.ErrNotFound):
-		writeError(w, http.StatusNotFound, "lista non trovata su MDBList: è pubblica?")
+		writeError(w, http.StatusNotFound, "list not found on MDBList: is it public?")
 		return
 	case err != nil:
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -207,7 +207,7 @@ func missingKind(w http.ResponseWriter, r *http.Request) (string, bool) {
 	case "lists":
 		return gaps.KindList, true
 	}
-	writeError(w, http.StatusNotFound, "tipo di controllo sconosciuto: "+r.PathValue("kind"))
+	writeError(w, http.StatusNotFound, "unknown kind of check: "+r.PathValue("kind"))
 	return "", false
 }
 
@@ -286,18 +286,18 @@ func readMark(w http.ResponseWriter, r *http.Request) (store.GapMark, *markIn, b
 		m.Quality, m.Unit, m.Torrent = "", 0, 0
 	case gaps.ActionAccept:
 		if m.Unit == 0 || m.Torrent == 0 {
-			bad = "indica la parte e il torrent da accettare"
+			bad = "give the part and the torrent to accept"
 		}
 	case gaps.ActionIgnore:
 		m.Torrent = 0
 		if m.Unit == 0 {
-			bad = "indica la parte da ignorare"
+			bad = "give the part to ignore"
 		}
 	default:
-		bad = "azione sconosciuta: " + in.Action
+		bad = "unknown action: " + in.Action
 	}
 	if in.Group == "" {
-		bad = "nessuna serie, saga o collezione indicata"
+		bad = "no series, saga or collection given"
 	}
 	if bad != "" {
 		writeError(w, http.StatusBadRequest, bad)
@@ -330,7 +330,7 @@ func (s *Server) setMissingMark(w http.ResponseWriter, r *http.Request) {
 		m.Value = gaps.CompleteValue(g)
 	case gaps.ActionThreshold:
 		if in.Threshold == nil {
-			writeError(w, http.StatusBadRequest, "nessuna qualità minima indicata")
+			writeError(w, http.StatusBadRequest, "no minimum quality given")
 			return
 		}
 		t, err := gaps.ValidThreshold(*in.Threshold)

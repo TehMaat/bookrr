@@ -30,7 +30,7 @@ func (s *Server) logFiles(w http.ResponseWriter, r *http.Request) {
 // after= (the "next" of an earlier read: only the lines added since).
 func (s *Server) readLogs(w http.ResponseWriter, r *http.Request) {
 	if s.Logs == nil {
-		writeError(w, http.StatusNotFound, "i log su file non sono attivi")
+		writeError(w, http.StatusNotFound, "file logs are not active")
 		return
 	}
 	v := r.URL.Query()
@@ -39,13 +39,13 @@ func (s *Server) readLogs(w http.ResponseWriter, r *http.Request) {
 		q.Day = s.Logs.Today()
 	}
 	if !logs.ValidDay(q.Day) {
-		writeError(w, http.StatusBadRequest, "giorno non valido (AAAA-MM-GG)")
+		writeError(w, http.StatusBadRequest, "invalid day (YYYY-MM-DD)")
 		return
 	}
 	if l := strings.TrimSpace(v.Get("level")); l != "" {
 		level, err := logs.ParseLevel(l)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "livello non valido (debug, info, warn, error)")
+			writeError(w, http.StatusBadRequest, "invalid level (debug, info, warn, error)")
 			return
 		}
 		q.Level = &level
@@ -53,7 +53,7 @@ func (s *Server) readLogs(w http.ResponseWriter, r *http.Request) {
 	if a := v.Get("after"); a != "" {
 		n, err := strconv.ParseInt(a, 10, 64)
 		if err != nil || n < 0 {
-			writeError(w, http.StatusBadRequest, "after non valido")
+			writeError(w, http.StatusBadRequest, "invalid after")
 			return
 		}
 		q.After = n
@@ -69,17 +69,17 @@ func (s *Server) readLogs(w http.ResponseWriter, r *http.Request) {
 // downloadLog sends a log file as it is.
 func (s *Server) downloadLog(w http.ResponseWriter, r *http.Request) {
 	if s.Logs == nil {
-		writeError(w, http.StatusNotFound, "i log su file non sono attivi")
+		writeError(w, http.StatusNotFound, "file logs are not active")
 		return
 	}
 	name := r.PathValue("name")
 	f, err := s.Logs.Open(name)
 	if errors.Is(err, os.ErrNotExist) {
-		writeError(w, http.StatusNotFound, "file di log inesistente")
+		writeError(w, http.StatusNotFound, "no such log file")
 		return
 	}
 	if err != nil {
-		slog.Error("lettura log", "file", name, "err", err)
+		slog.Error("reading log", "file", name, "err", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

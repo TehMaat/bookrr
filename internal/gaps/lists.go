@@ -68,12 +68,12 @@ func (c *Checker) checkLists(ctx context.Context) (string, error) {
 		return "", err
 	}
 	n := len(kept) - unver
-	res := fmt.Sprintf("%d %s, %d film mancanti", n, plural(n, "collezione", "collezioni"), missing)
+	res := fmt.Sprintf("%d %s, %d missing %s", n, plural(n, "collection", "collections"), missing, plural(missing, "film", "films"))
 	switch {
 	case unver == 1:
-		res += ", 1 lista non trovata"
+		res += ", 1 list not found"
 	case unver > 1:
-		res += fmt.Sprintf(", %d liste non trovate", unver)
+		res += fmt.Sprintf(", %d lists not found", unver)
 	}
 	return res, nil
 }
@@ -90,11 +90,11 @@ func (c *Checker) list(ctx context.Context, l store.GapList, mine map[int64][]st
 	}
 	items, err := c.MDBList.Items(ctx, l.Path)
 	if errors.Is(err, mdblist.ErrNotFound) {
-		g.Status, g.Note = StatusUnverifiable, "lista non trovata su MDBList: è stata cancellata o resa privata?"
+		g.Status, g.Note = StatusUnverifiable, "list not found on MDBList: was it deleted or made private?"
 		return g, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("lista %s su MDBList: %w", l.Path, err)
+		return nil, fmt.Errorf("list %s on MDBList: %w", l.Path, err)
 	}
 
 	// The films already out, and the user's even if TMDB does not have
@@ -119,7 +119,7 @@ func (c *Checker) list(ctx context.Context, l store.GapList, mine map[int64][]st
 			case errors.Is(err, tmdb.ErrNotFound):
 				m = tmdb.Movie{}
 			case err != nil:
-				return nil, fmt.Errorf("film %d su TMDB: %w", id, err)
+				return nil, fmt.Errorf("film %d on TMDB: %w", id, err)
 			}
 			m.ID = id
 			if m.Title == "" {
@@ -149,7 +149,7 @@ func (c *Checker) list(ctx context.Context, l store.GapList, mine map[int64][]st
 	// The tracker searches by saga, not by list: one search per film.
 	user, err := c.user(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("nome utente sul tracker: %w", err)
+		return nil, fmt.Errorf("username on the tracker: %w", err)
 	}
 	var listed []unit3d.Upload
 	for _, u := range g.Units {
@@ -157,7 +157,7 @@ func (c *Checker) list(ctx context.Context, l store.GapList, mine map[int64][]st
 		if !ok {
 			ts, err = unit3d.WithRetry(ctx, func() ([]unit3d.Upload, error) { return c.tracker.ByTmdb(ctx, u.TmdbID, user) })
 			if err != nil {
-				return nil, fmt.Errorf("torrent del film %d sul tracker: %w", u.TmdbID, err)
+				return nil, fmt.Errorf("torrents of film %d on the tracker: %w", u.TmdbID, err)
 			}
 			for i := range ts {
 				ts[i].TmdbID = u.TmdbID // what the search asked for

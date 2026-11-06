@@ -69,7 +69,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Alert, Location, Torrent, TorrentStatus } from "@/lib/api"
-import { formatBytes, formatState, formatUnix, isDownloading } from "@/lib/format"
+import { formatBytes, formatState, formatUnix, isDownloading, plural } from "@/lib/format"
 import { useAdopters, useClients, useDisks, useInfo, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -92,7 +92,7 @@ const noFilters = {
   status: [] as string[],
 }
 
-/** The values a torrent has for the "Dove si trova" filter. */
+/** The values a torrent has for the "Location" filter. */
 function places(t: Torrent) {
   const out = [
     ...t.locations.map((l) => `c:${l.clientId}`),
@@ -133,7 +133,7 @@ function DownloadCell({ t }: { t: Torrent }) {
             </Badge>
           </TooltipTrigger>
           <TooltipContent>
-            {formatState(l.state)} · aggiunto il {formatUnix(l.addedOn)}
+            {formatState(l.state)} · added on {formatUnix(l.addedOn)}
           </TooltipContent>
         </Tooltip>
       ))}
@@ -141,22 +141,22 @@ function DownloadCell({ t }: { t: Torrent }) {
   )
 }
 
-/** "Completato ovunque" plus a menu to delete the torrent from one of the clients. */
+/** "Complete everywhere" plus a menu to delete the torrent from one of the clients. */
 function RemoveDuplicate({ t }: { t: Torrent }) {
   const [removing, setRemoving] = useState<Location | null>(null)
   return (
     // Events from the menu and the dialog (portals included) must not open the sheet.
     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-      <span className="text-muted-foreground text-xs whitespace-nowrap">Completato ovunque</span>
+      <span className="text-muted-foreground text-xs whitespace-nowrap">Complete everywhere</span>
       {canRemoveDuplicate(t) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-7">
-              <Trash2 /> Rimuovi da…
+              <Trash2 /> Remove from…
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Togli il duplicato da</DropdownMenuLabel>
+            <DropdownMenuLabel>Remove the duplicate from</DropdownMenuLabel>
             {t.locations.map((l) => (
               <DropdownMenuItem key={l.clientId} onSelect={() => setRemoving(l)}>
                 <Server /> {l.clientName}
@@ -243,7 +243,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       else if (sort.key === "seeders") c = (a.peers?.seeders ?? -1) - (b.peers?.seeders ?? -1)
       else if (sort.key === "completed") c = (a.peers?.timesCompleted ?? -1) - (b.peers?.timesCompleted ?? -1)
       else if (sort.key === "status") c = statusOrder[a.status] - statusOrder[b.status]
-      if (c === 0) c = a.name.localeCompare(b.name, "it", { sensitivity: "base" })
+      if (c === 0) c = a.name.localeCompare(b.name, "en", { sensitivity: "base" })
       return c * dir
     })
     return out
@@ -273,14 +273,14 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
     sort.key === k ? sort.desc ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" /> : null
 
   const stats: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
-    { key: "all", label: "Totale", icon: Layers },
-    { key: "client", label: "Su client", icon: Server, tone: "text-sky-600 dark:text-sky-400" },
-    { key: "duplicate", label: "Duplicati", icon: Copy, tone: "text-destructive" },
-    { key: "missing", label: "Da localizzare", icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
-    { key: "archived", label: "Archiviati", icon: HardDrive, tone: "text-violet-600 dark:text-violet-400" },
-    { key: "adopted", label: "Adottati", icon: HandHeart, tone: "text-emerald-600 dark:text-emerald-400" },
-    { key: "unknown", label: "Posizione ignota", icon: CircleHelp },
-    { key: "archivable", label: "Archiviabili", icon: Archive, tone: archivableTone },
+    { key: "all", label: "Total", icon: Layers },
+    { key: "client", label: "On a client", icon: Server, tone: "text-sky-600 dark:text-sky-400" },
+    { key: "duplicate", label: "Duplicates", icon: Copy, tone: "text-destructive" },
+    { key: "missing", label: "To locate", icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
+    { key: "archived", label: "Archived", icon: HardDrive, tone: "text-violet-600 dark:text-violet-400" },
+    { key: "adopted", label: "Adopted", icon: HandHeart, tone: "text-emerald-600 dark:text-emerald-400" },
+    { key: "unknown", label: "Unknown location", icon: CircleHelp },
+    { key: "archivable", label: "Archivable", icon: Archive, tone: archivableTone },
   ]
 
   return (
@@ -312,21 +312,21 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
           <Input
             value={query}
             onChange={(e) => reset(setQuery)(e.target.value)}
-            placeholder="Cerca per nome, hash, disco, seriale, adottante, percorso…"
+            placeholder="Search by name, hash, disk, serial, adopter, path…"
             className="pl-8"
           />
         </div>
         <div className="flex items-center gap-2 px-1">
           <Switch id="only-personal" checked={onlyPersonal} onCheckedChange={reset(setOnlyPersonal)} />
           <Label htmlFor="only-personal" className="whitespace-nowrap">
-            Solo {info.data?.releaseTag ?? "Personal Release"}
+            Only {info.data?.releaseTag ?? "Personal Release"}
           </Label>
         </div>
         <Button variant="outline" onClick={() => setImporting(true)}>
-          <Upload /> Importa
+          <Upload /> Import
         </Button>
         <Button onClick={() => setAdding(true)}>
-          <Plus /> Aggiungi
+          <Plus /> Add
         </Button>
       </div>
 
@@ -353,19 +353,19 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               {picking && (
                 <TableHead className="w-0">
-                  <PickBox label="Seleziona tutti" checked={picker.all} indeterminate={picker.some} onChange={picker.toggleAll} />
+                  <PickBox label="Select all" checked={picker.all} indeterminate={picker.some} onChange={picker.toggleAll} />
                 </TableHead>
               )}
               <TableHead className="w-full">
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
-                    Nome <SortIcon k="name" />
+                    Name <SortIcon k="name" />
                   </button>
-                  <ColumnFilter label="Nome" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
+                  <ColumnFilter label="Name" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
                     <TextFilter
                       value={cf.name}
                       onChange={(v) => columns.set("name", v)}
-                      placeholder="Nome, hash, categoria, tag, note…"
+                      placeholder="Name, hash, category, tags, notes…"
                     />
                   </ColumnFilter>
                 </div>
@@ -373,27 +373,27 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               <TableHead className="text-right">
                 <div className="flex items-center justify-end gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("size")}>
-                    Dimensione <SortIcon k="size" />
+                    Size <SortIcon k="size" />
                   </button>
-                  <ColumnFilter label="Dimensione" active={isActive(cf.size)} onClear={() => columns.clear("size")}>
+                  <ColumnFilter label="Size" active={isActive(cf.size)} onClear={() => columns.clear("size")}>
                     <RangeFilter
                       value={cf.size}
                       onChange={(v) => columns.set("size", v)}
                       parse={parseSize}
-                      placeholders={["es. 1 GB", "es. 50 GB"]}
+                      placeholders={["e.g. 1 GB", "e.g. 50 GB"]}
                     />
                   </ColumnFilter>
                 </div>
               </TableHead>
               <TableHead>
                 <div className="flex items-center gap-1">
-                  Dove si trova
-                  <ColumnFilter label="Dove si trova" active={isActive(cf.where)} onClear={() => columns.clear("where")}>
+                  Location
+                  <ColumnFilter label="Location" active={isActive(cf.where)} onClear={() => columns.clear("where")}>
                     {(
                       [
                         ["Client", (clients.data ?? []).map((c) => ({ value: `c:${c.id}`, label: <><Server /> {c.name}</> }))],
-                        ["Dischi", (disks.data ?? []).map((d) => ({ value: `d:${d.id}`, label: <><HardDrive /> {d.label}</> }))],
-                        ["Adottatori", (adopters.data ?? []).map((a) => ({ value: `a:${a.id}`, label: <><HandHeart /> {a.name}</> }))],
+                        ["Disks", (disks.data ?? []).map((d) => ({ value: `d:${d.id}`, label: <><HardDrive /> {d.label}</> }))],
+                        ["Adopters", (adopters.data ?? []).map((a) => ({ value: `a:${a.id}`, label: <><HandHeart /> {a.name}</> }))],
                       ] as const
                     )
                       .filter(([, options]) => options.length > 0)
@@ -407,7 +407,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                         />
                       ))}
                     <OptionsFilter
-                      options={[{ value: "none", label: "Da nessuna parte" }]}
+                      options={[{ value: "none", label: "Nowhere" }]}
                       value={cf.where}
                       onChange={(v) => columns.set("where", v)}
                     />
@@ -417,12 +417,12 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               {showDownload && (
                 <TableHead>
                   <div className="flex items-center gap-1">
-                    In download
-                    <ColumnFilter label="In download" active={isActive(cf.download)} onClear={() => columns.clear("download")}>
+                    Downloading
+                    <ColumnFilter label="Downloading" active={isActive(cf.download)} onClear={() => columns.clear("download")}>
                       <OptionsFilter
                         options={[
-                          { value: "yes", label: <><Download /> In download su almeno un client</> },
-                          { value: "no", label: "Completato ovunque" },
+                          { value: "yes", label: <><Download /> Downloading on at least one client</> },
+                          { value: "no", label: "Complete everywhere" },
                         ]}
                         value={cf.download}
                         onChange={(v) => columns.set("download", v)}
@@ -434,20 +434,20 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               <TableHead className="hidden sm:table-cell">
                 <span className="flex items-center gap-2">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("seeders")}>
-                    Seed <SortIcon k="seeders" />
+                    Seeds <SortIcon k="seeders" />
                   </button>
                   <span className="text-muted-foreground">/</span>
                   <button className="flex items-center gap-1" onClick={() => toggleSort("completed")}>
-                    Completati <SortIcon k="completed" />
+                    Completed <SortIcon k="completed" />
                   </button>
                   <ColumnFilter
-                    label="Seed / Completati"
+                    label="Seeds / Completed"
                     active={isActive(cf.seeders) || isActive(cf.completed)}
                     onClear={() => columns.clear("seeders", "completed")}
                   >
-                    <RangeFilter title="Seeder" value={cf.seeders} onChange={(v) => columns.set("seeders", v)} parse={parseCount} />
+                    <RangeFilter title="Seeders" value={cf.seeders} onChange={(v) => columns.set("seeders", v)} parse={parseCount} />
                     <RangeFilter
-                      title="Completati"
+                      title="Completed"
                       value={cf.completed}
                       onChange={(v) => columns.set("completed", v)}
                       parse={parseCount}
@@ -457,13 +457,13 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               </TableHead>
               <TableHead className="hidden md:table-cell">
                 <div className="flex items-center gap-1">
-                  Archiviabile
-                  <ColumnFilter label="Archiviabile" active={isActive(cf.archivable)} onClear={() => columns.clear("archivable")}>
+                  Archivable
+                  <ColumnFilter label="Archivable" active={isActive(cf.archivable)} onClear={() => columns.clear("archivable")}>
                     <OptionsFilter
                       options={[
-                        { value: "yes", label: <><Archive className={archivableTone} /> Archiviabile</> },
-                        { value: "no", label: "Non archiviabile" },
-                        { value: "never", label: <><ArchiveX /> Da non archiviare</> },
+                        { value: "yes", label: <><Archive className={archivableTone} /> Archivable</> },
+                        { value: "no", label: "Not archivable" },
+                        { value: "never", label: <><ArchiveX /> Never archive</> },
                       ]}
                       value={cf.archivable}
                       onChange={(v) => columns.set("archivable", v)}
@@ -474,9 +474,9 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               <TableHead>
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
-                    Stato <SortIcon k="status" />
+                    Status <SortIcon k="status" />
                   </button>
-                  <ColumnFilter label="Stato" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
+                  <ColumnFilter label="Status" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
                     <OptionsFilter
                       options={[
                         ...(Object.keys(statusLabels) as TorrentStatus[]).map((st) => ({
@@ -487,7 +487,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                           value: "alert",
                           label: (
                             <Badge variant="warning">
-                              <TriangleAlert /> Dove è finito?
+                              <TriangleAlert /> Where did it go?
                             </Badge>
                           ),
                         },
@@ -512,7 +512,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             {torrents.isError && (
               <TableRow>
                 <TableCell colSpan={cols} className="text-destructive py-10 text-center">
-                  Errore nel caricamento: {torrents.error.message}
+                  Loading failed: {torrents.error.message}
                 </TableCell>
               </TableRow>
             )}
@@ -520,8 +520,8 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               <TableRow>
                 <TableCell colSpan={cols} className="text-muted-foreground py-10 text-center">
                   {all.length === 0
-                    ? "Nessun torrent. Aggiungi un client qBittorrent nella scheda Client oppure inserisci un torrent a mano."
-                    : "Nessun torrent corrisponde ai filtri."}
+                    ? "No torrents. Add a qBittorrent client in the Clients page or enter a torrent by hand."
+                    : "No torrents match the filters."}
                 </TableCell>
               </TableRow>
             )}
@@ -539,7 +539,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   <TableCell>
                     {t.archivable && (
                       <PickBox
-                        label={`Seleziona ${t.name}`}
+                        label={`Select ${t.name}`}
                         checked={picker.isPicked(t.hash)}
                         onChange={(on) => picker.toggle(t.hash, on)}
                       />
@@ -587,7 +587,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                         onResolve(t.openAlert!)
                       }}
                     >
-                      <TriangleAlert className="text-amber-600" /> Dove è finito?
+                      <TriangleAlert className="text-amber-600" /> Where did it go?
                     </Button>
                   ) : (
                     <StatusBadge status={t.status} />
@@ -599,7 +599,7 @@ export function TorrentsPage({ onResolve }: { onResolve: (a: Alert) => void }) {
         </Table>
         <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
           <span>
-            {rows.length} torrent · {formatBytes(totalSize)}
+            {plural(rows.length, "torrent")} · {formatBytes(totalSize)}
           </span>
           <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           {pages > 1 && (

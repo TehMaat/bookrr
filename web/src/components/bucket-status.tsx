@@ -10,11 +10,11 @@ export function BucketStatus({ disk }: { disk: Disk }) {
       <div className="text-muted-foreground">
         {b.scanAt ? (
           <>
-            Bucket letto {formatRelative(b.scanAt)} · {b.objects} file · {formatBytes(b.size)}
-            {b.unmatched > 0 && <> · {b.unmatched} non riconosciuti</>}
+            Bucket read {formatRelative(b.scanAt)} · {b.objects} file · {formatBytes(b.size)}
+            {b.unmatched > 0 && <> · {b.unmatched} unrecognized</>}
           </>
         ) : (
-          "Bucket non ancora letto"
+          "Bucket not read yet"
         )}
       </div>
       {b.scanError && <div className="text-destructive break-all">{b.scanError}</div>}

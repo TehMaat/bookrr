@@ -137,7 +137,7 @@ func (r *Runner) start(name string, run func(context.Context)) {
 		select {
 		case <-done:
 		case <-t.C:
-			slog.Warn("servizio non fermato in tempo, avvio comunque il nuovo", "servizio", name)
+			slog.Warn("service not stopped in time, starting the new one anyway", "service", name)
 		}
 	}
 }

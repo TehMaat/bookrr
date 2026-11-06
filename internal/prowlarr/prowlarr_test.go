@@ -162,7 +162,7 @@ func TestCheckAndAnnotate(t *testing.T) {
 	if strings.Join(queries, " ") != "{TmdbId:603} {ImdbId:tt0113277} {TmdbId:76170} {TmdbId:577922}" {
 		t.Fatalf("queries %v", queries)
 	}
-	if s := f.State(); s.LastError != "" || s.Done != 4 || !strings.HasPrefix(s.LastResult, "4 film cercati, 1 ") {
+	if s := f.State(); s.LastError != "" || s.Done != 4 || !strings.HasPrefix(s.LastResult, "4 films searched, 1 ") {
 		t.Fatalf("state %+v", s)
 	}
 	// Searched again only once recheck has passed.
@@ -308,7 +308,7 @@ func TestCheckPlan(t *testing.T) {
 	if strings.Join(queries, " ") != "{TmdbId:603} {TmdbId:194}" {
 		t.Fatalf("queries %v", queries)
 	}
-	if s := f.State(); s.LastResult != "2 film cercati, 1 in una versione migliore della tua, 1 del piano release" {
+	if s := f.State(); s.LastResult != "2 films searched, 1 in a better version than yours, 1 of the release plan" {
 		t.Fatalf("state %+v", s)
 	}
 

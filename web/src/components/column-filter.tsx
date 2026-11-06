@@ -107,8 +107,8 @@ export function ColumnFilter({
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={`Filtra ${label}`}
-          title={`Filtra ${label}`}
+          aria-label={`Filter ${label}`}
+          title={`Filter ${label}`}
           className={cn(
             "size-6 shrink-0",
             active ? "text-primary bg-primary/10 hover:bg-primary/20" : "text-muted-foreground/70 hover:text-foreground"
@@ -119,10 +119,10 @@ export function ColumnFilter({
       </PopoverTrigger>
       <PopoverContent align={align} className="grid w-64 gap-3 p-3 font-normal">
         <div className="flex h-6 items-center justify-between gap-2">
-          <span className="text-sm font-medium">Filtra: {label}</span>
+          <span className="text-sm font-medium">Filter: {label}</span>
           {active && (
             <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onClear}>
-              <X /> Azzera
+              <X /> Clear
             </Button>
           )}
         </div>
@@ -132,11 +132,11 @@ export function ColumnFilter({
   )
 }
 
-/** "Contiene…" on the text of a column. */
+/** "Contains…" on the text of a column. */
 export function TextFilter({
   value,
   onChange,
-  placeholder = "Contiene…",
+  placeholder = "Contains…",
 }: {
   value: string
   onChange: (v: string) => void
@@ -162,7 +162,7 @@ export function OptionsFilter({
   return (
     <div className="grid gap-1">
       {title && <div className="text-muted-foreground px-1.5 text-xs font-medium">{title}</div>}
-      {options.length === 0 && <span className="text-muted-foreground px-1.5 text-xs">Nessuna voce</span>}
+      {options.length === 0 && <span className="text-muted-foreground px-1.5 text-xs">No items</span>}
       <div className="grid max-h-56 gap-0.5 overflow-y-auto">
         {options.map((o) => (
           <label
@@ -183,14 +183,14 @@ export function OptionsFilter({
   )
 }
 
-/** "Da" and "A" bounds; `type="date"` for days, otherwise free text checked by `parse`. */
+/** "From" and "To" bounds; `type="date"` for days, otherwise free text checked by `parse`. */
 export function RangeFilter({
   title,
   value,
   onChange,
   type = "text",
   parse,
-  placeholders = ["Da", "A"],
+  placeholders = ["From", "To"],
 }: {
   title?: string
   value: Range
@@ -205,23 +205,23 @@ export function RangeFilter({
     return (
       <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5">
         {title && <div className="text-muted-foreground col-span-2 text-xs font-medium">{title}</div>}
-        <span className="text-muted-foreground text-xs">Dal</span>
+        <span className="text-muted-foreground text-xs">From</span>
         <Input
           autoFocus
           type="date"
           value={value.min}
           max={value.max || undefined}
           onChange={(e) => onChange({ ...value, min: e.target.value })}
-          aria-label="Dal giorno"
+          aria-label="From day"
           className="h-8"
         />
-        <span className="text-muted-foreground text-xs">Al</span>
+        <span className="text-muted-foreground text-xs">To</span>
         <Input
           type="date"
           value={value.max}
           min={value.min || undefined}
           onChange={(e) => onChange({ ...value, max: e.target.value })}
-          aria-label="Al giorno"
+          aria-label="To day"
           className="h-8"
         />
       </div>
@@ -237,7 +237,7 @@ export function RangeFilter({
           aria-invalid={invalid(value.min) || undefined}
           onChange={(e) => onChange({ ...value, min: e.target.value })}
           placeholder={placeholders[0]}
-          aria-label={`${title ?? ""} da`.trim()}
+          aria-label={`${title ?? ""} from`.trim()}
           className="h-8"
         />
         <span className="text-muted-foreground">–</span>
@@ -247,7 +247,7 @@ export function RangeFilter({
           aria-invalid={invalid(value.max) || undefined}
           onChange={(e) => onChange({ ...value, max: e.target.value })}
           placeholder={placeholders[1]}
-          aria-label={`${title ?? ""} a`.trim()}
+          aria-label={`${title ?? ""} to`.trim()}
           className="h-8"
         />
       </div>
@@ -261,9 +261,9 @@ export function ActiveFilters({ count, onClear }: { count: number; onClear: () =
   return (
     <span className="flex items-center gap-1">
       <ListFilter className="text-primary size-3.5" />
-      {count === 1 ? "1 filtro sulle colonne" : `${count} filtri sulle colonne`}
+      {count === 1 ? "1 column filter" : `${count} column filters`}
       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onClear}>
-        <X /> Azzera
+        <X /> Clear
       </Button>
     </span>
   )

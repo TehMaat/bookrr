@@ -20,11 +20,11 @@ import { formatDate, formatState, isErrorState } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 export const statusLabels: Record<TorrentStatus, string> = {
-  client: "Su client",
-  missing: "Da localizzare",
-  archived: "Archiviato",
-  adopted: "Adottato",
-  unknown: "Posizione ignota",
+  client: "On a client",
+  missing: "To locate",
+  archived: "Archived",
+  adopted: "Adopted",
+  unknown: "Unknown location",
 }
 
 export function StatusBadge({ status }: { status: TorrentStatus }) {
@@ -83,7 +83,7 @@ export function DuplicateBadge({ count }: { count: number }) {
           <Copy /> ×{count}
         </Badge>
       </TooltipTrigger>
-      <TooltipContent>Lo stesso torrent è su {count} client</TooltipContent>
+      <TooltipContent>The same torrent is on {count} clients</TooltipContent>
     </Tooltip>
   )
 }
@@ -111,7 +111,7 @@ export function WhereBadges({ t }: { t: Torrent }) {
         <Tooltip key={`a${a.id}`}>
           <TooltipTrigger asChild>
             <Badge variant="violet">
-              <HardDrive /> {a.diskLabel || "Archivio"}
+              <HardDrive /> {a.diskLabel || "Archive"}
             </Badge>
           </TooltipTrigger>
           <TooltipContent className="max-w-sm break-all">
@@ -123,7 +123,7 @@ export function WhereBadges({ t }: { t: Torrent }) {
             )}
             <span className="font-mono">{a.path || "—"}</span>
             <br />
-            Spostato il {formatDate(a.createdAt)}
+            Moved on {formatDate(a.createdAt)}
           </TooltipContent>
         </Tooltip>
       ))}
@@ -140,23 +140,23 @@ export function WhereBadges({ t }: { t: Torrent }) {
 /** Color of the archivable uploads, in badges and in the filters. */
 export const archivableTone = "text-teal-600 dark:text-teal-400"
 
-/** "da oggi", "da 1 giorno", "da 12 giorni". */
+/** "since today", "for 1 day", "for 12 days". */
 export function sinceDays(days: number) {
-  return days === 0 ? "da oggi" : days === 1 ? "da 1 giorno" : `da ${days} giorni`
+  return days === 0 ? "since today" : days === 1 ? "for 1 day" : `for ${days} days`
 }
 
-const daysRule = (d: number) => (d === 0 ? "subito" : d === 1 ? "da almeno 1 giorno" : `da almeno ${d} giorni di fila`)
+const daysRule = (d: number) => (d === 0 ? "right away" : d === 1 ? "for at least 1 day" : `for at least ${d} days in a row`)
 
 /** The numbers behind the assessment: seeders on the tracker, mine, others, completed and the rule. */
 export function ArchivableNumbers({ a }: { a: Archivability }) {
   const rows: [string, React.ReactNode][] = [
-    ["Seeder sul tracker", a.seeders],
-    ["Tuoi client in seed", a.mine],
-    ["Altri seeder", <span className={cn(a.others >= a.rule.minOthers && "font-semibold")}>{a.others}</span>],
-    ["Completati", <span className={cn(a.timesCompleted >= a.rule.minCompleted && "font-semibold")}>{a.timesCompleted}</span>],
-    ["Dati del tracker", formatDate(a.trackerAt)],
+    ["Seeders on the tracker", a.seeders],
+    ["Your seeding clients", a.mine],
+    ["Other seeders", <span className={cn(a.others >= a.rule.minOthers && "font-semibold")}>{a.others}</span>],
+    ["Completed", <span className={cn(a.timesCompleted >= a.rule.minCompleted && "font-semibold")}>{a.timesCompleted}</span>],
+    ["Tracker data", formatDate(a.trackerAt)],
   ]
-  if (a.since) rows.push(["Condizioni rispettate dal", formatDate(a.since)])
+  if (a.since) rows.push(["Conditions met since", formatDate(a.since)])
   return (
     <div className="grid gap-1">
       <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
@@ -168,14 +168,14 @@ export function ArchivableNumbers({ a }: { a: Archivability }) {
         ))}
       </dl>
       <p className="opacity-80">
-        Regola: altri seeder ≥ {a.rule.minOthers}, completati ≥ {a.rule.minCompleted}, {daysRule(a.rule.days)}.
+        Rule: other seeders ≥ {a.rule.minOthers}, completed ≥ {a.rule.minCompleted}, {daysRule(a.rule.days)}.
       </p>
     </div>
   )
 }
 
-/** Shown only for archivable uploads: "Sì · da 3 giorni", with the numbers in the tooltip. */
-export function ArchivableBadge({ a, label = "Sì" }: { a: Archivability | null; label?: string }) {
+/** Shown only for archivable uploads: "Yes · for 3 days", with the numbers in the tooltip. */
+export function ArchivableBadge({ a, label = "Yes" }: { a: Archivability | null; label?: string }) {
   if (!a?.archivable) return null
   return (
     <Tooltip>
@@ -185,7 +185,7 @@ export function ArchivableBadge({ a, label = "Sì" }: { a: Archivability | null;
         </Badge>
       </TooltipTrigger>
       <TooltipContent>
-        <p className="mb-1 font-medium">Altri la seminano: puoi toglierla dai client e archiviarla.</p>
+        <p className="mb-1 font-medium">Others are seeding it: you can remove it from the clients and archive it.</p>
         <ArchivableNumbers a={a} />
       </TooltipContent>
     </Tooltip>
@@ -199,24 +199,24 @@ export function NeverArchiveBadge({ a }: { a: Archivability | null }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <Badge variant="outline" className="text-muted-foreground">
-          <ArchiveX /> Da non archiviare
+          <ArchiveX /> Never archive
         </Badge>
       </TooltipTrigger>
-      <TooltipContent>La tieni sui client: non viene segnata come archiviabile anche se altri la seminano.</TooltipContent>
+      <TooltipContent>You keep it on the clients: it is not flagged as archivable even if others seed it.</TooltipContent>
     </Tooltip>
   )
 }
 
 /** One line on where an upload stands: archivable, waiting for the days, or why not. */
 export function archivableSummary(a: Archivability): string {
-  if (a.neverArchive) return "Da non archiviare: la tieni sui client, anche se altri la seminano."
-  if (a.archivable) return `Archiviabile ${sinceDays(a.days)}: altri la seminano, puoi toglierla dai client.`
-  if (a.met) return `Condizioni rispettate dal ${formatDate(a.since)}: archiviabile dal ${formatDate(a.readyAt)} se restano tali.`
+  if (a.neverArchive) return "Never archive: you keep it on the clients, even if others seed it."
+  if (a.archivable) return `Archivable ${sinceDays(a.days)}: others are seeding it, you can remove it from the clients.`
+  if (a.met) return `Conditions met since ${formatDate(a.since)}: archivable from ${formatDate(a.readyAt)} if they still hold.`
   const missing = [
-    a.others < a.rule.minOthers && `altri seeder ${a.others} su ${a.rule.minOthers}`,
-    a.timesCompleted < a.rule.minCompleted && `completati ${a.timesCompleted} su ${a.rule.minCompleted}`,
+    a.others < a.rule.minOthers && `other seeders ${a.others} of ${a.rule.minOthers}`,
+    a.timesCompleted < a.rule.minCompleted && `completed ${a.timesCompleted} of ${a.rule.minCompleted}`,
   ].filter(Boolean)
-  return `Non ancora archiviabile: ${missing.join(", ")}.`
+  return `Not archivable yet: ${missing.join(", ")}.`
 }
 
 /** Seeders, leechers and completed downloads, as on the tracker. */

@@ -55,13 +55,13 @@ func (r *Resolver) runPending(ctx context.Context) {
 	found, failed := 0, 0
 	defer func() {
 		if found+failed > 0 {
-			slog.Info("ricerca hash su UNIT3D", "trovati", found, "non trovati", failed)
+			slog.Info("hash lookup on UNIT3D", "found", found, "notFound", failed)
 		}
 	}()
 	for ctx.Err() == nil {
 		pending, err := r.store.PendingHashLookups(ctx, time.Now().Add(-r.RetryAfter), 20)
 		if err != nil {
-			slog.Error("ricerca hash", "err", err)
+			slog.Error("hash lookup", "err", err)
 			return
 		}
 		if len(pending) == 0 {
@@ -76,7 +76,7 @@ func (r *Resolver) runPending(ctx context.Context) {
 			case Final(err), errors.Is(err, store.ErrNotFound):
 				failed++
 			case errors.As(err, &rl):
-				slog.Warn("ricerca hash: limite del tracker", "attesa", rl.RetryAfter)
+				slog.Warn("hash lookup: tracker rate limit", "wait", rl.RetryAfter)
 				if !sleep(ctx, rl.RetryAfter) {
 					return
 				}
@@ -84,7 +84,7 @@ func (r *Resolver) runPending(ctx context.Context) {
 			default:
 				// Tracker unreachable or misconfigured: try again later.
 				if ctx.Err() == nil {
-					slog.Warn("ricerca hash interrotta", "err", err)
+					slog.Warn("hash lookup stopped", "err", err)
 				}
 				return
 			}
@@ -122,8 +122,8 @@ func (r *Resolver) save(ctx context.Context, p store.HashLookup, m Match) (strin
 	if err != nil {
 		return "", err
 	}
-	slog.Info("hash trovato su UNIT3D", "name", p.Name, "tracker", m.Name, "hash", m.Hash, "trackerId", m.ID,
-		"torrentFile", len(m.File) > 0, "unito", merged)
+	slog.Info("hash found on UNIT3D", "name", p.Name, "tracker", m.Name, "hash", m.Hash, "trackerId", m.ID,
+		"torrentFile", len(m.File) > 0, "merged", merged)
 	return m.Hash, nil
 }
 

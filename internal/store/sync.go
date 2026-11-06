@@ -84,7 +84,7 @@ ON CONFLICT(hash, client_id) DO UPDATE SET
 			return nil, fmt.Errorf("torrent %s: %w", t.Hash, err)
 		}
 		if _, err := upsertLocation.ExecContext(ctx, t.Hash, client.ID, t.SavePath, t.State, t.Progress, t.Ratio, t.Tags, t.Category, t.AddedOn, ts); err != nil {
-			return nil, fmt.Errorf("posizione %s: %w", t.Hash, err)
+			return nil, fmt.Errorf("location %s: %w", t.Hash, err)
 		}
 		delete(prev, t.Hash)
 	}
@@ -196,9 +196,9 @@ func flagRemoval(ctx context.Context, tx txLike, r Removal, releaseTag, source s
 	if err != nil || exists {
 		return false, err
 	}
-	msg := "Rimosso dal client"
+	msg := "Removed from the client"
 	if r.ClientName != "" {
-		msg = "Rimosso da " + r.ClientName
+		msg = "Removed from " + r.ClientName
 	}
 	moved, err := knownDestination(ctx, tx, r.Hash)
 	if err != nil {
@@ -221,12 +221,12 @@ func knownDestination(ctx context.Context, tx txLike, hash string) (string, erro
 	var desc string
 	err := tx.QueryRowContext(ctx, `
 SELECT d FROM (
-	SELECT 'Già spostato su ' || COALESCE(NULLIF(dk.label, ''), 'archivio') ||
+	SELECT 'Already moved to ' || COALESCE(NULLIF(dk.label, ''), 'archive') ||
 		CASE WHEN COALESCE(dk.serial, '') != '' THEN ' (SN ' || dk.serial || ')' ELSE '' END ||
 		CASE WHEN a.path != '' THEN ' · ' || a.path ELSE '' END AS d, a.created_at AS ts
 	FROM archives a LEFT JOIN disks dk ON dk.id = a.disk_id WHERE a.hash = ?
 	UNION ALL
-	SELECT 'Già adottato da ' || ad.name, ao.created_at
+	SELECT 'Already adopted by ' || ad.name, ao.created_at
 	FROM adoptions ao JOIN adopters ad ON ad.id = ao.adopter_id WHERE ao.hash = ?
 ) ORDER BY ts DESC LIMIT 1`, hash, hash).Scan(&desc)
 	if errors.Is(err, sql.ErrNoRows) {

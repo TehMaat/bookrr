@@ -106,7 +106,7 @@ func baseDomain(host string) string {
 func (s *Server) syncReleases(w http.ResponseWriter, r *http.Request) {
 	svc := s.current()
 	if svc.History == nil {
-		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato: impostalo nelle Impostazioni, scheda Tracker")
+		writeError(w, http.StatusBadRequest, "no UNIT3D tracker configured: set it in Settings, Tracker tab")
 		return
 	}
 	svc.History.Wake()
@@ -124,7 +124,7 @@ func (s *Server) addReleases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !in.All && len(in.IDs) == 0 {
-		writeError(w, http.StatusBadRequest, "nessuna release indicata")
+		writeError(w, http.StatusBadRequest, "no release given")
 		return
 	}
 	if in.All {
@@ -139,7 +139,7 @@ func (s *Server) addReleases(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	slog.Info("release del tracker aggiunte a bookrr", "count", added)
+	slog.Info("tracker releases added to bookrr", "count", added)
 	writeJSON(w, http.StatusCreated, map[string]int{"added": added})
 }
 
@@ -171,7 +171,7 @@ func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(in.Hashes) == 0 {
-		writeError(w, http.StatusBadRequest, "nessun torrent indicato")
+		writeError(w, http.StatusBadRequest, "no torrent given")
 		return
 	}
 
@@ -208,7 +208,7 @@ func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
 		err = svc.Syncer.Qbit(c).RemoveTags(qctx, hashes, tags)
 		cancel()
 		if err != nil {
-			slog.Warn("tag non rimosso dal client", "client", c.Name, "count", len(hashes), "err", err)
+			slog.Warn("tag not removed from the client", "client", c.Name, "count", len(hashes), "err", err)
 			failed = append(failed, fmt.Sprintf("%s: %v", c.Name, err))
 			continue
 		}
@@ -220,9 +220,9 @@ func (s *Server) unflagReleases(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	slog.Info("flag Personal Release tolto", "count", n, "fromClients", len(done))
+	slog.Info("Personal Release flag removed", "count", n, "fromClients", len(done))
 	if n == 0 && len(failed) > 0 {
-		writeError(w, http.StatusBadGateway, "tag non rimosso: "+strings.Join(failed, "; "))
+		writeError(w, http.StatusBadGateway, "tag not removed: "+strings.Join(failed, "; "))
 		return
 	}
 	writeJSON(w, 200, map[string]any{"unflagged": n, "errors": failed})

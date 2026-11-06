@@ -94,18 +94,18 @@ export function useScanDisk() {
     mutationFn: (id: number) => api.scanDisk(id),
     onSuccess: (r) => {
       const changes = [
-        r.added > 0 && `trovati: ${r.added}`,
-        r.removed > 0 && `non più presenti: ${r.removed}`,
-        r.alerts > 0 && `nuove segnalazioni: ${r.alerts}`,
+        r.added > 0 && `found: ${r.added}`,
+        r.removed > 0 && `gone: ${r.removed}`,
+        r.alerts > 0 && `new alerts: ${r.alerts}`,
       ].filter(Boolean)
-      const unmatched = r.disk.s3?.unmatched ? `non riconosciuti: ${r.disk.s3.unmatched}` : ""
-      toast.success(`Bucket "${r.disk.label}" letto`, {
-        description: [changes.length ? `Torrent ${changes.join(", ")}` : "Nessuna novità", unmatched].filter(Boolean).join(" · "),
+      const unmatched = r.disk.s3?.unmatched ? `unrecognized: ${r.disk.s3.unmatched}` : ""
+      toast.success(`Bucket "${r.disk.label}" read`, {
+        description: [changes.length ? `Torrent ${changes.join(", ")}` : "Nothing new", unmatched].filter(Boolean).join(" · "),
       })
       refresh()
     },
     onError: (err: Error) => {
-      toast.error("Lettura del bucket fallita", { description: err.message })
+      toast.error("Reading the bucket failed", { description: err.message })
       refresh()
     },
   })

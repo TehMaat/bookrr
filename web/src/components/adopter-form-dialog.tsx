@@ -27,7 +27,7 @@ export function AdopterFormDialog({
 
   const save = useAction(
     (a: Partial<Adopter>) => (adopter ? api.updateAdopter(adopter.id, a) : api.createAdopter(a)),
-    adopter ? "Adottatore aggiornato" : "Adottatore aggiunto"
+    adopter ? "Adopter updated" : "Adopter added"
   )
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -49,34 +49,34 @@ export function AdopterFormDialog({
       <DialogContent>
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>{adopter ? "Modifica adottatore" : "Nuovo adottatore"}</DialogTitle>
-            <DialogDescription>Una persona che ha adottato (e continua a condividere) le tue release.</DialogDescription>
+            <DialogTitle>{adopter ? "Edit adopter" : "New adopter"}</DialogTitle>
+            <DialogDescription>Someone who adopted (and keeps seeding) your releases.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="adopter-name">Nome *</Label>
-              <Input id="adopter-name" value={form.name} onChange={set("name")} placeholder="Nome utente" required autoFocus />
+              <Label htmlFor="adopter-name">Name *</Label>
+              <Input id="adopter-name" value={form.name} onChange={set("name")} placeholder="Username" required autoFocus />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="adopter-contact">Contatto</Label>
+              <Label htmlFor="adopter-contact">Contact</Label>
               <Input
                 id="adopter-contact"
                 value={form.contact}
                 onChange={set("contact")}
-                placeholder="Profilo sul tracker, Telegram, e-mail…"
+                placeholder="Tracker profile, Telegram, e-mail…"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="adopter-notes">Note</Label>
+              <Label htmlFor="adopter-notes">Notes</Label>
               <Textarea id="adopter-notes" value={form.notes} onChange={set("notes")} />
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Annulla
+              Cancel
             </Button>
             <Button type="submit" disabled={!form.name.trim() || save.isPending}>
-              Salva
+              Save
             </Button>
           </DialogFooter>
         </form>

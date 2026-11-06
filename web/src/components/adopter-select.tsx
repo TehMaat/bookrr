@@ -27,11 +27,11 @@ export function AdopterSelect({
     <div className="flex gap-2">
       <Select value={value ? String(value) : "none"} onValueChange={(v) => onChange(v === "none" ? null : Number(v))}>
         <SelectTrigger id={id} className="w-full min-w-0">
-          <SelectValue placeholder="Scegli un adottatore" />
+          <SelectValue placeholder="Choose an adopter" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">
-            <span className="text-muted-foreground">Nessuno</span>
+            <span className="text-muted-foreground">None</span>
           </SelectItem>
           {options.map((a) => (
             <SelectItem key={a.id} value={String(a.id)}>
@@ -41,7 +41,7 @@ export function AdopterSelect({
           ))}
         </SelectContent>
       </Select>
-      <Button type="button" variant="outline" size="icon" onClick={() => setCreating(true)} aria-label="Nuovo adottatore">
+      <Button type="button" variant="outline" size="icon" onClick={() => setCreating(true)} aria-label="New adopter">
         <Plus />
       </Button>
       <AdopterFormDialog open={creating} onOpenChange={setCreating} onSaved={(a) => onChange(a.id)} />

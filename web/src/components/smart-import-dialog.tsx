@@ -46,7 +46,7 @@ export function SmartImportDialog({
 
   const save = useAction(
     () => api.importSmart(report, target === NEW ? { newLabel: label } : { id: Number(target) }),
-    target === NEW ? "Disco creato dai dati SMART" : "Disco aggiornato dai dati SMART"
+    target === NEW ? "Disk created from SMART data" : "Disk updated from SMART data"
   )
 
   const analyze = async (e: React.FormEvent) => {
@@ -89,12 +89,12 @@ export function SmartImportDialog({
         {!preview ? (
           <form onSubmit={analyze} className="grid min-w-0 gap-4">
             <DialogHeader>
-              <DialogTitle>{disk ? `Aggiorna "${disk.label}" da SMART` : "Importa da SMART"}</DialogTitle>
+              <DialogTitle>{disk ? `Update "${disk.label}" from SMART` : "Import from SMART"}</DialogTitle>
               <DialogDescription>
-                Esegui <code className="font-mono">sudo smartctl -a /dev/sdX</code> (o <code className="font-mono">-x</code>,{" "}
-                <code className="font-mono">-j</code> per il JSON) e incolla qui l'output. Va bene anche il testo copiato da
-                CrystalDiskInfo.
-                {!disk && " Se esiste già un disco con lo stesso numero di serie viene aggiornato, altrimenti ne viene creato uno nuovo."}
+                Run <code className="font-mono">sudo smartctl -a /dev/sdX</code> (or <code className="font-mono">-x</code>,{" "}
+                <code className="font-mono">-j</code> for JSON) and paste the output here. Text copied from CrystalDiskInfo
+                works too.
+                {!disk && " If a disk with the same serial number already exists it is updated, otherwise a new one is created."}
               </DialogDescription>
             </DialogHeader>
             <Textarea
@@ -108,14 +108,14 @@ export function SmartImportDialog({
             <input ref={fileInput} type="file" accept=".txt,.log,.json,text/*,application/json" hidden onChange={loadFile} />
             <DialogFooter className="sm:justify-between">
               <Button type="button" variant="outline" onClick={() => fileInput.current?.click()}>
-                <Upload /> Carica file
+                <Upload /> Load file
               </Button>
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Annulla
+                  Cancel
                 </Button>
                 <Button type="submit" disabled={analyzing || report.trim() === ""}>
-                  Analizza
+                  Analyze
                 </Button>
               </div>
             </DialogFooter>
@@ -123,53 +123,53 @@ export function SmartImportDialog({
         ) : (
           <form onSubmit={confirm} className="grid min-w-0 gap-4">
             <DialogHeader>
-              <DialogTitle>Dati SMART letti</DialogTitle>
+              <DialogTitle>SMART data read</DialogTitle>
               <DialogDescription>
-                Modello, seriale, capacità, firmware, stato e ore di accensione vengono copiati sul disco; nome, posizione e note
-                restano invariati.
+                Model, serial, capacity, firmware, health and power-on hours are copied to the disk; name, location and notes
+                stay as they are.
               </DialogDescription>
             </DialogHeader>
             {s && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-                <dt className="text-muted-foreground">Modello</dt>
+                <dt className="text-muted-foreground">Model</dt>
                 <dd className="min-w-0 break-words">{s.model || "—"}</dd>
-                <dt className="text-muted-foreground">Numero di serie</dt>
+                <dt className="text-muted-foreground">Serial number</dt>
                 <dd className="font-mono break-all">{s.serial || "—"}</dd>
-                <dt className="text-muted-foreground">Capacità</dt>
+                <dt className="text-muted-foreground">Capacity</dt>
                 <dd>{formatBytes(s.capacity)}</dd>
-                <dt className="text-muted-foreground">Tipo</dt>
+                <dt className="text-muted-foreground">Kind</dt>
                 <dd>{s.kind || "—"}</dd>
                 <dt className="text-muted-foreground">Firmware</dt>
                 <dd className="font-mono">{s.firmware || "—"}</dd>
-                <dt className="text-muted-foreground">Stato SMART</dt>
+                <dt className="text-muted-foreground">SMART health</dt>
                 <dd>{s.health ? <Badge variant={healthVariant(s.health)}>{s.health}</Badge> : "—"}</dd>
-                <dt className="text-muted-foreground">Ore di accensione</dt>
+                <dt className="text-muted-foreground">Power-on hours</dt>
                 <dd>{formatHours(s.powerOnHours)}</dd>
               </dl>
             )}
             {s && !s.serial && (
               <Alert variant="warning">
                 <TriangleAlert />
-                <AlertDescription>Nessun numero di serie nei dati: scegli tu il disco da aggiornare.</AlertDescription>
+                <AlertDescription>No serial number in the data: choose the disk to update yourself.</AlertDescription>
               </Alert>
             )}
             {otherSerial && (
               <Alert variant="warning">
                 <TriangleAlert />
                 <AlertDescription>
-                  "{chosen.label}" ha un altro numero di serie ({chosen.serial}): verrà sostituito con quello letto.
+                  "{chosen.label}" has a different serial number ({chosen.serial}): it will be replaced with the one read.
                 </AlertDescription>
               </Alert>
             )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Disco</Label>
+                <Label>Disk</Label>
                 <Select value={target} onValueChange={setTarget}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NEW}>Nuovo disco</SelectItem>
+                    <SelectItem value={NEW}>New disk</SelectItem>
                     {disks.data?.map((d) => (
                       <SelectItem key={d.id} value={String(d.id)}>
                         {d.label}
@@ -179,22 +179,22 @@ export function SmartImportDialog({
                   </SelectContent>
                 </Select>
                 {matched && target === String(matched.id) && (
-                  <p className="text-muted-foreground text-xs">Riconosciuto dal numero di serie.</p>
+                  <p className="text-muted-foreground text-xs">Recognized by its serial number.</p>
                 )}
               </div>
               {target === NEW && (
                 <div className="grid gap-2">
-                  <Label htmlFor="smart-label">Nome *</Label>
+                  <Label htmlFor="smart-label">Name *</Label>
                   <Input id="smart-label" value={label} onChange={(e) => setLabel(e.target.value)} required />
                 </div>
               )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPreview(null)}>
-                Indietro
+                Back
               </Button>
               <Button type="submit" disabled={save.isPending}>
-                {target === NEW ? "Crea disco" : "Aggiorna disco"}
+                {target === NEW ? "Create disk" : "Update disk"}
               </Button>
             </DialogFooter>
           </form>

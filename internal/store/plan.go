@@ -113,7 +113,7 @@ func (s *Store) PlanEntryByTmdb(ctx context.Context, tmdbID int64) (PlanEntry, e
 // AddPlanEntry adds a film to the plan, to do; ErrExists if it is there already.
 func (s *Store) AddPlanEntry(ctx context.Context, e PlanEntry) (PlanEntry, error) {
 	if e.TmdbID <= 0 {
-		return e, errors.New("film senza id TMDB")
+		return e, errors.New("film without TMDB id")
 	}
 	res, err := s.db.ExecContext(ctx, `
 INSERT INTO release_plan (tmdb_id, imdb_id, title, original_title, release_date, poster_path, status, source, source_title, note, created_at)
@@ -152,7 +152,7 @@ func (s *Store) UpdatePlanEntry(ctx context.Context, id int64, u PlanUpdate) (Pl
 	}
 	if u.Status != nil && *u.Status != e.Status {
 		if !ValidPlanStatus(*u.Status) {
-			return e, errors.New("stato non valido")
+			return e, errors.New("invalid status")
 		}
 		e.Status = *u.Status
 		e.DoneAt, e.ReleaseID = nil, 0

@@ -34,7 +34,7 @@ export function RemoveFromClientDialog({
   const [deleteFiles, setDeleteFiles] = useState(false)
   const remove = useAction(
     (l: Location) => api.removeFromClient(torrent.hash, l.clientId, deleteFiles),
-    location ? `Rimosso da ${location.clientName}` : undefined
+    location ? `Removed from ${location.clientName}` : undefined
   )
 
   useEffect(() => setDeleteFiles(false), [location?.clientId])
@@ -46,11 +46,11 @@ export function RemoveFromClientDialog({
     <AlertDialog open={location !== null} onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Rimuovere da {location?.clientName}?</AlertDialogTitle>
+          <AlertDialogTitle>Remove from {location?.clientName}?</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="grid gap-2">
               <p className="break-all">
-                "{torrent.name}" verrà tolto da {location?.clientName} e resterà su{" "}
+                "{torrent.name}" will be removed from {location?.clientName} and stay on{" "}
                 {others.map((l) => l.clientName).join(", ")}.
               </p>
               {location && <p className="font-mono text-xs break-all">{location.savePath}</p>}
@@ -60,17 +60,17 @@ export function RemoveFromClientDialog({
         <div className="grid gap-2">
           <div className="flex items-center gap-2">
             <Switch id="rm-delete-files" checked={deleteFiles} onCheckedChange={setDeleteFiles} />
-            <Label htmlFor="rm-delete-files">Elimina anche i file scaricati</Label>
+            <Label htmlFor="rm-delete-files">Also delete the downloaded files</Label>
           </div>
           {deleteFiles && samePath.length > 0 && (
             <p className="text-destructive text-xs">
-              Attenzione: anche {samePath.map((l) => l.clientName).join(", ")} usa lo stesso percorso. Se i client
-              condividono lo stesso disco elimineresti anche l'altra copia.
+              Warning: {samePath.map((l) => l.clientName).join(", ")} uses the same path too. If the clients share
+              the same disk you would delete the other copy as well.
             </p>
           )}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel>Annulla</AlertDialogCancel>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive hover:bg-destructive/90 text-white"
             disabled={remove.isPending}
@@ -80,7 +80,7 @@ export function RemoveFromClientDialog({
               if (location) remove.mutate(location, { onSuccess: onClose })
             }}
           >
-            Rimuovi
+            Remove
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

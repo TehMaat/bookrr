@@ -41,7 +41,7 @@ export function DiskQrDialog({ disk, onClose }: { disk: Disk | null; onClose: ()
     if (disk) setBase(saved || window.location.origin)
   }, [disk, saved])
 
-  const save = useAction(() => api.saveSettings({ publicUrl: normalizeBase(base) }), "Indirizzo salvato")
+  const save = useAction(() => api.saveSettings({ publicUrl: normalizeBase(base) }), "Address saved")
   const url = disk ? diskUrl(base, disk.id) : ""
   const svg = useMemo(() => (url ? renderSVG(url, { ecc: "M", border: 2 }) : ""), [url])
   const changed = normalizeBase(base) !== saved
@@ -77,15 +77,15 @@ ${d.serial ? `<div class="meta">SN ${escape(d.serial)}</div>` : ""}
     <Dialog open={disk !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>QR code di "{disk?.label}"</DialogTitle>
+          <DialogTitle>QR code of "{disk?.label}"</DialogTitle>
           <DialogDescription>
-            Stampalo e attaccalo al disco: inquadrandolo con il telefono apri l'elenco dei torrent archiviati su questo disco.
+            Print it and stick it on the disk: scan it with your phone to open the list of torrents archived on this disk.
           </DialogDescription>
         </DialogHeader>
         <div className="mx-auto size-56 rounded-md bg-white p-1 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: svg }} />
         <p className="text-muted-foreground text-center font-mono text-xs break-all">{url}</p>
         <div className="grid gap-2">
-          <Label htmlFor="public-url">Indirizzo di bookrr nella tua rete</Label>
+          <Label htmlFor="public-url">bookrr address on your network</Label>
           <div className="flex gap-2">
             <Input
               id="public-url"
@@ -95,26 +95,26 @@ ${d.serial ? `<div class="meta">SN ${escape(d.serial)}</div>` : ""}
               className="font-mono"
             />
             <Button variant="outline" disabled={!changed || save.isPending} onClick={() => save.mutate(undefined)}>
-              Salva
+              Save
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            L'IP (o il nome) e la porta con cui gli altri dispositivi raggiungono il container, ad esempio quelli della
-            macchina che ospita Docker. Viene salvato per tutti i dischi.
+            The IP (or name) and port other devices use to reach the container, e.g. those of the machine running
+            Docker. It is saved for all disks.
           </p>
         </div>
         {unreachable(normalizeBase(base)) && (
           <Alert>
             <TriangleAlert />
-            <AlertDescription>Questo indirizzo funziona solo da questo computer: indica l'IP della macchina nella tua rete.</AlertDescription>
+            <AlertDescription>This address only works from this computer: enter the IP of the machine on your network.</AlertDescription>
           </Alert>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={download}>
-            <Download /> Scarica SVG
+            <Download /> Download SVG
           </Button>
           <Button onClick={print}>
-            <Printer /> Stampa etichetta
+            <Printer /> Print label
           </Button>
         </DialogFooter>
       </DialogContent>

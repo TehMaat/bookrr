@@ -65,7 +65,7 @@ type configValues map[string]*string
 func (in configValues) unknown() string {
 	for k := range in {
 		if !config.IsOption(k) {
-			return fmt.Sprintf("%s non si può impostare dall'interfaccia", k)
+			return fmt.Sprintf("%s can't be set from the interface", k)
 		}
 	}
 	return ""
@@ -159,40 +159,40 @@ func (s *Server) testConfig(w http.ResponseWriter, r *http.Request) {
 	case "unit3d":
 		url, key := strings.TrimRight(get("BOOKRR_UNIT3D_URL"), "/"), get("BOOKRR_UNIT3D_API_KEY")
 		if url == "" || key == "" {
-			err = errors.New("servono indirizzo e API key")
+			err = errors.New("address and API key are needed")
 			break
 		}
 		var name string
 		if name, err = unit3d.New(url, key).Username(ctx); err == nil {
-			msg = "Collegato come " + name
+			msg = "Connected as " + name
 		}
 	case "tmdb":
 		if key := get("BOOKRR_TMDB_API_KEY"); key == "" {
-			err = errors.New("serve la chiave")
+			err = errors.New("the key is needed")
 		} else if err = tmdb.New(key).Check(ctx); err == nil {
-			msg = "Chiave TMDB valida"
+			msg = "Valid TMDB key"
 		}
 	case "mdblist":
 		if key := get("BOOKRR_MDBLIST_API_KEY"); key == "" {
-			err = errors.New("serve la chiave")
+			err = errors.New("the key is needed")
 		} else {
 			var name string
 			if name, err = mdblist.New(key).User(ctx); err == nil {
-				msg = strings.TrimSpace("Chiave MDBList valida " + name)
+				msg = strings.TrimSpace("Valid MDBList key " + name)
 			}
 		}
 	case "prowlarr":
 		url, key := strings.TrimRight(get("BOOKRR_PROWLARR_URL"), "/"), get("BOOKRR_PROWLARR_API_KEY")
 		if url == "" || key == "" {
-			err = errors.New("servono indirizzo e API key")
+			err = errors.New("address and API key are needed")
 			break
 		}
 		var v string
 		if v, err = prowlarr.New(url, key).Version(ctx); err == nil {
-			msg = strings.TrimSpace("Collegato a Prowlarr " + v)
+			msg = strings.TrimSpace("Connected to Prowlarr " + v)
 		}
 	default:
-		writeError(w, http.StatusBadRequest, "servizio sconosciuto")
+		writeError(w, http.StatusBadRequest, "unknown service")
 		return
 	}
 	if err != nil {

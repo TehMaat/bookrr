@@ -57,16 +57,16 @@ export default function App() {
   }
 
   const nav: (NavItem & { id: Tab })[] = [
-    { id: "torrents", label: "Torrent", icon: ListTree },
-    { id: "releases", label: "Release", icon: CloudUpload },
-    { id: "dead", label: "Morte", icon: Skull },
-    { id: "missing", label: "Mancanti", icon: Puzzle },
-    { id: "plan", label: "Piano", icon: ListTodo },
-    { id: "alerts", label: "Segnalazioni", icon: BellRing, count: openCount },
-    { id: "disks", label: "Dischi", icon: HardDrive },
-    { id: "adopters", label: "Adottatori", icon: HandHeart },
-    { id: "clients", label: "Client", icon: Server },
-    { id: "logs", label: "Log", icon: ScrollText },
+    { id: "torrents", label: "Torrents", icon: ListTree },
+    { id: "releases", label: "Releases", icon: CloudUpload },
+    { id: "dead", label: "Dead", icon: Skull },
+    { id: "missing", label: "Missing", icon: Puzzle },
+    { id: "plan", label: "Plan", icon: ListTodo },
+    { id: "alerts", label: "Alerts", icon: BellRing, count: openCount },
+    { id: "disks", label: "Disks", icon: HardDrive },
+    { id: "adopters", label: "Adopters", icon: HandHeart },
+    { id: "clients", label: "Clients", icon: Server },
+    { id: "logs", label: "Logs", icon: ScrollText },
   ]
   const current = nav.find((n) => n.id === tab)!
   const sidebar = (

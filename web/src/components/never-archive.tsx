@@ -67,8 +67,8 @@ export function useNeverArchive() {
 }
 
 export function neverArchiveDone(n: number, never: boolean) {
-  if (never) toast.success(n === 1 ? "1 torrent non sarà più segnato da archiviare" : `${n} torrent non saranno più segnati da archiviare`)
-  else toast.success(n === 1 ? "1 torrent di nuovo segnalato quando è archiviabile" : `${n} torrent di nuovo segnalati quando sono archiviabili`)
+  if (never) toast.success(n === 1 ? "1 torrent will no longer be flagged to archive" : `${n} torrents will no longer be flagged to archive`)
+  else toast.success(n === 1 ? "1 torrent flagged again when archivable" : `${n} torrents flagged again when archivable`)
 }
 
 /**
@@ -104,29 +104,29 @@ export function NeverArchiveBar({
     <div className="bg-muted/40 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
       {chosen.length === 0 ? (
         <span className="text-muted-foreground">
-          Spunta i torrent che non vuoi archiviare mai: non saranno più segnati come archiviabili.
+          Tick the torrents you never want to archive: they will no longer be flagged as archivable.
         </span>
       ) : (
         <>
-          <span className="font-medium">{hashes.length === 1 ? "1 selezionato" : `${hashes.length} selezionati`}</span>
+          <span className="font-medium">{hashes.length === 1 ? "1 selected" : `${hashes.length} selected`}</span>
           {toKeep > 0 && (
             <Button size="sm" className="h-7" disabled={mark.isPending} onClick={() => run(true)}>
-              <ArchiveX /> Non segnare da archiviare
+              <ArchiveX /> Never archive
             </Button>
           )}
           {toRestore > 0 && (
             <Button size="sm" variant="outline" className="h-7" disabled={mark.isPending} onClick={() => run(false)}>
-              <ArchiveRestore /> Segnala di nuovo quando archiviabile
+              <ArchiveRestore /> Flag again when archivable
             </Button>
           )}
           <Button size="sm" variant="ghost" className="h-7" onClick={onClear}>
-            <X /> Deseleziona
+            <X /> Clear selection
           </Button>
         </>
       )}
       {kept > 0 && onShowKept && (
         <button type="button" className="text-muted-foreground ml-auto text-xs underline-offset-2 hover:underline" onClick={onShowKept}>
-          {kept === 1 ? "1 da non archiviare" : `${kept} da non archiviare`} · mostra
+          {kept === 1 ? "1 never to archive" : `${kept} never to archive`} · show
         </button>
       )}
     </div>

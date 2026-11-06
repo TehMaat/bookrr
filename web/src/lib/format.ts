@@ -20,7 +20,7 @@ export function parseBytes(s: string): number {
   return Math.round(v * 1024 ** Math.max(exp, 0))
 }
 
-const dateFmt = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" })
+const dateFmt = new Intl.DateTimeFormat("en-GB", { dateStyle: "short", timeStyle: "short" })
 
 export function formatDate(s: string | null | undefined): string {
   if (!s) return "—"
@@ -28,10 +28,10 @@ export function formatDate(s: string | null | undefined): string {
   return isNaN(d.getTime()) ? s : dateFmt.format(d)
 }
 
-const rtf = new Intl.RelativeTimeFormat("it-IT", { numeric: "auto" })
+const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 export function formatRelative(s: string | null | undefined): string {
-  if (!s) return "mai"
+  if (!s) return "never"
   const diff = (new Date(s).getTime() - Date.now()) / 1000
   const abs = Math.abs(diff)
   if (abs < 60) return rtf.format(Math.round(diff), "second")
@@ -41,26 +41,26 @@ export function formatRelative(s: string | null | undefined): string {
 }
 
 const states: Record<string, string> = {
-  uploading: "In seed",
-  stalledUP: "In seed (fermo)",
-  forcedUP: "Seed forzato",
-  queuedUP: "In coda (seed)",
-  pausedUP: "In pausa",
-  stoppedUP: "Fermato",
-  checkingUP: "Verifica",
-  downloading: "In download",
-  stalledDL: "Download fermo",
-  forcedDL: "Download forzato",
-  queuedDL: "In coda",
-  pausedDL: "In pausa (incompleto)",
-  stoppedDL: "Fermato (incompleto)",
-  checkingDL: "Verifica",
-  metaDL: "Metadati",
-  forcedMetaDL: "Metadati",
-  checkingResumeData: "Verifica",
-  moving: "Spostamento",
-  missingFiles: "File mancanti",
-  error: "Errore",
+  uploading: "Seeding",
+  stalledUP: "Seeding (stalled)",
+  forcedUP: "Forced seeding",
+  queuedUP: "Queued (seed)",
+  pausedUP: "Paused",
+  stoppedUP: "Stopped",
+  checkingUP: "Checking",
+  downloading: "Downloading",
+  stalledDL: "Download stalled",
+  forcedDL: "Forced download",
+  queuedDL: "Queued",
+  pausedDL: "Paused (incomplete)",
+  stoppedDL: "Stopped (incomplete)",
+  checkingDL: "Checking",
+  metaDL: "Metadata",
+  forcedMetaDL: "Metadata",
+  checkingResumeData: "Checking",
+  moving: "Moving",
+  missingFiles: "Missing files",
+  error: "Error",
 }
 
 export function formatState(s: string): string {
@@ -93,14 +93,14 @@ export function isErrorState(s: string): boolean {
   return s === "missingFiles" || s === "error"
 }
 
-const intFmt = new Intl.NumberFormat("it-IT")
-const yearsFmt = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 })
+const intFmt = new Intl.NumberFormat("en-GB")
+const yearsFmt = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 })
 
-/** Power-on hours, e.g. "28.734 h (3,3 anni)". */
+/** Power-on hours, e.g. "28,734 h (3.3 years)". */
 export function formatHours(h: number): string {
   if (!h || h <= 0) return "—"
   const years = h / (24 * 365)
-  return years >= 0.1 ? `${intFmt.format(h)} h (${yearsFmt.format(years)} anni)` : `${intFmt.format(h)} h`
+  return years >= 0.1 ? `${intFmt.format(h)} h (${yearsFmt.format(years)} years)` : `${intFmt.format(h)} h`
 }
 
 /** Badge variant for a SMART health status (PASSED, OK, Good, FAILED, Caution…). */
@@ -108,4 +108,9 @@ export function healthVariant(h: string): "success" | "destructive" | "warning" 
   if (/pass|^ok|good|buon/i.test(h)) return "success"
   if (/fail|bad|cattiv/i.test(h)) return "destructive"
   return "warning"
+}
+
+/** "1 torrent", "3 torrents": a count with its noun, singular or plural. */
+export function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`
 }

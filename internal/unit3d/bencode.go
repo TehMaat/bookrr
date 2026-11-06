@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-var errBadTorrent = errors.New("file .torrent non valido")
+var errBadTorrent = errors.New("invalid .torrent file")
 
 // InfoHash returns the v1 info hash (SHA-1 of the bencoded "info"
 // dictionary) of a .torrent file.
@@ -34,7 +34,7 @@ func InfoHash(data []byte) (string, error) {
 		}
 		i = end
 	}
-	return "", errors.New("file .torrent senza dizionario info")
+	return "", errors.New("the .torrent file has no info dictionary")
 }
 
 // bstring reads the byte string starting at i and returns it with the

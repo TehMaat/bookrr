@@ -103,7 +103,7 @@ func TestTestConfig(t *testing.T) {
 	}
 	// The saved key, with the address being typed.
 	body := map[string]any{"service": "prowlarr", "values": map[string]any{"BOOKRR_PROWLARR_URL": prowlarr.URL, "BOOKRR_PROWLARR_API_KEY": nil}}
-	if code := call(t, h, "POST", "/api/config/test", body, &res); code != 200 || !res.OK || res.Message != "Collegato a Prowlarr 1.30.2" {
+	if code := call(t, h, "POST", "/api/config/test", body, &res); code != 200 || !res.OK || res.Message != "Connected to Prowlarr 1.30.2" {
 		t.Fatalf("%d %+v", code, res)
 	}
 	body["values"] = map[string]any{"BOOKRR_PROWLARR_URL": prowlarr.URL, "BOOKRR_PROWLARR_API_KEY": "bad"}

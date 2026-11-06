@@ -47,12 +47,12 @@ func (s *Scanner) Run(ctx context.Context) {
 func (s *Scanner) ScanAll(ctx context.Context) {
 	disks, err := s.store.BucketDisks(ctx)
 	if err != nil {
-		slog.Error("lettura archivi S3", "err", err)
+		slog.Error("reading S3 archives", "err", err)
 		return
 	}
 	for _, d := range disks {
 		if _, err := s.Scan(ctx, d); err != nil && ctx.Err() == nil {
-			slog.Warn("bucket non leggibile", "disk", d.Label, "bucket", d.S3.Bucket, "err", err)
+			slog.Warn("bucket not readable", "disk", d.Label, "bucket", d.S3.Bucket, "err", err)
 		}
 	}
 }
@@ -60,7 +60,7 @@ func (s *Scanner) ScanAll(ctx context.Context) {
 // Scan lists the disk's bucket and records the torrents found there.
 func (s *Scanner) Scan(ctx context.Context, d store.Disk) (store.BucketResult, error) {
 	if d.S3 == nil {
-		return store.BucketResult{}, fmt.Errorf("%s non è collegato a un bucket", d.Label)
+		return store.BucketResult{}, fmt.Errorf("%s is not linked to a bucket", d.Label)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -68,7 +68,7 @@ func (s *Scanner) Scan(ctx context.Context, d store.Disk) (store.BucketResult, e
 	res, err := s.scan(ctx, d)
 	if err != nil && !errors.Is(err, store.ErrBucketChanged) && !errors.Is(err, store.ErrNotFound) {
 		if serr := s.store.SetBucketError(context.WithoutCancel(ctx), d.ID, err); serr != nil {
-			slog.Error("salvataggio errore bucket", "err", serr)
+			slog.Error("saving bucket error", "err", serr)
 		}
 	}
 	return res, err
@@ -94,7 +94,7 @@ func (s *Scanner) scan(ctx context.Context, d store.Disk) (store.BucketResult, e
 	if err != nil {
 		return res, err
 	}
-	slog.Info("bucket letto", "disk", d.Label, "bucket", d.S3.Bucket, "objects", scan.Objects,
+	slog.Info("bucket read", "disk", d.Label, "bucket", d.S3.Bucket, "objects", scan.Objects,
 		"torrents", len(scan.Matches), "unmatched", len(scan.Unmatched), "added", res.Added, "removed", res.Removed, "alerts", res.Alerts)
 	return res, nil
 }

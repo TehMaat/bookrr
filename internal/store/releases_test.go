@@ -186,3 +186,61 @@ func TestTrackerReleaseStatus(t *testing.T) {
 		t.Fatalf("added release: %+v", r)
 	}
 }
+
+// The disk kinds and the texts bookrr saved on the alerts, from when the
+// interface was in Italian, are translated; what the user typed is kept.
+func TestEnglishMigration(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := len(migrations) - 1
+	for i := 0; i < before; i++ {
+		if _, err := db.ExecContext(ctx, migrations[i]); err != nil {
+			t.Fatalf("migration %d: %v", i+1, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d;
+INSERT INTO disks (label, kind, created_at) VALUES ('Tape 1', 'Nastro', 'x'), ('Box', 'Altro', 'x'), ('Disk', 'HDD', 'x');
+INSERT INTO torrents (hash, name, personal_release, manual, first_seen_at, updated_at) VALUES ('h1', 'Old', 1, 1, 'x', 'x');
+INSERT INTO alerts (hash, source, message, created_at, resolved_at, resolution) VALUES
+	('h1', 'sync', 'Rimosso da seedbox', '2026-01-01', '2026-01-02', 'Spostato su Archivio 1 (SN WD-1) · /x — Adottato da luigi — nota mia'),
+	('h1', 'sync', 'Rimosso dal client', '2026-01-03', '2026-01-04', 'Spostato su archivio — Eliminato definitivamente');`, before)); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	disks, err := s.ListDisks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]string{}
+	for _, d := range disks {
+		kinds[d.Label] = d.Kind
+	}
+	if kinds["Tape 1"] != "Tape" || kinds["Box"] != "Other" || kinds["Disk"] != "HDD" {
+		t.Fatalf("kinds %v", kinds)
+	}
+	alerts, err := s.ListAlerts(ctx, false, "h1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, a := range alerts {
+		got[a.Message] = a.Resolution
+	}
+	want := map[string]string{
+		"Removed from seedbox":    "Moved to Archivio 1 (SN WD-1) · /x — Adopted by luigi — nota mia",
+		"Removed from the client": "Moved to archive — Permanently deleted",
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("alerts %v", got)
+	}
+}

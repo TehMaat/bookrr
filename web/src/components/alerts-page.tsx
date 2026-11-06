@@ -81,25 +81,25 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-sm">
-          Personal Release rimosse da un client e non più presenti altrove.
+          Personal Releases removed from a client and no longer anywhere else.
         </p>
         <Tabs value={show} onValueChange={(v) => setShow(v as "open" | "all")} className="ml-auto">
           <TabsList>
-            <TabsTrigger value="open">Da gestire</TabsTrigger>
-            <TabsTrigger value="all">Storico</TabsTrigger>
+            <TabsTrigger value="open">To handle</TabsTrigger>
+            <TabsTrigger value="all">History</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
       {selected.length > 0 && (
         <div className="bg-muted/60 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
           <span className="font-medium">
-            {selected.length === 1 ? "1 selezionata" : `${selected.length} selezionate`}
+            {selected.length === 1 ? "1 selected" : `${selected.length} selected`}
           </span>
           <Button size="sm" className="ml-auto h-7" onClick={() => onResolve(selected)}>
-            <TriangleAlert /> Indica posizione
+            <TriangleAlert /> Set location
           </Button>
           <Button size="sm" variant="ghost" className="h-7" onClick={() => setChecked(new Set())}>
-            <X /> Deseleziona
+            <X /> Clear selection
           </Button>
         </div>
       )}
@@ -110,7 +110,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
               <TableHead className="w-8">
                 <input
                   type="checkbox"
-                  aria-label="Seleziona tutte"
+                  aria-label="Select all"
                   className="accent-primary size-4 cursor-pointer align-middle disabled:cursor-default"
                   checked={allSelected}
                   ref={(el) => {
@@ -124,16 +124,16 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                 <div className="flex items-center gap-1">
                   Torrent
                   <ColumnFilter label="Torrent" active={isActive(cf.torrent)} onClear={() => columns.clear("torrent")}>
-                    <TextFilter value={cf.torrent} onChange={(v) => columns.set("torrent", v)} placeholder="Nome o hash…" />
+                    <TextFilter value={cf.torrent} onChange={(v) => columns.set("torrent", v)} placeholder="Name or hash…" />
                   </ColumnFilter>
                 </div>
               </TableHead>
               <TableHead>
                 <div className="flex items-center gap-1">
-                  Evento
-                  <ColumnFilter label="Evento" active={isActive(cf.event)} onClear={() => columns.clear("event")}>
+                  Event
+                  <ColumnFilter label="Event" active={isActive(cf.event)} onClear={() => columns.clear("event")}>
                     <OptionsFilter
-                      title="Rilevato da"
+                      title="Detected by"
                       options={(Object.keys(sourceLabels) as Alert["source"][]).map((s) => ({ value: s, label: sourceLabels[s] }))}
                       value={cf.event}
                       onChange={(v) => columns.set("event", v)}
@@ -143,25 +143,25 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
               </TableHead>
               <TableHead>
                 <div className="flex items-center gap-1">
-                  Quando
-                  <ColumnFilter label="Quando" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
+                  When
+                  <ColumnFilter label="When" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
                     <RangeFilter type="date" value={cf.date} onChange={(v) => columns.set("date", v)} />
                   </ColumnFilter>
                 </div>
               </TableHead>
               <TableHead>
                 <div className="flex items-center gap-1">
-                  Esito
+                  Outcome
                   <ColumnFilter
-                    label="Esito"
+                    label="Outcome"
                     align="end"
                     active={isActive(cf.outcome) || isActive(cf.resolution)}
                     onClear={() => columns.clear("outcome", "resolution")}
                   >
                     <OptionsFilter
                       options={[
-                        { value: "open", label: "Da gestire" },
-                        { value: "resolved", label: "Gestite" },
+                        { value: "open", label: "To handle" },
+                        { value: "resolved", label: "Handled" },
                       ]}
                       value={cf.outcome}
                       onChange={(v) => columns.set("outcome", v)}
@@ -169,7 +169,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                     <TextFilter
                       value={cf.resolution}
                       onChange={(v) => columns.set("resolution", v)}
-                      placeholder="Esito contiene (es. un disco)…"
+                      placeholder="Outcome contains (e.g. a disk)…"
                     />
                   </ColumnFilter>
                 </div>
@@ -187,7 +187,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
             {alerts.data && alerts.data.length > 0 && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
-                  Nessuna segnalazione corrisponde ai filtri.
+                  No alerts match the filters.
                 </TableCell>
               </TableRow>
             )}
@@ -195,7 +195,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
                   <CircleCheck className="mx-auto mb-2 size-6 text-emerald-500" />
-                  Nessuna segnalazione {show === "open" ? "da gestire" : ""}.
+                  No alerts{show === "open" ? " to handle" : ""}.
                 </TableCell>
               </TableRow>
             )}
@@ -209,7 +209,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                   {!a.resolvedAt && (
                     <input
                       type="checkbox"
-                      aria-label={`Seleziona ${a.torrentName}`}
+                      aria-label={`Select ${a.torrentName}`}
                       className="accent-primary size-4 cursor-pointer align-middle"
                       checked={checked.has(a.id)}
                       onChange={() => {}}
@@ -234,12 +234,12 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
                   {a.resolvedAt ? (
                     <div className="min-w-[200px] text-sm">
                       <span className="text-emerald-600 dark:text-emerald-400">✓ </span>
-                      {a.resolution || "Gestita"}
+                      {a.resolution || "Handled"}
                       <div className="text-muted-foreground text-xs">{formatDate(a.resolvedAt)}</div>
                     </div>
                   ) : (
                     <Button size="sm" variant="outline" className="h-7" onClick={() => onResolve([a])}>
-                      <TriangleAlert className="text-amber-600" /> Indica posizione
+                      <TriangleAlert className="text-amber-600" /> Set location
                     </Button>
                   )}
                 </TableCell>
@@ -249,7 +249,7 @@ export function AlertsPage({ onResolve }: { onResolve: (as: Alert[]) => void }) 
         </Table>
         {columns.active > 0 && (
           <div className="text-muted-foreground flex items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
-            <span>{rows.length === 1 ? "1 segnalazione" : `${rows.length} segnalazioni`}</span>
+            <span>{rows.length === 1 ? "1 alert" : `${rows.length} alerts`}</span>
             <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           </div>
         )}

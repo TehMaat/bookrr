@@ -79,7 +79,7 @@ func TestListErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 	c, _ := New(Config{Endpoint: srv.URL, Bucket: "b"})
-	if _, err := c.List(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "accesso negato") {
+	if _, err := c.List(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "access denied") {
 		t.Fatalf("err %v", err)
 	}
 }

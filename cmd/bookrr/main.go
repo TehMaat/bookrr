@@ -23,12 +23,12 @@ import (
 var version = "dev"
 
 func main() {
-	healthcheck := flag.Bool("healthcheck", false, "verifica che il server risponda ed esce")
+	healthcheck := flag.Bool("healthcheck", false, "checks that the server responds and exits")
 	flag.Parse()
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("configurazione", "err", err)
+		slog.Error("configuration", "err", err)
 		os.Exit(1)
 	}
 	if *healthcheck {
@@ -36,14 +36,14 @@ func main() {
 	}
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
-		slog.Error("cartella dati", "dir", cfg.DataDir, "err", err)
+		slog.Error("data folder", "dir", cfg.DataDir, "err", err)
 		os.Exit(1)
 	}
 	// From here on the messages also go to the files of the day, in the
 	// data folder; before, to stderr alone.
 	logFiles, err := logs.New(cfg.LogDir())
 	if err != nil {
-		slog.Warn("log su file disattivati", "dir", cfg.LogDir(), "err", err)
+		slog.Warn("file logs disabled", "dir", cfg.LogDir(), "err", err)
 	} else {
 		logFiles.Configure(cfg.LogRetentionDays, cfg.LogMaxSize, cfg.LogLevel)
 		slog.SetDefault(slog.New(logs.Handler(logFiles, os.Stderr)))
@@ -62,11 +62,11 @@ func main() {
 	// The options set from the web UI, under the environment.
 	stored, err := st.ConfigValues(ctx)
 	if err != nil {
-		slog.Error("configurazione salvata", "err", err)
+		slog.Error("saved configuration", "err", err)
 		os.Exit(1)
 	}
 	if full, err := config.Resolve(stored); err != nil {
-		slog.Warn("configurazione salvata dall'interfaccia non valida: uso solo le variabili d'ambiente", "err", err)
+		slog.Warn("configuration saved from the interface is invalid: using only the environment variables", "err", err)
 	} else {
 		cfg = full
 	}
@@ -90,7 +90,7 @@ func main() {
 		srv.Shutdown(shutdown)
 	}()
 
-	slog.Info("bookrr avviato", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
+	slog.Info("bookrr started", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
 		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasonsAndSagas", svc.Missing != nil, "missingLists", svc.Missing != nil && svc.Missing.MDBList != nil, "prowlarr", svc.Best != nil, "logs", cfg.LogDir(), "logRetentionDays", cfg.LogRetentionDays, "logLevel", cfg.LogLevel.String())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server", "err", err)

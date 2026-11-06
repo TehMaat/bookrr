@@ -40,16 +40,16 @@ func newFakes(t *testing.T) *fakes {
 	shows := map[string]string{
 		"/3/tv/100": `{"id":100,"name":"Serie Test","first_air_date":"2019-03-01","seasons":[
 			{"season_number":0,"name":"Speciali","air_date":"2019-01-01","episode_count":3},
-			{"season_number":1,"name":"Stagione 1","air_date":"2019-03-01","episode_count":10},
-			{"season_number":2,"name":"Stagione 2","air_date":"2020-03-01","episode_count":10},
-			{"season_number":3,"name":"Stagione 3","air_date":"2021-03-01","episode_count":10},
-			{"season_number":4,"name":"Stagione 4","air_date":"2022-03-01","episode_count":10},
+			{"season_number":1,"name":"Season 1","air_date":"2019-03-01","episode_count":10},
+			{"season_number":2,"name":"Season 2","air_date":"2020-03-01","episode_count":10},
+			{"season_number":3,"name":"Season 3","air_date":"2021-03-01","episode_count":10},
+			{"season_number":4,"name":"Season 4","air_date":"2022-03-01","episode_count":10},
 			{"season_number":5,"name":"","air_date":"2023-03-01","episode_count":8},
-			{"season_number":6,"name":"Stagione 6","air_date":"2099-03-01","episode_count":8},
-			{"season_number":7,"name":"Stagione 7","air_date":null,"episode_count":0}]}`,
+			{"season_number":6,"name":"Season 6","air_date":"2099-03-01","episode_count":8},
+			{"season_number":7,"name":"Season 7","air_date":null,"episode_count":0}]}`,
 		"/3/tv/200": `{"id":200,"name":"Altra Serie","first_air_date":"2019-05-01","seasons":[
-			{"season_number":1,"name":"Stagione 1","air_date":"2019-05-01","episode_count":6},
-			{"season_number":2,"name":"Stagione 2","air_date":"2021-05-01","episode_count":6}]}`,
+			{"season_number":1,"name":"Season 1","air_date":"2019-05-01","episode_count":6},
+			{"season_number":2,"name":"Season 2","air_date":"2021-05-01","episode_count":6}]}`,
 		"/3/find/555": `{"movie_results":[],"tv_results":[{"id":200}]}`,
 		"/3/find/999": `{"movie_results":[],"tv_results":[]}`,
 	}
@@ -159,7 +159,7 @@ func TestCheckSeries(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Check(ctx)
-	if s := c.State(); s.LastError != "" || s.Running || s.Phase != "" || !strings.HasPrefix(s.LastResult, "3 serie, ") {
+	if s := c.State(); s.LastError != "" || s.Running || s.Phase != "" || !strings.HasPrefix(s.LastResult, "3 series, ") {
 		t.Fatalf("state %+v", s)
 	}
 	stored, err := st.GapGroups(ctx, KindSeries)
@@ -193,7 +193,7 @@ func TestCheckSeries(t *testing.T) {
 	for _, u := range g.Units {
 		units = append(units, u.Number)
 	}
-	if !reflect.DeepEqual(units, []int{1, 2, 3, 4, 5}) || g.Units[4].Name != "Stagione 5" {
+	if !reflect.DeepEqual(units, []int{1, 2, 3, 4, 5}) || g.Units[4].Name != "Season 5" {
 		t.Fatalf("units %+v", g.Units)
 	}
 	type cell struct {

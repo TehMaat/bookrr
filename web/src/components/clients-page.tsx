@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { api, type Client, type ClientInput } from "@/lib/api"
-import { formatRelative } from "@/lib/format"
+import { formatRelative, plural } from "@/lib/format"
 import { useAction, useClients, useInfo } from "@/lib/queries"
 
 function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: Client | null; onOpenChange: (o: boolean) => void }) {
@@ -50,15 +50,15 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
 
   const save = useAction(
     (c: ClientInput) => (client ? api.updateClient(client.id, c) : api.createClient(c)),
-    client ? "Client aggiornato" : "Client aggiunto, sincronizzazione avviata"
+    client ? "Client updated" : "Client added, sync started"
   )
 
   const test = async () => {
     setTesting(true)
     try {
       const r = await api.testClient(payload())
-      if (r.ok) toast.success(`Connesso a qBittorrent ${r.version}`, { description: `${r.torrents} torrent trovati` })
-      else toast.error("Connessione fallita", { description: r.error })
+      if (r.ok) toast.success(`Connected to qBittorrent ${r.version}`, { description: `${plural(r.torrents ?? 0, "torrent")} found` })
+      else toast.error("Connection failed", { description: r.error })
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -80,11 +80,11 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
           }}
         >
           <DialogHeader>
-            <DialogTitle>{client ? "Modifica client" : "Nuovo client qBittorrent"}</DialogTitle>
-            <DialogDescription>Indirizzo della Web UI di qBittorrent.</DialogDescription>
+            <DialogTitle>{client ? "Edit client" : "New qBittorrent client"}</DialogTitle>
+            <DialogDescription>Address of the qBittorrent Web UI.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            <Label htmlFor="c-name">Nome *</Label>
+            <Label htmlFor="c-name">Name *</Label>
             <Input id="c-name" value={form.name} onChange={set("name")} placeholder="seedbox" required autoFocus />
           </div>
           <div className="grid gap-2">
@@ -93,7 +93,7 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="c-user">Utente</Label>
+              <Label htmlFor="c-user">Username</Label>
               <Input id="c-user" value={form.username} onChange={set("username")} autoComplete="off" />
             </div>
             <div className="grid gap-2">
@@ -103,7 +103,7 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={client?.hasPassword ? "•••••• (invariata)" : ""}
+                placeholder={client?.hasPassword ? "•••••• (unchanged)" : ""}
                 autoComplete="new-password"
               />
             </div>
@@ -111,7 +111,7 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
           <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2">
               <Switch id="c-enabled" checked={form.enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))} />
-              <Label htmlFor="c-enabled">Attivo</Label>
+              <Label htmlFor="c-enabled">Enabled</Label>
             </div>
             <div className="flex items-center gap-2">
               <Switch
@@ -119,15 +119,15 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
                 checked={form.skipTlsVerify}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, skipTlsVerify: v }))}
               />
-              <Label htmlFor="c-tls">Ignora certificato TLS</Label>
+              <Label htmlFor="c-tls">Skip TLS certificate check</Label>
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={test} disabled={testing || !form.url}>
-              {testing ? "Verifica…" : "Prova connessione"}
+              {testing ? "Testing…" : "Test connection"}
             </Button>
             <Button type="submit" disabled={save.isPending}>
-              Salva
+              Save
             </Button>
           </DialogFooter>
         </form>
@@ -139,26 +139,26 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
 function WebhookCard() {
   const info = useInfo()
   const origin = window.location.origin
-  const token = info.data?.webhookTokenRequired ? "?token=IL_TUO_TOKEN" : ""
+  const token = info.data?.webhookTokenRequired ? "?token=YOUR_TOKEN" : ""
   const example = `curl -s -X POST "${origin}/api/webhook/qbit${token}" \\
-  -d hash="%I" -d name="%N" -d tags="%G" -d category="%L" -d client="NOME_CLIENT"`
+  -d hash="%I" -d name="%N" -d tags="%G" -d category="%L" -d client="CLIENT_NAME"`
   return (
     <Card className="gap-3">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Webhook className="size-4" /> Webhook rimozione
+          <Webhook className="size-4" /> Removal webhook
         </CardTitle>
         <CardDescription>
-          bookrr rileva da solo le rimozioni a ogni sincronizzazione (ogni {info.data?.syncInterval ?? "5m"}). Per una
-          segnalazione immediata, fai chiamare questo endpoint quando elimini un torrent (script, qbit_manage, n8n…).
-          Vengono segnalati solo i torrent con il tag <b>{info.data?.releaseTag ?? "Personal Release"}</b>.
+          bookrr detects removals by itself on every sync (every {info.data?.syncInterval ?? "5m"}). For an immediate
+          alert, have this endpoint called when you delete a torrent (script, qbit_manage, n8n…). Only torrents with
+          the <b>{info.data?.releaseTag ?? "Personal Release"}</b> tag are reported.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <pre className="bg-muted overflow-x-auto rounded-md p-3 text-xs">{example}</pre>
         <p className="text-muted-foreground mt-2 text-xs">
-          Accetta JSON, form o query string. Campi: <code>hash</code> (obbligatorio), <code>name</code>,{" "}
-          <code>tags</code>, <code>category</code>, <code>size</code>, <code>client</code> (nome del client in bookrr).
+          Accepts JSON, form or query string. Fields: <code>hash</code> (required), <code>name</code>,{" "}
+          <code>tags</code>, <code>category</code>, <code>size</code>, <code>client</code> (client name in bookrr).
         </p>
       </CardContent>
     </Card>
@@ -170,12 +170,12 @@ export function ClientsPage() {
   const [editing, setEditing] = useState<Client | null>(null)
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState<Client | null>(null)
-  const del = useAction((id: number) => api.deleteClient(id), "Client rimosso")
+  const del = useAction((id: number) => api.deleteClient(id), "Client removed")
 
   return (
     <div className="grid gap-4">
       <div className="flex items-center gap-2">
-        <p className="text-muted-foreground text-sm">I client qBittorrent da cui bookrr legge i torrent.</p>
+        <p className="text-muted-foreground text-sm">The qBittorrent clients bookrr reads torrents from.</p>
         <Button
           className="ml-auto"
           onClick={() => {
@@ -183,7 +183,7 @@ export function ClientsPage() {
             setOpen(true)
           }}
         >
-          <Plus /> Nuovo client
+          <Plus /> New client
         </Button>
       </div>
 
@@ -191,7 +191,7 @@ export function ClientsPage() {
       {clients.data?.length === 0 && (
         <Card>
           <CardContent className="text-muted-foreground py-6 text-center text-sm">
-            Nessun client configurato. Aggiungi il tuo primo qBittorrent.
+            No clients configured. Add your first qBittorrent.
           </CardContent>
         </Card>
       )}
@@ -204,10 +204,10 @@ export function ClientsPage() {
                 <Server className="size-4 text-sky-600" />
                 {c.name}
                 {!c.enabled ? (
-                  <Badge variant="outline">Disattivato</Badge>
+                  <Badge variant="outline">Disabled</Badge>
                 ) : c.lastError ? (
                   <Badge variant="destructive">
-                    <CircleX /> Errore
+                    <CircleX /> Error
                   </Badge>
                 ) : c.lastSyncAt ? (
                   <Badge variant="success">
@@ -220,7 +220,7 @@ export function ClientsPage() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Modifica"
+                  aria-label="Edit"
                   onClick={() => {
                     setEditing(c)
                     setOpen(true)
@@ -228,16 +228,16 @@ export function ClientsPage() {
                 >
                   <Pencil />
                 </Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Elimina" onClick={() => setDeleting(c)}>
+                <Button variant="ghost" size="icon-sm" aria-label="Delete" onClick={() => setDeleting(c)}>
                   <Trash2 />
                 </Button>
               </CardAction>
             </CardHeader>
             <CardContent className="grid gap-1 text-sm">
               <div>
-                <span className="font-medium">{c.torrentCount}</span> torrent
+                <span className="font-medium">{c.torrentCount}</span> {c.torrentCount === 1 ? "torrent" : "torrents"}
               </div>
-              <div className="text-muted-foreground text-xs">Ultima sincronizzazione: {formatRelative(c.lastSyncAt)}</div>
+              <div className="text-muted-foreground text-xs">Last sync: {formatRelative(c.lastSyncAt)}</div>
               {c.lastError && <div className="text-destructive text-xs break-all">{c.lastError}</div>}
             </CardContent>
           </Card>
@@ -250,19 +250,19 @@ export function ClientsPage() {
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Rimuovere il client "{deleting?.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>Remove the client "{deleting?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              bookrr smetterà di leggerlo. I torrent rimossi in questo modo non generano segnalazioni; quelli senza
-              altri dati (archivi, adozione, note) verranno dimenticati.
+              bookrr will stop reading it. Torrents removed this way don't raise alerts; those without other data
+              (archives, adoption, notes) will be forgotten.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => deleting && del.mutate(deleting.id)}
             >
-              Rimuovi
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

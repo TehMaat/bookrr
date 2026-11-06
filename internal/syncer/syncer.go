@@ -55,7 +55,7 @@ func (s *Syncer) Run(ctx context.Context) {
 	for {
 		s.setNext(time.Now().Add(s.interval))
 		if _, err := s.SyncAll(ctx); err != nil && ctx.Err() == nil {
-			slog.Error("sync fallito", "err", err)
+			slog.Error("sync failed", "err", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -124,7 +124,7 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 		cancel()
 		if err != nil {
 			failed++
-			slog.Warn("client non raggiungibile", "client", c.Name, "err", err)
+			slog.Warn("client unreachable", "client", c.Name, "err", err)
 			if err := s.store.SetClientSyncResult(ctx, c.ID, 0, err); err != nil {
 				return "", err
 			}
@@ -147,7 +147,7 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 		}
 		r, err := s.store.ApplySnapshot(ctx, c, snap)
 		if err != nil {
-			return "", fmt.Errorf("salvataggio %s: %w", c.Name, err)
+			return "", fmt.Errorf("saving %s: %w", c.Name, err)
 		}
 		removed = append(removed, r...)
 		ok++
@@ -161,7 +161,7 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 	if err := s.store.RefreshArchivable(ctx); err != nil {
 		return "", err
 	}
-	result := fmt.Sprintf("%d client sincronizzati, %d con errori, %d torrent, %d nuove segnalazioni", ok, failed, total, alerts)
-	slog.Info("sync completato", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts)
+	result := fmt.Sprintf("%d clients synced, %d with errors, %d torrents, %d new alerts", ok, failed, total, alerts)
+	slog.Info("sync complete", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts)
 	return result, nil
 }

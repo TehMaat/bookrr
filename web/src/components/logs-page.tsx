@@ -37,7 +37,7 @@ const MAX_ENTRIES = 5000
 const POLL_MS = 5_000
 
 const levels: LogLevel[] = ["DEBUG", "INFO", "WARN", "ERROR"]
-const levelLabels: Record<LogLevel, string> = { DEBUG: "Debug", INFO: "Info", WARN: "Avviso", ERROR: "Errore" }
+const levelLabels: Record<LogLevel, string> = { DEBUG: "Debug", INFO: "Info", WARN: "Warning", ERROR: "Error" }
 const ALL = "all"
 
 /** The base level of a level as slog writes it ("WARN+2" → "WARN"). */
@@ -67,8 +67,8 @@ function flatten(attrs: Record<string, unknown>, prefix = ""): [string, string][
   return out
 }
 
-const timeFmt = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-const dayFmt = new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+const dayFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
 
 function formatTime(s: string) {
   const d = new Date(s)
@@ -76,7 +76,7 @@ function formatTime(s: string) {
 }
 
 function formatDay(day: string, today: string) {
-  if (day === today) return "Oggi"
+  if (day === today) return "Today"
   const d = new Date(`${day}T12:00:00`)
   return isNaN(d.getTime()) ? day : dayFmt.format(d)
 }
@@ -179,7 +179,7 @@ export function LogsPage() {
   if (files.isError)
     return (
       <Card>
-        <CardContent className="text-destructive text-sm">Errore: {files.error.message}</CardContent>
+        <CardContent className="text-destructive text-sm">Error: {files.error.message}</CardContent>
       </Card>
     )
   if (!enabled)
@@ -188,8 +188,8 @@ export function LogsPage() {
         <CardContent className="flex items-start gap-3 text-sm">
           <FileWarning className="text-amber-600 mt-0.5 size-5 shrink-0" />
           <div>
-            I log su file non sono attivi: bookrr non è riuscito a creare la cartella <code>logs/</code> nella cartella
-            dati. I messaggi vanno solo sullo stderr del container (<code>docker logs</code>).
+            File logs are not active: bookrr could not create the <code>logs/</code> folder in the data folder. Messages
+            only go to the container's stderr (<code>docker logs</code>).
           </div>
         </CardContent>
       </Card>
@@ -199,7 +199,7 @@ export function LogsPage() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Select value={day} onValueChange={(d) => setDay(d === today ? "" : d)}>
-          <SelectTrigger className="w-[190px]" aria-label="Giorno">
+          <SelectTrigger className="w-[190px]" aria-label="Day">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -211,14 +211,14 @@ export function LogsPage() {
           </SelectContent>
         </Select>
         <Select value={minLevel} onValueChange={setMinLevel}>
-          <SelectTrigger className="w-[160px]" aria-label="Livello minimo">
+          <SelectTrigger className="w-[160px]" aria-label="Minimum level">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Tutti i livelli</SelectItem>
+            <SelectItem value={ALL}>All levels</SelectItem>
             {levels.slice(1).map((l) => (
               <SelectItem key={l} value={l}>
-                {levelLabels[l]} o più
+                {levelLabels[l]} or above
               </SelectItem>
             ))}
           </SelectContent>
@@ -228,14 +228,14 @@ export function LogsPage() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cerca nei messaggi e negli attributi (client, hash, errore…)"
+            placeholder="Search messages and attributes (client, hash, error…)"
             className="pl-8"
           />
         </div>
         {day === today && (
           <Button variant="outline" onClick={() => setLive(!live)} aria-pressed={live}>
             {live ? <Pause /> : <Play />}
-            {live ? "Pausa" : "Aggiorna"}
+            {live ? "Pause" : "Live"}
           </Button>
         )}
         <DownloadButton files={dayFiles} />
@@ -243,7 +243,7 @@ export function LogsPage() {
 
       {error && (
         <Card>
-          <CardContent className="text-destructive text-sm">Errore: {error}</CardContent>
+          <CardContent className="text-destructive text-sm">Error: {error}</CardContent>
         </Card>
       )}
 
@@ -251,11 +251,11 @@ export function LogsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-24">Ora</TableHead>
+              <TableHead className="w-24">Time</TableHead>
               <TableHead className="w-24">
                 <div className="flex items-center gap-1">
-                  Livello
-                  <ColumnFilter label="Livello" active={isActive(cf.level)} onClear={() => columns.clear("level")}>
+                  Level
+                  <ColumnFilter label="Level" active={isActive(cf.level)} onClear={() => columns.clear("level")}>
                     <OptionsFilter
                       options={levels.map((l) => ({ value: l, label: levelLabels[l] }))}
                       value={cf.level}
@@ -266,17 +266,17 @@ export function LogsPage() {
               </TableHead>
               <TableHead>
                 <div className="flex items-center gap-1">
-                  Messaggio
-                  <ColumnFilter label="Messaggio" active={isActive(cf.msg)} onClear={() => columns.clear("msg")}>
+                  Message
+                  <ColumnFilter label="Message" active={isActive(cf.msg)} onClear={() => columns.clear("msg")}>
                     <TextFilter value={cf.msg} onChange={(v) => columns.set("msg", v)} />
                   </ColumnFilter>
                 </div>
               </TableHead>
               <TableHead className="w-full">
                 <div className="flex items-center gap-1">
-                  Attributi
-                  <ColumnFilter label="Attributi" align="end" active={isActive(cf.attrs)} onClear={() => columns.clear("attrs")}>
-                    <TextFilter value={cf.attrs} onChange={(v) => columns.set("attrs", v)} placeholder="Es. client=nas…" />
+                  Attributes
+                  <ColumnFilter label="Attributes" align="end" active={isActive(cf.attrs)} onClear={() => columns.clear("attrs")}>
+                    <TextFilter value={cf.attrs} onChange={(v) => columns.set("attrs", v)} placeholder="E.g. client=nas…" />
                   </ColumnFilter>
                 </div>
               </TableHead>
@@ -295,9 +295,9 @@ export function LogsPage() {
                 <TableCell colSpan={4} className="text-muted-foreground py-10 text-center">
                   {data.entries.length === 0
                     ? q || level
-                      ? "Nessun messaggio corrisponde alla ricerca."
-                      : "Nessun messaggio in questo giorno."
-                    : "Nessun messaggio corrisponde ai filtri."}
+                      ? "No messages match the search."
+                      : "No messages on this day."
+                    : "No messages match the filters."}
                 </TableCell>
               </TableRow>
             )}
@@ -308,10 +308,10 @@ export function LogsPage() {
         </Table>
         <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
           <span>
-            {rows.length === 1 ? "1 messaggio" : `${rows.length} messaggi`}
-            {data?.truncated && ` (solo gli ultimi ${MAX_ENTRIES}: restringi la ricerca o scarica il file)`}
+            {rows.length === 1 ? "1 message" : `${rows.length} messages`}
+            {data?.truncated && ` (only the last ${MAX_ENTRIES}: narrow the search or download the file)`}
           </span>
-          {following && <span className="text-emerald-600 dark:text-emerald-400">· in aggiornamento</span>}
+          {following && <span className="text-emerald-600 dark:text-emerald-400">· live</span>}
           <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           {pages > 1 && (
             <div className="ml-auto flex items-center gap-1">
@@ -330,7 +330,7 @@ export function LogsPage() {
       </TableCard>
       {files.data?.dir && (
         <p className="text-muted-foreground text-xs">
-          File in <code>{files.data.dir}</code>, uno al giorno in formato JSON Lines.
+          Files in <code>{files.data.dir}</code>, one per day in JSON Lines format.
         </p>
       )}
     </div>
@@ -373,14 +373,14 @@ function DownloadButton({ files }: { files: LogFile[] }) {
   if (files.length === 0)
     return (
       <Button variant="outline" disabled>
-        <Download /> Scarica
+        <Download /> Download
       </Button>
     )
   if (files.length === 1)
     return (
       <Button variant="outline" asChild>
         <a href={api.logFileUrl(files[0].name)} download title={`${files[0].name} · ${formatBytes(files[0].size)}`}>
-          <Download /> Scarica
+          <Download /> Download
         </a>
       </Button>
     )
@@ -388,11 +388,11 @@ function DownloadButton({ files }: { files: LogFile[] }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline">
-          <Download /> Scarica
+          <Download /> Download
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>File del giorno</DropdownMenuLabel>
+        <DropdownMenuLabel>Files of the day</DropdownMenuLabel>
         {files.map((f) => (
           <DropdownMenuItem key={f.name} asChild>
             <a href={api.logFileUrl(f.name)} download>

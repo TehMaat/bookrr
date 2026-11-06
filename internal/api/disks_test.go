@@ -52,7 +52,7 @@ func TestDiskBucketSecretIsWriteOnly(t *testing.T) {
 
 	var bad map[string]string
 	in["s3"] = map[string]any{"endpoint": "https://s3.fr-par.scw.cloud", "bucket": "archivio/torrent", "accessKey": "AK", "secretKey": "SK"}
-	if code := call(t, h, "POST", "/api/disks", in, &bad); code != http.StatusBadRequest || !strings.Contains(bad["error"], "prefisso") {
+	if code := call(t, h, "POST", "/api/disks", in, &bad); code != http.StatusBadRequest || !strings.Contains(bad["error"], "prefix") {
 		t.Fatalf("bucket with a folder: %d %v", code, bad)
 	}
 }

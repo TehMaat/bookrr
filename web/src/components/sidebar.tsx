@@ -73,41 +73,41 @@ function SidebarFooter() {
         <TooltipTrigger asChild>
           <span className="text-muted-foreground px-1 text-xs">Sync {formatRelative(sync.data?.lastRunAt)}</span>
         </TooltipTrigger>
-        <TooltipContent side="right">{sync.data?.lastResult || "Nessuna sincronizzazione ancora"}</TooltipContent>
+        <TooltipContent side="right">{sync.data?.lastResult || "No sync yet"}</TooltipContent>
       </Tooltip>
       <Button
         variant="outline"
         size="sm"
         disabled={running}
         onClick={() =>
-          syncNow.mutate(undefined, { onSuccess: (r) => toast.success("Sincronizzazione completata", { description: r.result }) })
+          syncNow.mutate(undefined, { onSuccess: (r) => toast.success("Sync complete", { description: r.result }) })
         }
       >
         <RefreshCw className={cn(running && "animate-spin")} />
-        Sincronizza
+        Sync now
       </Button>
       <div className="flex items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Impostazioni" onClick={() => setSettingsOpen(true)}>
+            <Button variant="ghost" size="icon-sm" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
               <Settings />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Impostazioni</TooltipContent>
+          <TooltipContent>Settings</TooltipContent>
         </Tooltip>
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Colore">
+                <Button variant="ghost" size="icon-sm" aria-label="Color">
                   <Palette />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent>Colore</TooltipContent>
+            <TooltipContent>Color</TooltipContent>
           </Tooltip>
           <DropdownMenuContent side="top" align="start">
-            <DropdownMenuLabel>Colore della spada</DropdownMenuLabel>
+            <DropdownMenuLabel>Saber color</DropdownMenuLabel>
             {accents.map((a) => (
               <DropdownMenuItem key={a.id} onClick={() => setAccent(a.id)}>
                 <img src={logoUrl(a)} alt="" className="size-5" />
@@ -120,20 +120,20 @@ function SidebarFooter() {
         </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Tema">
+            <Button variant="ghost" size="icon-sm" aria-label="Theme">
               <Sun className="dark:hidden" />
               <Moon className="hidden dark:block" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start">
             <DropdownMenuItem onClick={() => setTheme("light")}>
-              <Sun /> Chiaro
+              <Sun /> Light
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTheme("dark")}>
-              <Moon /> Scuro
+              <Moon /> Dark
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTheme("system")}>
-              <Laptop /> Sistema
+              <Laptop /> System
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -144,7 +144,7 @@ function SidebarFooter() {
                 {info.data.version}
               </Badge>
             </TooltipTrigger>
-            <TooltipContent>Versione di bookrr</TooltipContent>
+            <TooltipContent>bookrr version</TooltipContent>
           </Tooltip>
         )}
       </div>

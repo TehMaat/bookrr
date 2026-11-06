@@ -97,7 +97,7 @@ func (h *History) Sync(ctx context.Context) {
 	// Even a partial round may have refreshed the counters of the uploads.
 	if ctx.Err() == nil {
 		if aerr := h.store.RefreshArchivable(ctx); aerr != nil && err == nil {
-			err = fmt.Errorf("release archiviabili: %w", aerr)
+			err = fmt.Errorf("archivable releases: %w", aerr)
 		}
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
@@ -109,9 +109,9 @@ func (h *History) Sync(ctx context.Context) {
 	})
 	switch {
 	case err != nil && ctx.Err() == nil:
-		slog.Warn("storico release UNIT3D", "err", err)
+		slog.Warn("UNIT3D release history", "err", err)
 	case err == nil:
-		slog.Info("storico release UNIT3D", "result", res)
+		slog.Info("UNIT3D release history", "result", res)
 	}
 }
 
@@ -120,13 +120,13 @@ func (h *History) sync(ctx context.Context) (string, error) {
 	if name == "" {
 		var err error
 		if name, err = WithRetry(ctx, func() (string, error) { return h.client.Username(ctx) }); err != nil {
-			return "", fmt.Errorf("nome utente sul tracker: %w", err)
+			return "", fmt.Errorf("username on the tracker: %w", err)
 		}
 		h.update(func(s *HistoryState) { s.Username = name })
 	}
 	uploads, err := WithRetry(ctx, func() ([]Upload, error) { return h.client.Uploads(ctx, name) })
 	if err != nil {
-		return "", fmt.Errorf("elenco degli upload: %w", err)
+		return "", fmt.Errorf("list of uploads: %w", err)
 	}
 	rows := make([]store.TrackerUpload, len(uploads))
 	byID := make(map[int64]Upload, len(uploads))
@@ -143,22 +143,22 @@ func (h *History) sync(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	parts := []string{fmt.Sprintf("%d release", len(uploads))}
+	parts := []string{fmt.Sprintf("%d releases", len(uploads))}
 	if added > 0 {
-		parts = append(parts, fmt.Sprintf("%d nuove", added))
+		parts = append(parts, fmt.Sprintf("%d new", added))
 	}
 	if done, err := CompletePlan(ctx, h.store, rows); err != nil {
-		return strings.Join(parts, ", "), fmt.Errorf("piano release: %w", err)
+		return strings.Join(parts, ", "), fmt.Errorf("release plan: %w", err)
 	} else if done > 0 {
-		parts = append(parts, fmt.Sprintf("%d film del piano completati", done))
+		parts = append(parts, fmt.Sprintf("%d plan films done", done))
 	}
 
 	hashed, failed, herr := h.fetchHashes(ctx, byID)
 	if hashed > 0 {
-		parts = append(parts, fmt.Sprintf("%d hash calcolati", hashed))
+		parts = append(parts, fmt.Sprintf("%d hashes computed", hashed))
 	}
 	if failed > 0 {
-		parts = append(parts, fmt.Sprintf("%d hash non calcolati", failed))
+		parts = append(parts, fmt.Sprintf("%d hashes not computed", failed))
 	}
 	if herr != nil {
 		return strings.Join(parts, ", "), herr
@@ -169,7 +169,7 @@ func (h *History) sync(ctx context.Context) (string, error) {
 		return strings.Join(parts, ", "), err
 	}
 	if linked > 0 {
-		parts = append(parts, fmt.Sprintf("%d torrent senza hash collegati per nome", linked))
+		parts = append(parts, fmt.Sprintf("%d torrents without hash linked by name", linked))
 	}
 	return strings.Join(parts, ", "), h.store.LinkTrackerReleases(ctx)
 }
@@ -207,7 +207,7 @@ func (h *History) fetchHashes(ctx context.Context, byID map[int64]Upload) (hashe
 			}
 			if !Final(err) {
 				if inARow++; inARow >= 3 {
-					return hashed, failed, fmt.Errorf("download dei .torrent interrotto: %w", err)
+					return hashed, failed, fmt.Errorf("download of the .torrent files stopped: %w", err)
 				}
 			}
 			continue
@@ -247,7 +247,7 @@ func (h *History) linkByName(ctx context.Context) (int, error) {
 			return linked, err
 		}
 		linked++
-		slog.Info("torrent collegato a una release del tracker", "name", m.Name, "tracker", c.Name, "hash", c.Hash, "trackerId", c.ID, "unito", merged)
+		slog.Info("torrent linked to a tracker release", "name", m.Name, "tracker", c.Name, "hash", c.Hash, "trackerId", c.ID, "merged", merged)
 	}
 	return linked, nil
 }
@@ -302,7 +302,7 @@ func WithRetry[T any](ctx context.Context, f func() (T, error)) (T, error) {
 		if !errors.As(err, &rl) {
 			return v, err
 		}
-		slog.Warn("tracker UNIT3D: limite di richieste", "attesa", rl.RetryAfter)
+		slog.Warn("UNIT3D tracker: rate limit", "wait", rl.RetryAfter)
 		if !sleep(ctx, rl.RetryAfter) {
 			return v, ctx.Err()
 		}

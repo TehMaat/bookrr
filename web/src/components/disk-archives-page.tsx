@@ -13,7 +13,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, type Alert, type BucketEntry, type Disk } from "@/lib/api"
-import { formatBytes, formatDate } from "@/lib/format"
+import { formatBytes, formatDate, plural } from "@/lib/format"
 import { useBucketEntries, useDisks, useScanDisk, useTorrents } from "@/lib/queries"
 
 /** The torrents archived on one disk: the page opened by the disk's QR code. */
@@ -40,13 +40,13 @@ export function DiskArchivesPage({
     return all
       .flatMap((t) => t.archives.filter((a) => a.diskId === diskId).map((a) => ({ t, a })))
       .filter(({ t, a }) => !q || t.name.toLowerCase().includes(q) || a.path.toLowerCase().includes(q) || a.notes.toLowerCase().includes(q))
-      .sort((x, y) => x.t.name.localeCompare(y.t.name, "it", { sensitivity: "base" }))
+      .sort((x, y) => x.t.name.localeCompare(y.t.name, "en", { sensitivity: "base" }))
   }, [all, diskId, query])
   const selectedTorrent = selected ? (all.find((t) => t.hash === selected) ?? null) : null
 
   const back = (
     <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
-      <ArrowLeft /> Tutti i dischi
+      <ArrowLeft /> All disks
     </Button>
   )
 
@@ -56,7 +56,7 @@ export function DiskArchivesPage({
       <div className="grid gap-4">
         {back}
         <Card>
-          <CardContent className="text-muted-foreground py-6 text-center text-sm">Questo disco non esiste più.</CardContent>
+          <CardContent className="text-muted-foreground py-6 text-center text-sm">This disk no longer exists.</CardContent>
         </Card>
       </div>
     )
@@ -72,12 +72,12 @@ export function DiskArchivesPage({
             <Badge variant="outline">{disk.kind}</Badge>
           </CardTitle>
           <CardDescription className="font-mono text-xs break-all">
-            {disk.s3 ? `s3://${disk.s3.bucket}/${disk.s3.prefix}` : disk.serial ? `SN ${disk.serial}` : "Seriale non indicato"}
+            {disk.s3 ? `s3://${disk.s3.bucket}/${disk.s3.prefix}` : disk.serial ? `SN ${disk.serial}` : "No serial number"}
           </CardDescription>
           {disk.s3 ? (
             <CardAction>
               <Button variant="outline" size="sm" onClick={() => scan.mutate(disk.id)} disabled={scan.isPending}>
-                <RefreshCw className={scan.isPending ? "animate-spin" : undefined} /> Leggi il bucket
+                <RefreshCw className={scan.isPending ? "animate-spin" : undefined} /> Read the bucket
               </Button>
             </CardAction>
           ) : (
@@ -99,8 +99,8 @@ export function DiskArchivesPage({
           )}
           {disk.s3 && <BucketStatus disk={disk} />}
           <div>
-            <span className="font-medium">{disk.archiveCount}</span> torrent · {formatBytes(disk.archivedSize)}
-            {disk.capacity > 0 && <span className="text-muted-foreground"> su {formatBytes(disk.capacity)}</span>}
+            <span className="font-medium">{disk.archiveCount}</span> {disk.archiveCount === 1 ? "torrent" : "torrents"} · {formatBytes(disk.archivedSize)}
+            {disk.capacity > 0 && <span className="text-muted-foreground"> of {formatBytes(disk.capacity)}</span>}
           </div>
           {disk.notes && <p className="text-muted-foreground text-xs whitespace-pre-wrap">{disk.notes}</p>}
         </CardContent>
@@ -108,14 +108,14 @@ export function DiskArchivesPage({
 
       <div className="relative">
         <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca per nome, cartella, note…" className="pl-8" />
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, folder, notes…" className="pl-8" />
       </div>
 
       <Card className="py-0">
         <CardContent className="px-0">
           {entries.length === 0 ? (
             <p className="text-muted-foreground py-6 text-center text-sm">
-              {query ? "Nessun torrent trovato." : disk.s3 ? "Nessun torrent trovato nel bucket." : "Nessun torrent archiviato su questo disco."}
+              {query ? "No torrents found." : disk.s3 ? "No torrents found in the bucket." : "No torrents archived on this disk."}
             </p>
           ) : (
             <ul className="divide-y">
@@ -137,7 +137,7 @@ export function DiskArchivesPage({
                           <FolderOpen className="size-3.5 shrink-0" /> {a.path}
                         </span>
                       )}
-                      <span>{a.source === "s3" ? "trovato nel bucket il" : "archiviato il"} {formatDate(a.createdAt)}</span>
+                      <span>{a.source === "s3" ? "found in the bucket on" : "archived on"} {formatDate(a.createdAt)}</span>
                     </div>
                     {a.notes && <p className="text-muted-foreground text-xs whitespace-pre-wrap">{a.notes}</p>}
                   </button>
@@ -184,11 +184,11 @@ function Unmatched({ disk, query, onAdded }: { disk: Disk; query: string; onAdde
     <div className="grid gap-2">
       <div>
         <h3 className="flex items-center gap-2 font-medium">
-          <FileQuestion className="text-muted-foreground size-4" /> Non riconosciuti nel bucket ({count})
+          <FileQuestion className="text-muted-foreground size-4" /> Unrecognized in the bucket ({count})
         </h3>
         <p className="text-muted-foreground text-sm">
-          File e cartelle che non hanno il nome di nessun torrent noto a bookrr. Aggiungili come torrent per tenerne traccia: il
-          nome resta quello del bucket.
+          Files and folders not named after any torrent bookrr knows. Add them as torrents to keep track of them: the name
+          stays the one in the bucket.
         </p>
       </div>
       <Card className="py-0">
@@ -196,7 +196,7 @@ function Unmatched({ disk, query, onAdded }: { disk: Disk; query: string; onAdde
           {entries.isLoading ? (
             <Skeleton className="m-4 h-12" />
           ) : shown.length === 0 ? (
-            <p className="text-muted-foreground py-6 text-center text-sm">Nessun elemento trovato.</p>
+            <p className="text-muted-foreground py-6 text-center text-sm">Nothing found.</p>
           ) : (
             <ul className="divide-y">
               {shown.map((e) => (
@@ -208,13 +208,13 @@ function Unmatched({ disk, query, onAdded }: { disk: Disk; query: string; onAdde
                         <FolderOpen className="size-3.5 shrink-0" /> {e.path}
                       </span>
                       <span className="tabular-nums">
-                        {e.files} file · {formatBytes(e.size)}
+                        {plural(e.files, "file")} · {formatBytes(e.size)}
                       </span>
-                      {e.modifiedAt && <span>modificato il {formatDate(e.modifiedAt)}</span>}
+                      {e.modifiedAt && <span>modified on {formatDate(e.modifiedAt)}</span>}
                     </div>
                   </div>
                   <Button variant="outline" size="sm" className="shrink-0" disabled={adding !== null} onClick={() => add(e)}>
-                    <Plus /> {adding === e.path ? "Aggiunta…" : "Aggiungi"}
+                    <Plus /> {adding === e.path ? "Adding…" : "Add"}
                   </Button>
                 </li>
               ))}

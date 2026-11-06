@@ -364,7 +364,7 @@ ORDER BY r.created_at DESC, r.id DESC`, args...)
 	return out, nil
 }
 
-var ErrNoReleaseHash = errors.New("l'hash di questa release non è ancora stato calcolato: riprova dopo il prossimo aggiornamento")
+var ErrNoReleaseHash = errors.New("the hash of this release hasn't been computed yet: try again after the next refresh")
 
 // AddTrackerReleases creates in bookrr the torrents of uploads it does not
 // know yet, as personal releases with their hash, name, size, page link and

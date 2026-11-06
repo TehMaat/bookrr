@@ -36,7 +36,7 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
     setArchive(emptyArchive)
   }, [open])
 
-  const create = useAction((t: TorrentInput) => api.createTorrent(t), "Torrent aggiunto")
+  const create = useAction((t: TorrentInput) => api.createTorrent(t), "Torrent added")
 
   const hashValid = isValidHash(hash)
 
@@ -52,14 +52,14 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-2xl">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Aggiungi torrent manualmente</DialogTitle>
+            <DialogTitle>Add a torrent manually</DialogTitle>
             <DialogDescription>
-              Per i torrent che non sono su nessun client: archiviati, adottati o di cui vuoi solo tenere traccia.
+              For torrents that are on no client: archived, adopted or just to keep track of.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="t-name">Nome *</Label>
+              <Label htmlFor="t-name">Name *</Label>
               <Input id="t-name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
             </div>
             <div className="grid gap-2 sm:col-span-2">
@@ -70,23 +70,23 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
                 onChange={(e) => setHash(e.target.value)}
                 placeholder={
                   info.data?.unit3d
-                    ? "Opzionale: se lo lasci vuoto, bookrr lo cerca per nome sul tracker UNIT3D"
-                    : "Opzionale: se lo inserisci, bookrr lo riconosce quando torna su un client"
+                    ? "Optional: if left empty, bookrr looks it up by name on the UNIT3D tracker"
+                    : "Optional: if set, bookrr recognizes it when it is back on a client"
                 }
                 className="font-mono text-sm"
                 aria-invalid={!hashValid}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="t-size">Dimensione</Label>
+              <Label htmlFor="t-size">Size</Label>
               <Input id="t-size" value={size} onChange={(e) => setSize(e.target.value)} placeholder="12.5 GB" />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="t-tags">Tag (separati da virgola)</Label>
+              <Label htmlFor="t-tags">Tags (comma separated)</Label>
               <Input id="t-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="t-adopted">Adottato da</Label>
+              <Label htmlFor="t-adopted">Adopted by</Label>
               <AdopterSelect id="t-adopted" value={adopterId} onChange={setAdopterId} />
             </div>
             <div className="flex items-center gap-2 pt-6">
@@ -94,21 +94,21 @@ export function TorrentFormDialog({ open, onOpenChange }: { open: boolean; onOpe
               <Label htmlFor="t-personal">Personal Release</Label>
             </div>
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="t-notes">Note</Label>
+              <Label htmlFor="t-notes">Notes</Label>
               <Textarea id="t-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </div>
           <Separator />
           <div>
-            <h4 className="mb-3 text-sm font-semibold">Spostato su disco (opzionale)</h4>
+            <h4 className="mb-3 text-sm font-semibold">Moved to disk (optional)</h4>
             <ArchiveFields value={archive} onChange={setArchive} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Annulla
+              Cancel
             </Button>
             <Button type="submit" disabled={!name.trim() || !hashValid || create.isPending}>
-              Aggiungi
+              Add
             </Button>
           </DialogFooter>
         </form>
