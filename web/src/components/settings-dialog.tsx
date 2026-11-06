@@ -22,10 +22,10 @@ const fields: { key: keyof ArchiveFields; label: string; hint: string; max?: num
 
 /** The groups of the options of the configuration, after the archive rule. */
 const groups: { group: ConfigGroup; label: string; intro: string }[] = [
-  { group: "general", label: "Generale", intro: "Le release e ogni quanto leggere client e bucket." },
+  { group: "general", label: "Generale", intro: "Le release, ogni quanto leggere client e bucket e i log." },
   { group: "unit3d", label: "Tracker", intro: "Il tracker UNIT3D: hash dei torrent aggiunti senza, storico release, archiviabili." },
   { group: "missing", label: "Mancanti", intro: "TMDB e MDBList, per le stagioni, le saghe e le collezioni mancanti." },
-  { group: "prowlarr", label: "Prowlarr", intro: "La risoluzione massima che esiste dei film caricati." },
+  { group: "prowlarr", label: "Prowlarr", intro: "La versione migliore che esiste dei film caricati." },
 ]
 
 const toForm = (s: ArchiveFields) => ({

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"log/slog"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -31,5 +33,35 @@ func TestResolve(t *testing.T) {
 	}
 	if _, err := Resolve(map[string]string{"BOOKRR_MISSING_CHECK_AT": "25:00"}); err == nil {
 		t.Fatal("bad time accepted")
+	}
+}
+
+func TestResolveLogs(t *testing.T) {
+	c, err := Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.LogRetentionDays != 30 || c.LogMaxSize != 50<<20 || c.LogLevel != slog.LevelInfo || c.LogDir() != filepath.Join("/data", "logs") {
+		t.Fatalf("defaults %+v", c)
+	}
+	c, err = Resolve(map[string]string{"BOOKRR_LOG_RETENTION": "0", "BOOKRR_LOG_MAX_SIZE": "1.5 GB", "BOOKRR_LOG_LEVEL": "DEBUG"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.LogRetentionDays != 0 || c.LogMaxSize != 3<<29 || c.LogLevel != slog.LevelDebug {
+		t.Fatalf("got %+v", c)
+	}
+	// At least a day, at least 1MB.
+	c, err = Resolve(map[string]string{"BOOKRR_LOG_RETENTION": "36h", "BOOKRR_LOG_MAX_SIZE": "10k"})
+	if err != nil || c.LogRetentionDays != 2 || c.LogMaxSize != 1<<20 {
+		t.Fatalf("got %+v %v", c, err)
+	}
+	if c, err = Resolve(map[string]string{"BOOKRR_LOG_MAX_SIZE": "0"}); err != nil || c.LogMaxSize != 0 {
+		t.Fatalf("no limit: %+v %v", c, err)
+	}
+	for k, v := range map[string]string{"BOOKRR_LOG_RETENTION": "-1d", "BOOKRR_LOG_MAX_SIZE": "tanti", "BOOKRR_LOG_LEVEL": "loud"} {
+		if _, err := Resolve(map[string]string{k: v}); err == nil {
+			t.Errorf("%s=%s accepted", k, v)
+		}
 	}
 }

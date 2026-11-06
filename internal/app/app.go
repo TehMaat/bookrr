@@ -14,6 +14,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/bucket"
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/gaps"
+	"github.com/tehmaat/bookrr/internal/logs"
 	"github.com/tehmaat/bookrr/internal/mdblist"
 	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/store"
@@ -29,6 +30,9 @@ const stopWait = 30 * time.Second
 type Runner struct {
 	ctx   context.Context
 	store *store.Store
+	// The log files, nil when they could not be written: retention, size
+	// and level apply at once.
+	Logs *logs.Writer
 
 	mu      sync.Mutex
 	svc     api.Services
@@ -53,6 +57,10 @@ func (r *Runner) Apply(cfg config.Config) api.Services {
 	r.started = true
 	svc.Config = cfg
 	changed := func(f func(config.Config) any) bool { return first || f(cfg) != f(old) }
+
+	if r.Logs != nil && changed(func(c config.Config) any { return [3]any{c.LogRetentionDays, c.LogMaxSize, c.LogLevel} }) {
+		r.Logs.Configure(cfg.LogRetentionDays, cfg.LogMaxSize, cfg.LogLevel)
+	}
 
 	if changed(func(c config.Config) any { return [2]any{c.ReleaseTag, c.SyncInterval} }) {
 		svc.Syncer = syncer.New(r.store, cfg.ReleaseTag, cfg.SyncInterval)

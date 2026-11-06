@@ -110,7 +110,7 @@ function matches(r: TrackerRelease, f: Filter) {
 
 type BestKind = "better" | "max" | "none"
 
-/** How a film stands against the best resolution found; null when it was not searched (or is not a film). */
+/** How a film stands against the best release found; null when it was not searched (or is not a film). */
 function bestKind(b: BestResolution | null): BestKind | null {
   if (!b) return null
   if (b.better) return "better"
@@ -118,16 +118,22 @@ function bestKind(b: BestResolution | null): BestKind | null {
   return "max"
 }
 
-/** The best resolution found with Prowlarr for the film of an upload. */
+/** Resolution and type, as "2160p Remux". */
+function grade(resolution: string, type: string) {
+  return [resolution, type].filter(Boolean).join(" ")
+}
+
+/** The best release found with Prowlarr for the film of an upload. */
 function BestBadge({ b }: { b: BestResolution | null }) {
   const kind = bestKind(b)
   if (!b || !kind) return <span className="text-muted-foreground text-xs">—</span>
+  const mine = grade(b.mine, b.mineType)
   const searched = b.checkedAt ? ` · cercata ${formatRelative(b.checkedAt)}` : ""
   const found = b.name && `${b.name}${b.indexer ? ` (${b.indexer})` : ""}`
   const badge =
     kind === "better" ? (
       <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-        <CircleArrowUp /> {b.resolution}
+        <CircleArrowUp /> {grade(b.resolution, b.type)}
       </Badge>
     ) : kind === "none" ? (
       <Badge variant="outline" className="text-muted-foreground border-dashed">
@@ -135,17 +141,17 @@ function BestBadge({ b }: { b: BestResolution | null }) {
       </Badge>
     ) : (
       <Badge variant="outline" className="text-muted-foreground">
-        <CircleCheck /> {b.mine || b.resolution}
+        <CircleCheck /> {mine || grade(b.resolution, b.type)}
       </Badge>
     )
   const tip =
     kind === "better"
-      ? `Esiste in ${b.resolution}, tu ce l'hai in ${b.mine || "risoluzione ignota"}: ${found}`
+      ? `Esiste in ${grade(b.resolution, b.type)}, tu ce l'hai in ${mine || "qualità ignota"}: ${found}`
       : kind === "none"
         ? "Prowlarr non ha trovato release di questo film con una risoluzione nota"
         : b.checkedAt
-          ? `Hai già la risoluzione migliore che esiste${found ? `: la migliore trovata è ${found}` : ""}`
-          : `Ce l'hai già in ${b.mine}: non serve cercarla`
+          ? `Hai già la versione migliore che esiste${found ? `: la migliore trovata è ${found}` : ""}`
+          : `Ce l'hai già in ${mine}: non serve cercarla`
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -578,8 +584,9 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                         <span>Max</span>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-sm">
-                        La risoluzione migliore che esiste di ogni film, in qualsiasi lingua, cercata con Prowlarr una volta al
-                        giorno (ogni film ogni {best.recheck}).{" "}
+                        La versione migliore che esiste di ogni film, in qualsiasi lingua, cercata con Prowlarr una volta al
+                        giorno (ogni film ogni {best.recheck}): conta prima il tipo (Remux &gt; Encode &gt; WEB-DL &gt; WEBRip
+                        &gt; HDTV), poi la risoluzione, quindi un 1080p Remux batte un 2160p WEB-DL.{" "}
                         {best.running
                           ? `Ricerca in corso: ${best.done} di ${best.total} film.`
                           : best.lastRunAt
@@ -590,7 +597,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                     <ColumnFilter label="Max" active={isActive(cf.best)} onClear={() => columns.clear("best")}>
                       <OptionsFilter
                         options={[
-                          { value: "better", label: "Esiste in una risoluzione migliore" },
+                          { value: "better", label: "Esiste in una versione migliore" },
                           { value: "max", label: "Hai già la migliore" },
                           { value: "none", label: "Non trovata" },
                         ]}

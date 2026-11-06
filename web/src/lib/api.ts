@@ -261,20 +261,23 @@ export type TrackerRelease = {
   best: BestResolution | null
 }
 
-/** The best resolution found with Prowlarr for a film, whatever the language. */
+/** The best release found with Prowlarr for a film (by type, then resolution), whatever the language. */
 export type BestResolution = {
   film: string
   /** "" when no release of the film with a resolution was found. */
   resolution: string
+  /** Type of the release found, from its name ("Remux", "WEB-DL"); "" if unknown. */
+  type: string
   name: string
   indexer: string
   url: string
   results: number
-  /** "" when it was not searched: the user already has the film in 2160p. */
+  /** "" when it was not searched: the user already has the film in a 2160p Remux. */
   checkedAt: string
-  /** Best resolution of the user's uploads of the film. */
+  /** Resolution and type of the best of the user's uploads of the film. */
   mine: string
-  /** The resolution found is better than the user's. */
+  mineType: string
+  /** The release found is better than the user's: a better type, or the same type in a higher resolution. */
   better: boolean
 }
 
@@ -614,6 +617,49 @@ export type ResolveInput = {
 export type ImportRow = { row: number; hash: string; name: string; error?: string }
 export type ImportResult = { rows: ImportRow[]; imported: number }
 
+/** A log file in the data folder: one a day, more when a day passes the maximum size. */
+export type LogFile = {
+  name: string
+  /** "2026-11-06", local time. */
+  day: string
+  /** 1 for the first file of the day, 2 for "bookrr-2026-11-06.2.log"… */
+  part: number
+  size: number
+  modifiedAt: string
+}
+
+export type LogFiles = {
+  /** False when the log files cannot be written: the messages only go to stderr. */
+  enabled: boolean
+  files: LogFile[]
+  today: string
+  dir: string
+}
+
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
+
+/** A line of a log file. */
+export type LogEntry = {
+  /** Position of the line in the day: unique within it. */
+  id: number
+  time: string
+  /** As slog writes it: "INFO", also "WARN+2". */
+  level: string
+  msg: string
+  attrs: Record<string, unknown>
+}
+
+export type LogQuery = { day: string; level?: string; q?: string; after?: number }
+
+export type LogResult = {
+  /** Oldest first. */
+  entries: LogEntry[]
+  /** Position past the last line read: `after` of the next read, for the new lines only. */
+  next: number
+  /** More lines matched than are returned: only the last ones are. */
+  truncated: boolean
+}
+
 export class ApiError extends Error {
   status: number
   data: unknown
@@ -673,6 +719,16 @@ export const api = {
   /** Gives the torrent the hash of the tracker torrent picked by the user; returns it under the new hash. */
   trackerMatch: (hash: string, id: string) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/tracker-match`, { id }),
   torrentFileUrl: (hash: string) => `/api/torrents/${enc(hash)}/torrent-file`,
+
+  logFiles: () => request<LogFiles>("GET", "/api/logs/files"),
+  logs: (q: LogQuery) => {
+    const p = new URLSearchParams({ day: q.day })
+    if (q.level) p.set("level", q.level)
+    if (q.q?.trim()) p.set("q", q.q.trim())
+    if (q.after) p.set("after", String(q.after))
+    return request<LogResult>("GET", `/api/logs?${p}`)
+  },
+  logFileUrl: (name: string) => `/api/logs/files/${enc(name)}`,
   removeFromClient: (hash: string, clientId: number, deleteFiles: boolean) =>
     request<Torrent>("DELETE", `/api/torrents/${enc(hash)}/locations/${clientId}?deleteFiles=${deleteFiles ? 1 : 0}`),
   addArchive: (hash: string, a: ArchiveInput) => request<Torrent>("POST", `/api/torrents/${enc(hash)}/archives`, a),

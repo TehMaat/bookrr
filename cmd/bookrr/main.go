@@ -15,6 +15,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/api"
 	"github.com/tehmaat/bookrr/internal/app"
 	"github.com/tehmaat/bookrr/internal/config"
+	"github.com/tehmaat/bookrr/internal/logs"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/web"
 )
@@ -38,6 +39,16 @@ func main() {
 		slog.Error("cartella dati", "dir", cfg.DataDir, "err", err)
 		os.Exit(1)
 	}
+	// From here on the messages also go to the files of the day, in the
+	// data folder; before, to stderr alone.
+	logFiles, err := logs.New(cfg.LogDir())
+	if err != nil {
+		slog.Warn("log su file disattivati", "dir", cfg.LogDir(), "err", err)
+	} else {
+		logFiles.Configure(cfg.LogRetentionDays, cfg.LogMaxSize, cfg.LogLevel)
+		slog.SetDefault(slog.New(logs.Handler(logFiles, os.Stderr)))
+		defer logFiles.Close()
+	}
 	st, err := store.Open(cfg.DBPath())
 	if err != nil {
 		slog.Error("database", "path", cfg.DBPath(), "err", err)
@@ -60,9 +71,11 @@ func main() {
 		cfg = full
 	}
 	runner := app.New(ctx, st)
+	runner.Logs = logFiles
 	svc := runner.Apply(cfg)
 	server := api.New(cfg, st, svc.Syncer, svc.Buckets, svc.Hashes, svc.History, svc.Missing, svc.Best, web.FS(), version)
 	server.Reconfigure = runner.Apply
+	server.Logs = logFiles
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
@@ -77,7 +90,7 @@ func main() {
 	}()
 
 	slog.Info("bookrr avviato", "version", version, "listen", cfg.Listen, "data", cfg.DataDir,
-		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasonsAndSagas", svc.Missing != nil, "missingLists", svc.Missing != nil && svc.Missing.MDBList != nil, "prowlarr", svc.Best != nil)
+		"sync", cfg.SyncInterval.String(), "s3Scan", cfg.S3ScanInterval.String(), "releaseTag", cfg.ReleaseTag, "unit3d", cfg.Unit3DURL, "unit3dReleases", cfg.Unit3DReleasesInterval.String(), "missingSeasonsAndSagas", svc.Missing != nil, "missingLists", svc.Missing != nil && svc.Missing.MDBList != nil, "prowlarr", svc.Best != nil, "logs", cfg.LogDir(), "logRetentionDays", cfg.LogRetentionDays, "logLevel", cfg.LogLevel.String())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server", "err", err)
 		os.Exit(1)

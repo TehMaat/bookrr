@@ -31,6 +31,12 @@ var Options = []Option{
 		Help: "Ogni quanto leggere i client qBittorrent (minimo 30s)."},
 	{Key: "BOOKRR_S3_SCAN_INTERVAL", Group: GroupGeneral, Label: "Lettura dei bucket S3", Default: "1h",
 		Help: "Ogni quanto leggere i bucket degli archivi cloud (minimo 1m)."},
+	{Key: "BOOKRR_LOG_RETENTION", Group: GroupGeneral, Label: "Conservazione dei log", Default: "30d",
+		Help: "Per quanti giorni tenere i file di log nella cartella dati (logs/): minimo 1d, 0 per sempre."},
+	{Key: "BOOKRR_LOG_MAX_SIZE", Group: GroupGeneral, Label: "Dimensione massima di un file di log", Default: "50MB",
+		Help: "Oltre questa dimensione il giorno prosegue in un nuovo file (bookrr-AAAA-MM-GG.2.log); 0 senza limite."},
+	{Key: "BOOKRR_LOG_LEVEL", Group: GroupGeneral, Label: "Livello dei log", Default: "info",
+		Help: "Livello minimo dei messaggi scritti: debug, info, warn o error."},
 
 	{Key: "BOOKRR_UNIT3D_URL", Group: GroupUnit3D, Label: "Indirizzo del tracker",
 		Help: "Es. https://tracker.example: serve a trovare l'hash dei torrent aggiunti senza e per lo storico delle tue release."},
