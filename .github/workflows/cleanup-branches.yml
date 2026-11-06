@@ -1,0 +1,88 @@
+# Deletes the branches that are done with:
+# - the head branch of a pull request, as soon as it is merged;
+# - every week (or by hand, from the Actions tab), the branches whose pull
+#   request was merged at their last commit, and the branches with no commit
+#   that is not already in the default branch.
+# A branch with commits pushed after its merge, or never merged, is kept.
+# The default branch, protected branches and branches with an open pull
+# request are never touched. Run it by hand with "dry run" to see what it
+# would delete.
+name: Cleanup branches
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only list the branches, without deleting them
+        type: boolean
+        default: true
+      min_age_days:
+        description: Leave alone the branches with commits newer than this
+        default: "7"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  merged-pr:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const ref = context.payload.pull_request.head.ref
+            const { owner, repo } = context.repo
+            const open = await github.paginate(github.rest.pulls.list, { owner, repo, state: "open", head: `${owner}:${ref}` })
+            if (open.length > 0) return core.info(`${ref}: still has an open pull request`)
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: ref }).catch(() => ({ data: null }))
+            if (!branch) return core.info(`${ref}: already deleted`)
+            if (branch.protected) return core.info(`${ref}: protected`)
+            if (branch.commit.sha !== context.payload.pull_request.head.sha) return core.info(`${ref}: has commits pushed after the merge`)
+            await github.rest.git.deleteRef({ owner, repo, ref: `heads/${ref}` })
+            core.info(`${ref}: deleted`)
+
+  sweep:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+          MIN_AGE_DAYS: ${{ inputs.min_age_days || '7' }}
+        with:
+          script: |
+            const { owner, repo } = context.repo
+            const dryRun = process.env.DRY_RUN === "true"
+            const minAge = Number(process.env.MIN_AGE_DAYS) * 86400_000
+            const { data: info } = await github.rest.repos.get({ owner, repo })
+            const main = info.default_branch
+            const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 })
+            const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: "all", per_page: 100 })
+            for (const b of branches) {
+              if (b.name === main || b.protected) continue
+              const prs = pulls.filter((p) => p.head.ref === b.name && p.head.repo?.full_name === `${owner}/${repo}`)
+              if (prs.some((p) => p.state === "open")) continue
+              const { data: commit } = await github.rest.repos.getCommit({ owner, repo, ref: b.commit.sha })
+              const age = Date.now() - new Date(commit.commit.committer.date).getTime()
+              if (age < minAge) continue
+              let why = ""
+              // Merged at its current commit (squash merges included): nothing pushed since.
+              if (prs.some((p) => p.merged_at && p.head.sha === b.commit.sha)) why = "pull request merged"
+              else {
+                const { data: cmp } = await github.rest.repos.compareCommits({ owner, repo, base: main, head: b.name })
+                if (cmp.ahead_by === 0) why = `already in ${main}`
+              }
+              if (!why) continue
+              if (dryRun) {
+                core.info(`would delete ${b.name} (${why})`)
+                continue
+              }
+              await github.rest.git.deleteRef({ owner, repo, ref: `heads/${b.name}` })
+              core.info(`deleted ${b.name} (${why})`)
+            }
