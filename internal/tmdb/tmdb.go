@@ -39,13 +39,17 @@ type Client struct {
 	last time.Time
 }
 
+// DefaultBaseURL is the API root of the new clients (scripts/demo points it
+// to a fake TMDB).
+var DefaultBaseURL = "https://api.themoviedb.org/3"
+
 // New takes either an API key (v3) or an API read access token (v4).
 func New(key string) *Client {
 	return &Client{
-		BaseURL:     "https://api.themoviedb.org/3",
+		BaseURL:     DefaultBaseURL,
 		key:         strings.TrimSpace(key),
 		http:        &http.Client{Timeout: 30 * time.Second},
-		Language:    "it-IT",
+		Language:    "en-US",
 		MinInterval: 100 * time.Millisecond,
 	}
 }

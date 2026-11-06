@@ -127,7 +127,7 @@ export function DiskArchivesPage({
                     onClick={() => setSelected(t.hash)}
                   >
                     <div className="flex items-start gap-2">
-                      <span className="min-w-0 flex-1 font-medium break-words">{t.name}</span>
+                      <span className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]">{t.name}</span>
                       <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{formatBytes(t.size)}</span>
                     </div>
                     <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -202,7 +202,7 @@ function Unmatched({ disk, query, onAdded }: { disk: Disk; query: string; onAdde
               {shown.map((e) => (
                 <li key={e.path} className="flex items-start gap-3 px-4 py-3">
                   <div className="grid min-w-0 flex-1 gap-1">
-                    <span className="font-medium break-words">{e.name}</span>
+                    <span className="font-medium [overflow-wrap:anywhere]">{e.name}</span>
                     <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                       <span className="flex min-w-0 items-center gap-1 font-mono break-all">
                         <FolderOpen className="size-3.5 shrink-0" /> {e.path}

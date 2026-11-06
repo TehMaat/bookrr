@@ -173,7 +173,7 @@ export function ClientsPage() {
   const del = useAction((id: number) => api.deleteClient(id), "Client removed")
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex items-center gap-2">
         <p className="text-muted-foreground text-sm">The qBittorrent clients bookrr reads torrents from.</p>
         <Button

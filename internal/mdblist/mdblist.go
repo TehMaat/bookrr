@@ -33,9 +33,13 @@ type Client struct {
 	last time.Time
 }
 
+// DefaultBaseURL is the API root of the new clients (scripts/demo points it
+// to a fake MDBList).
+var DefaultBaseURL = "https://api.mdblist.com"
+
 func New(key string) *Client {
 	return &Client{
-		BaseURL:     "https://api.mdblist.com",
+		BaseURL:     DefaultBaseURL,
 		key:         strings.TrimSpace(key),
 		http:        &http.Client{Timeout: 30 * time.Second},
 		MinInterval: time.Second,

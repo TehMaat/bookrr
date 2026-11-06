@@ -1,7 +1,7 @@
 services:
   bookrr:
-    # Immagine multi-arch (amd64, 386, arm64, armv7, armv6) pubblicata dalla CI.
-    # Per compilarla in locale: docker compose up -d --build
+    # Multi-arch image (amd64, 386, arm64, armv7, armv6) published by the CI.
+    # To build it locally: docker compose up -d --build
     image: ghcr.io/tehmaat/bookrr:latest
     build: .
     container_name: bookrr
@@ -12,42 +12,42 @@ services:
       - ./data:/data
     environment:
       TZ: Europe/Rome
-      # Le opzioni qui sotto (tranne login e webhook) si possono impostare anche
-      # dall'interfaccia, Impostazioni: se le imposti qui hanno la precedenza.
-      # Ogni quanto leggere i client qBittorrent (min 30s)
+      # The options below (except login and webhook) can also be set from the
+      # interface, in Settings: when set here they take precedence.
+      # How often to read the qBittorrent clients (min 30s)
       # BOOKRR_SYNC_INTERVAL: 5m
-      # Ogni quanto leggere i bucket S3 degli archivi cloud (min 1m)
+      # How often to read the S3 buckets of the cloud archives (min 1m)
       # BOOKRR_S3_SCAN_INTERVAL: 1h
-      # Tag che identifica le tue release
+      # The tag that marks your releases
       # BOOKRR_RELEASE_TAG: Personal Release
-      # Log: un file al giorno in ./data/logs (pagina Log). Per quanti giorni
-      # tenerli (min 1d, 0 per sempre), dimensione massima di un file (0 senza
-      # limite) e livello minimo (debug, info, warn, error)
+      # Logs: one file per day in ./data/logs (Logs page). How many days to
+      # keep them (min 1d, 0 forever), maximum size of a file (0 for no limit)
+      # and minimum level (debug, info, warn, error)
       # BOOKRR_LOG_RETENTION: 30d
       # BOOKRR_LOG_MAX_SIZE: 50MB
       # BOOKRR_LOG_LEVEL: info
-      # Token richiesto dal webhook (consigliato se bookrr è esposto)
-      # BOOKRR_WEBHOOK_TOKEN: cambiami
-      # Login opzionale per l'interfaccia web
+      # Token required by the webhook (recommended if bookrr is exposed)
+      # BOOKRR_WEBHOOK_TOKEN: change-me
+      # Optional login for the web interface
       # BOOKRR_AUTH_USER: admin
-      # BOOKRR_AUTH_PASSWORD: cambiami
-      # Tracker UNIT3D dove cercare l'hash dei torrent aggiunti senza
-      # e da cui leggere lo storico dei tuoi upload (scheda Release)
+      # BOOKRR_AUTH_PASSWORD: change-me
+      # UNIT3D tracker: finds the hash of torrents added without one and
+      # reads the history of your uploads (Releases page)
       # BOOKRR_UNIT3D_URL: https://tracker.example
-      # BOOKRR_UNIT3D_API_KEY: la-tua-api-key
-      # Ogni quanto rileggere i tuoi upload sul tracker (min 15m)
+      # BOOKRR_UNIT3D_API_KEY: your-api-key
+      # How often to read your uploads on the tracker again (min 15m)
       # BOOKRR_UNIT3D_RELEASES_INTERVAL: 6h
-      # Chiave API TMDB (v3) o token di lettura (v4): con il tracker UNIT3D
-      # attiva il controllo delle stagioni mancanti (scheda Mancanti)
-      # BOOKRR_TMDB_API_KEY: la-tua-chiave-tmdb
-      # Chiave API MDBList (gratuita): con TMDB attiva le collezioni da seguire
-      # (liste di film come l'MCU o i film Pixar, scheda Mancanti)
-      # BOOKRR_MDBLIST_API_KEY: la-tua-chiave-mdblist
-      # Prowlarr: con il tracker UNIT3D cerca la versione migliore che esiste
-      # dei film caricati, per tipo e risoluzione (scheda Release, colonna Max)
+      # TMDB API key (v3) or read access token (v4): with the UNIT3D tracker
+      # it enables the missing seasons and saga films (Missing page)
+      # BOOKRR_TMDB_API_KEY: your-tmdb-key
+      # MDBList API key (free): with TMDB it enables the collections to follow
+      # (lists of films, Missing page)
+      # BOOKRR_MDBLIST_API_KEY: your-mdblist-key
+      # Prowlarr: with the UNIT3D tracker it searches the best existing version
+      # of your uploaded films, by type and resolution (Releases page, Max column)
       # BOOKRR_PROWLARR_URL: http://prowlarr:9696
-      # BOOKRR_PROWLARR_API_KEY: la-tua-api-key-prowlarr
-      # Ogni quanto cercare di nuovo ogni film (min 1d)
+      # BOOKRR_PROWLARR_API_KEY: your-prowlarr-api-key
+      # How often to search each film again (min 1d)
       # BOOKRR_PROWLARR_RECHECK: 7d
-      # Ora del controllo notturno delle stagioni mancanti (ora locale)
+      # Time of the nightly missing seasons and films check (local time)
       # BOOKRR_MISSING_CHECK_AT: "04:00"

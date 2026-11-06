@@ -1,5 +1,5 @@
 import type { Disk } from "@/lib/api"
-import { formatBytes, formatRelative } from "@/lib/format"
+import { formatBytes, formatRelative, plural } from "@/lib/format"
 
 /** Last read of a cloud archive's bucket. */
 export function BucketStatus({ disk }: { disk: Disk }) {
@@ -10,7 +10,7 @@ export function BucketStatus({ disk }: { disk: Disk }) {
       <div className="text-muted-foreground">
         {b.scanAt ? (
           <>
-            Bucket read {formatRelative(b.scanAt)} · {b.objects} file · {formatBytes(b.size)}
+            Bucket read {formatRelative(b.scanAt)} · {plural(b.objects, "file")} · {formatBytes(b.size)}
             {b.unmatched > 0 && <> · {b.unmatched} unrecognized</>}
           </>
         ) : (

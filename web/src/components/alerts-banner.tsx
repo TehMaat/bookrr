@@ -25,7 +25,7 @@ export function AlertsBanner({
           : `${alerts.length} Personal Releases were removed: where did you move them?`}
       </AlertTitle>
       <AlertDescription>
-        <ul className="w-full space-y-1.5 pt-1">
+        <ul className="w-full min-w-0 space-y-1.5 pt-1">
           {shown.map((a) => (
             <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-foreground min-w-0 flex-1 truncate font-medium">{a.torrentName}</span>
