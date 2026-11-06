@@ -18,7 +18,7 @@ export type Accent = {
 export const accents: Accent[] = [
   {
     id: "viola",
-    label: "Viola",
+    label: "Purple",
     saber: "Mace Windu",
     light: { brand: "#7c3aed", fg: "#ffffff" },
     dark: { brand: "#a78bfa", fg: "#2e1065" },
@@ -26,7 +26,7 @@ export const accents: Accent[] = [
   },
   {
     id: "blu",
-    label: "Blu",
+    label: "Blue",
     saber: "Obi-Wan Kenobi",
     light: { brand: "#2563eb", fg: "#ffffff" },
     dark: { brand: "#60a5fa", fg: "#172554" },
@@ -34,7 +34,7 @@ export const accents: Accent[] = [
   },
   {
     id: "verde",
-    label: "Verde",
+    label: "Green",
     saber: "Yoda",
     light: { brand: "#15803d", fg: "#ffffff" },
     dark: { brand: "#4ade80", fg: "#052e16" },
@@ -42,7 +42,7 @@ export const accents: Accent[] = [
   },
   {
     id: "giallo",
-    label: "Giallo",
+    label: "Yellow",
     saber: "Rey",
     light: { brand: "#f59e0b", fg: "#451a03" },
     dark: { brand: "#fbbf24", fg: "#451a03" },
@@ -50,7 +50,7 @@ export const accents: Accent[] = [
   },
   {
     id: "rosso",
-    label: "Rosso",
+    label: "Red",
     saber: "Sith",
     light: { brand: "#dc2626", fg: "#ffffff" },
     dark: { brand: "#f87171", fg: "#450a0a" },
@@ -58,7 +58,7 @@ export const accents: Accent[] = [
   },
   {
     id: "darksaber",
-    label: "Nero",
+    label: "Black",
     saber: "Darksaber",
     light: { brand: "#18181b", fg: "#fafafa" },
     dark: { brand: "#e4e4e7", fg: "#18181b" },

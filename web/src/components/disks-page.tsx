@@ -50,15 +50,15 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
     setSmartDisk(d)
     setSmartOpen(true)
   }
-  const del = useAction((id: number) => api.deleteDisk(id), "Disco eliminato")
+  const del = useAction((id: number) => api.deleteDisk(id), "Disk deleted")
   const scan = useScanDisk()
 
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-muted-foreground text-sm">Dischi e archivi offline su cui conservi i torrent tolti dai client.</p>
+        <p className="text-muted-foreground text-sm">Offline disks and archives where you keep the torrents removed from the clients.</p>
         <Button className="ml-auto" variant="outline" onClick={() => openSmart(null)}>
-          <Activity /> Importa da SMART
+          <Activity /> Import from SMART
         </Button>
         <Button
           onClick={() => {
@@ -66,7 +66,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
             setOpen(true)
           }}
         >
-          <Plus /> Nuovo disco
+          <Plus /> New disk
         </Button>
       </div>
 
@@ -74,7 +74,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
       {disks.data?.length === 0 && (
         <Card>
           <CardContent className="text-muted-foreground py-6 text-center text-sm">
-            Nessun disco registrato. Aggiungine uno per poter indicare dove archivi i torrent.
+            No disks yet. Add one to record where you archive your torrents.
           </CardContent>
         </Card>
       )}
@@ -87,7 +87,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
               key={d.id}
               role="link"
               tabIndex={0}
-              aria-label={`Torrent archiviati su ${d.label}`}
+              aria-label={`Torrents archived on ${d.label}`}
               className="hover:bg-accent/50 focus-visible:ring-ring/50 cursor-pointer gap-4 transition-colors outline-none focus-visible:ring-[3px]"
               onClick={() => {
                 // Selecting text, like the serial, does not open the disk.
@@ -102,7 +102,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                   <Badge variant="outline">{d.kind}</Badge>
                 </CardTitle>
                 <CardDescription className="font-mono text-xs break-all">
-                  {d.s3 ? `s3://${d.s3.bucket}/${d.s3.prefix}` : d.serial ? `SN ${d.serial}` : "Seriale non indicato"}
+                  {d.s3 ? `s3://${d.s3.bucket}/${d.s3.prefix}` : d.serial ? `SN ${d.serial}` : "No serial number"}
                 </CardDescription>
                 <CardAction className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {isPhysicalDisk(d.kind) && (
@@ -114,22 +114,22 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Leggi il bucket"
-                      title="Leggi il bucket"
+                      aria-label="Read the bucket"
+                      title="Read the bucket"
                       disabled={scan.isPending && scan.variables === d.id}
                       onClick={() => scan.mutate(d.id)}
                     >
                       <RefreshCw className={scan.isPending && scan.variables === d.id ? "animate-spin" : undefined} />
                     </Button>
                   ) : (
-                    <Button variant="ghost" size="icon-sm" aria-label="Aggiorna da SMART" title="Aggiorna da SMART" onClick={() => openSmart(d)}>
+                    <Button variant="ghost" size="icon-sm" aria-label="Update from SMART" title="Update from SMART" onClick={() => openSmart(d)}>
                       <Activity />
                     </Button>
                   )}
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Modifica"
+                    aria-label="Edit"
                     onClick={() => {
                       setEditing(d)
                       setOpen(true)
@@ -137,7 +137,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                   >
                     <Pencil />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label="Elimina" onClick={() => setDeleting(d)}>
+                  <Button variant="ghost" size="icon-sm" aria-label="Delete" onClick={() => setDeleting(d)}>
                     <Trash2 />
                   </Button>
                 </CardAction>
@@ -157,7 +157,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                         <Clock className="text-muted-foreground size-3.5" /> {formatHours(d.powerOnHours)}
                       </span>
                     )}
-                    <span className="text-muted-foreground text-xs">letto il {formatDate(d.smartAt)}</span>
+                    <span className="text-muted-foreground text-xs">read on {formatDate(d.smartAt)}</span>
                   </div>
                 )}
                 {d.place && (
@@ -169,8 +169,8 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                 <div className="flex items-center gap-1.5">
                   <ListTree className="text-muted-foreground size-3.5" />
                   <span>
-                    <span className="font-medium">{d.archiveCount}</span> torrent · {formatBytes(d.archivedSize)}
-                    {d.capacity > 0 && <span className="text-muted-foreground"> su {formatBytes(d.capacity)}</span>}
+                    <span className="font-medium">{d.archiveCount}</span> {d.archiveCount === 1 ? "torrent" : "torrents"} · {formatBytes(d.archivedSize)}
+                    {d.capacity > 0 && <span className="text-muted-foreground"> of {formatBytes(d.capacity)}</span>}
                   </span>
                 </div>
                 {usage !== null && (
@@ -191,20 +191,20 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminare il disco "{deleting?.label}"?</AlertDialogTitle>
+            <AlertDialogTitle>Delete the disk "{deleting?.label}"?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleting?.archiveCount
-                ? `${deleting.archiveCount} archivi resteranno registrati con il solo percorso, senza disco.`
-                : "Nessun torrent è associato a questo disco."}
+                ? `${deleting.archiveCount} archives will be kept with their path only, without a disk.`
+                : "No torrents are on this disk."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => deleting && del.mutate(deleting.id)}
             >
-              Elimina
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

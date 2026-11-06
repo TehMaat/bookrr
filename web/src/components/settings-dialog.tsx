@@ -15,17 +15,17 @@ type ArchiveFields = Pick<Settings, "archiveMinSeeders" | "archiveMinCompleted" 
 const MAX_DAYS = 3650
 
 const fields: { key: keyof ArchiveFields; label: string; hint: string; max?: number }[] = [
-  { key: "archiveMinSeeders", label: "Altri seeder", hint: "Seeder del tracker meno i tuoi client che la seminano completa." },
-  { key: "archiveMinCompleted", label: "Completati", hint: "Download completati sul tracker." },
-  { key: "archiveDays", label: "Giorni di fila", hint: "Da quanto devono valere le due soglie; 0 = subito.", max: MAX_DAYS },
+  { key: "archiveMinSeeders", label: "Other seeders", hint: "Seeders on the tracker minus your clients seeding it complete." },
+  { key: "archiveMinCompleted", label: "Completed", hint: "Completed downloads on the tracker." },
+  { key: "archiveDays", label: "Days in a row", hint: "How long both thresholds must hold; 0 = right away.", max: MAX_DAYS },
 ]
 
 /** The groups of the options of the configuration, after the archive rule. */
 const groups: { group: ConfigGroup; label: string; intro: string }[] = [
-  { group: "general", label: "Generale", intro: "Le release, ogni quanto leggere client e bucket e i log." },
-  { group: "unit3d", label: "Tracker", intro: "Il tracker UNIT3D: hash dei torrent aggiunti senza, storico release, archiviabili." },
-  { group: "missing", label: "Mancanti", intro: "TMDB e MDBList, per le stagioni, le saghe e le collezioni mancanti." },
-  { group: "prowlarr", label: "Prowlarr", intro: "La versione migliore che esiste dei film caricati." },
+  { group: "general", label: "General", intro: "Releases, how often to read clients and buckets, and logs." },
+  { group: "unit3d", label: "Tracker", intro: "The UNIT3D tracker: hashes of torrents added without one, release history, archivable." },
+  { group: "missing", label: "Missing", intro: "TMDB and MDBList, for missing seasons, sagas and collections." },
+  { group: "prowlarr", label: "Prowlarr", intro: "The best existing version of your uploaded films." },
 ]
 
 const toForm = (s: ArchiveFields) => ({
@@ -55,21 +55,21 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   >
   const valid = fields.every((f) => values[f.key] !== null)
   const changed = !!settings.data && fields.some((f) => values[f.key] !== settings.data[f.key])
-  const save = useAction(() => api.saveSettings(values as ArchiveFields), "Impostazioni salvate")
+  const save = useAction(() => api.saveSettings(values as ArchiveFields), "Settings saved")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Impostazioni</DialogTitle>
+          <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Valgono per tutta l'istanza di bookrr e si applicano subito, senza riavviare. Le opzioni impostate come variabili
-            d'ambiente nel docker-compose hanno la precedenza e qui non si possono cambiare.
+            They apply to the whole bookrr instance, right away, without a restart. Options set as environment variables
+            in the docker-compose take precedence and can't be changed here.
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="archive">
           <TabsList className="h-auto w-full flex-wrap">
-            <TabsTrigger value="archive">Archiviabili</TabsTrigger>
+            <TabsTrigger value="archive">Archivable</TabsTrigger>
             {groups.map((g) => (
               <TabsTrigger key={g.group} value={g.group}>
                 {g.label}
@@ -87,12 +87,12 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <section className="grid gap-3">
                 <div className="flex items-center gap-2">
                   <Archive className="text-muted-foreground size-4" />
-                  <h3 className="text-sm font-semibold">Release archiviabili</h3>
+                  <h3 className="text-sm font-semibold">Archivable releases</h3>
                 </div>
                 <p className="text-muted-foreground text-sm">
-                  Una tua release ancora su un client è archiviabile quando altri la stanno già seminando: puoi toglierla dai client
-                  e archiviarla. La trovi con il filtro "Archiviabili" nei Torrent e nelle Release.
-                  {info.data && !info.data.unit3d && " Serve un tracker UNIT3D configurato."}
+                  One of your releases still on a client is archivable when others are already seeding it: you can remove it from
+                  the clients and archive it. Find them with the "Archivable" filter in Torrents and Releases.
+                  {info.data && !info.data.unit3d && " Needs a UNIT3D tracker to be configured."}
                 </p>
                 <div className="grid gap-3 sm:grid-cols-3">
                   {fields.map((f) => (
@@ -117,7 +117,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </section>
               <div className="flex justify-end">
                 <Button type="submit" disabled={!valid || !changed || save.isPending}>
-                  Salva
+                  Save
                 </Button>
               </div>
             </form>
@@ -131,7 +131,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         </Tabs>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Chiudi
+            Close
           </Button>
         </DialogFooter>
       </DialogContent>

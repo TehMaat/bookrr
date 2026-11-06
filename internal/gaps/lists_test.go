@@ -133,7 +133,7 @@ func TestCheckLists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res != "3 collezioni, 6 film mancanti, 1 lista non trovata" {
+	if res != "3 collections, 6 missing films, 1 list not found" {
 		t.Errorf("result %q", res)
 	}
 	stored, err := st.GapGroups(ctx, KindList)
@@ -234,7 +234,7 @@ func TestCheckKinds(t *testing.T) {
 	c.MDBList = mdblist.New("MDBKEY")
 	c.MDBList.BaseURL = md.URL
 	c.MDBList.MinInterval = 0
-	c.results[KindSeries] = "2 serie, 1 stagioni mancanti"
+	c.results[KindSeries] = "2 series, 1 missing season"
 	c.check(ctx, map[string]bool{KindList: true})
 	if at, _ := st.GapsCheckedAt(ctx, KindSeries); at != nil {
 		t.Error("series checked")
@@ -243,7 +243,7 @@ func TestCheckKinds(t *testing.T) {
 		t.Error("lists not checked")
 	}
 	s := c.State()
-	if s.Running || s.LastResult != "2 serie, 1 stagioni mancanti · 0 collezioni, 0 film mancanti" || s.LastError != "" {
+	if s.Running || s.LastResult != "2 series, 1 missing season · 0 collections, 0 missing films" || s.LastError != "" {
 		t.Errorf("state %+v", s)
 	}
 }

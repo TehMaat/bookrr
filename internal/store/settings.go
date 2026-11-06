@@ -33,7 +33,7 @@ var DefaultSettings = Settings{ArchiveMinSeeders: 1, ArchiveMinCompleted: 1, Arc
 // MaxArchiveDays keeps the days of the archive rule within a sane range.
 const MaxArchiveDays = 3650
 
-var ErrInvalidSettings = errors.New("soglie delle release archiviabili non valide: numeri da 0 in su, giorni al massimo 3650")
+var ErrInvalidSettings = errors.New("invalid archivable release thresholds: numbers from 0 up, days at most 3650")
 
 func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 	out := DefaultSettings

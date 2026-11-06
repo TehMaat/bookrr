@@ -45,13 +45,13 @@ export function TrackerPickDialog({
     onPicked(t.hash)
     onOpenChange(false)
     return t
-  }, "Hash e file .torrent salvati")
+  }, "Hash and .torrent file saved")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Scegli il torrent sul tracker</DialogTitle>
+          <DialogTitle>Pick the torrent on the tracker</DialogTitle>
           <DialogDescription className="break-all">
             Torrent in bookrr: <span className="text-foreground font-medium">{torrent.name}</span>
             {torrent.size > 0 && <> · {formatBytes(torrent.size)}</>}
@@ -68,21 +68,21 @@ export function TrackerPickDialog({
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Cerca altro sul tracker (vuoto = per nome, es. Ad Astra 2019)"
+            placeholder="Search the tracker for something else (empty = by name, e.g. Ad Astra 2019)"
           />
           <Button type="submit" variant="outline">
-            <Search /> Cerca
+            <Search /> Search
           </Button>
         </form>
 
         <div className="max-h-96 overflow-auto">
           {candidates.isFetching ? (
-            <p className="text-muted-foreground py-6 text-center text-sm">Ricerca sul tracker…</p>
+            <p className="text-muted-foreground py-6 text-center text-sm">Searching the tracker…</p>
           ) : candidates.isError ? (
             <p className="text-destructive py-6 text-center text-sm">{candidates.error.message}</p>
           ) : candidates.data?.length === 0 ? (
             <p className="text-muted-foreground py-6 text-center text-sm">
-              Nessun torrent trovato: prova a cercare solo titolo e anno.
+              No torrents found: try searching only title and year.
             </p>
           ) : (
             <ul className="grid gap-2">
@@ -93,13 +93,13 @@ export function TrackerPickDialog({
                     <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                       {c.match ? (
                         <Badge variant="success">
-                          <Check /> Stessa release
+                          <Check /> Same release
                         </Badge>
                       ) : (
-                        <Badge variant="secondary">{c.score}% parole in comune</Badge>
+                        <Badge variant="secondary">{c.score}% words in common</Badge>
                       )}
                       <span>{formatBytes(c.size)}</span>
-                      {c.createdAt && <span>caricato il {formatDate(c.createdAt)}</span>}
+                      {c.createdAt && <span>uploaded on {formatDate(c.createdAt)}</span>}
                       {c.detailsLink && (
                         <a
                           href={c.detailsLink}
@@ -107,13 +107,13 @@ export function TrackerPickDialog({
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
                         >
-                          <ExternalLink className="size-3" /> Apri sul tracker
+                          <ExternalLink className="size-3" /> Open on the tracker
                         </a>
                       )}
                     </div>
                   </div>
                   <Button size="sm" disabled={choose.isPending} onClick={() => choose.mutate(c.id)}>
-                    <Check /> Usa questo
+                    <Check /> Use this
                   </Button>
                 </li>
               ))}

@@ -133,18 +133,18 @@ export function TorrentSheet({
     // Reset only when switching torrent, not on background refreshes.
   }, [hash])
 
-  const update = useAction((p: TorrentPatch) => api.updateTorrent(hash!, p), "Salvato")
-  const addArchive = useAction((a: ArchiveInput) => api.addArchive(hash!, a), "Spostamento registrato")
-  const delArchive = useAction((id: number) => api.deleteArchive(id), "Spostamento rimosso")
-  const addAdoption = useAction((a: AdoptionInput) => api.addAdoption(hash!, a), "Adozione aggiunta")
-  const delAdoption = useAction((id: number) => api.deleteAdoption(id), "Adozione rimossa")
-  const del = useAction(() => api.deleteTorrent(hash!), "Torrent eliminato")
+  const update = useAction((p: TorrentPatch) => api.updateTorrent(hash!, p), "Saved")
+  const addArchive = useAction((a: ArchiveInput) => api.addArchive(hash!, a), "Move saved")
+  const delArchive = useAction((id: number) => api.deleteArchive(id), "Move removed")
+  const addAdoption = useAction((a: AdoptionInput) => api.addAdoption(hash!, a), "Adoption added")
+  const delAdoption = useAction((id: number) => api.deleteAdoption(id), "Adoption removed")
+  const del = useAction(() => api.deleteTorrent(hash!), "Torrent deleted")
   const neverArchive = useNeverArchive()
   const lookup = useAction(async () => {
     const found = await api.lookupHash(hash!)
     onHashChange?.(found.hash)
     return found
-  }, "Hash trovato sul tracker")
+  }, "Hash found on the tracker")
 
   if (!t) return <Sheet open={false} />
 
@@ -160,7 +160,7 @@ export function TorrentSheet({
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      toast.error("Copia non riuscita")
+      toast.error("Copy failed")
     }
   }
 
@@ -174,7 +174,7 @@ export function TorrentSheet({
               <StatusBadge status={t.status} />
               {t.personalRelease && <PersonalBadge />}
               {t.duplicate && <DuplicateBadge count={t.locations.length} />}
-              {t.manual && <Badge variant="outline">Manuale</Badge>}
+              {t.manual && <Badge variant="outline">Manual</Badge>}
               {t.tags.map((tag) => (
                 <Badge key={tag} variant="secondary">
                   {tag}
@@ -188,13 +188,13 @@ export function TorrentSheet({
           {t.openAlert && (
             <AlertBox variant="warning">
               <TriangleAlert />
-              <AlertTitle>Rimosso: dove è stato spostato?</AlertTitle>
+              <AlertTitle>Removed: where was it moved?</AlertTitle>
               <AlertDescription>
                 <p>
-                  {t.openAlert.message} il {formatDate(t.openAlert.createdAt)}.
+                  {t.openAlert.message} on {formatDate(t.openAlert.createdAt)}.
                 </p>
                 <Button size="sm" className="mt-1" onClick={() => onResolve(t.openAlert!)}>
-                  Indica posizione
+                  Set location
                 </Button>
               </AlertDescription>
             </AlertBox>
@@ -203,12 +203,12 @@ export function TorrentSheet({
           {t.duplicate && (
             <AlertBox variant="destructive">
               <Copy />
-              <AlertTitle>Presente su {t.locations.length} client</AlertTitle>
+              <AlertTitle>On {t.locations.length} clients</AlertTitle>
               <AlertDescription>
-                Lo stesso torrent (stesso hash) è caricato su più client.
+                The same torrent (same hash) is loaded on several clients.
                 {downloading.length > 0 && (
                   <p>
-                    In download su: {downloading.map((l) => `${l.clientName} (${Math.floor(l.progress * 100)}%)`).join(", ")}.
+                    Downloading on: {downloading.map((l) => `${l.clientName} (${Math.floor(l.progress * 100)}%)`).join(", ")}.
                   </p>
                 )}
               </AlertDescription>
@@ -219,20 +219,20 @@ export function TorrentSheet({
             <Field label="Hash">
               {isManualHash(t.hash) ? (
                 <span className="grid justify-items-start gap-1">
-                  <span className="text-muted-foreground">Non indicato</span>
+                  <span className="text-muted-foreground">Not set</span>
                   {info.data?.unit3d && (
                     <>
                       <span className={t.hashLookupError ? "text-destructive text-xs" : "text-muted-foreground text-xs"}>
                         {t.hashLookupError
                           ? `Tracker: ${t.hashLookupError}${t.hashLookupAt ? ` (${formatDate(t.hashLookupAt)})` : ""}`
-                          : "In coda per la ricerca sul tracker UNIT3D."}
+                          : "Queued for lookup on the UNIT3D tracker."}
                       </span>
                       <span className="flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" disabled={lookup.isPending} onClick={() => lookup.mutate(undefined)}>
-                          <Search /> {lookup.isPending ? "Ricerca…" : "Cerca ora sul tracker"}
+                          <Search /> {lookup.isPending ? "Searching…" : "Search the tracker now"}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setPicking(true)}>
-                          <ListChecks /> Scegli dal tracker
+                          <ListChecks /> Pick from the tracker
                         </Button>
                       </span>
                       <TrackerPickDialog
@@ -247,35 +247,35 @@ export function TorrentSheet({
               ) : (
                 <span className="inline-flex items-center gap-1 font-mono text-xs">
                   {t.hash}
-                  <Button variant="ghost" size="icon-sm" className="size-6" onClick={copyHash} aria-label="Copia hash">
+                  <Button variant="ghost" size="icon-sm" className="size-6" onClick={copyHash} aria-label="Copy hash">
                     {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
                   </Button>
                 </span>
               )}
             </Field>
             {t.trackerUrl && (
-              <Field label="Sul tracker">
+              <Field label="On the tracker">
                 <a
                   href={t.trackerUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
                 >
-                  <ExternalLink className="size-3.5" /> Apri pagina del torrent
+                  <ExternalLink className="size-3.5" /> Open the torrent page
                 </a>
               </Field>
             )}
-            <Field label="Dimensione">{formatBytes(t.size)}</Field>
-            {t.category && <Field label="Categoria">{t.category}</Field>}
+            <Field label="Size">{formatBytes(t.size)}</Field>
+            {t.category && <Field label="Category">{t.category}</Field>}
             {t.tracker && <Field label="Tracker">{t.tracker}</Field>}
-            <Field label="Visto la prima volta">{formatDate(t.firstSeenAt)}</Field>
-            <Field label="Ultima volta su client">{formatDate(t.lastSeenAt)}</Field>
+            <Field label="First seen">{formatDate(t.firstSeenAt)}</Field>
+            <Field label="Last seen on a client">{formatDate(t.lastSeenAt)}</Field>
           </div>
 
           {t.archivable && (
             <>
               <Separator />
-              <Section title="Archiviabile" icon={Archive}>
+              <Section title="Archivable" icon={Archive}>
                 <p className={cn("text-sm", t.archivable.archivable && "font-medium text-teal-700 dark:text-teal-300")}>
                   {archivableSummary(t.archivable)}
                 </p>
@@ -292,8 +292,8 @@ export function TorrentSheet({
                     }
                   />
                   <div className="grid gap-0.5">
-                    <Label htmlFor="never-archive">Non segnare da archiviare</Label>
-                    <p className="text-muted-foreground text-xs">Per quelli che tieni sui client: non comparirà tra gli archiviabili.</p>
+                    <Label htmlFor="never-archive">Never archive</Label>
+                    <p className="text-muted-foreground text-xs">For the ones you keep on the clients: it won't show up among the archivable ones.</p>
                   </div>
                 </div>
               </Section>
@@ -302,9 +302,9 @@ export function TorrentSheet({
 
           <Separator />
 
-          <Section title={`Sui client (${t.locations.length})`} icon={Server}>
+          <Section title={`On clients (${t.locations.length})`} icon={Server}>
             {t.locations.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Non presente su nessun client.</p>
+              <p className="text-muted-foreground text-sm">Not on any client.</p>
             ) : (
               <ul className="grid gap-2">
                 {t.locations.map((l) => (
@@ -327,8 +327,8 @@ export function TorrentSheet({
                           size="icon-sm"
                           className="size-6"
                           onClick={() => setRemoving(l)}
-                          aria-label={`Rimuovi da ${l.clientName}`}
-                          title={`Rimuovi da ${l.clientName}`}
+                          aria-label={`Remove from ${l.clientName}`}
+                          title={`Remove from ${l.clientName}`}
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
@@ -339,12 +339,12 @@ export function TorrentSheet({
                         <div className="h-full rounded-full bg-amber-500" style={{ width: `${l.progress * 100}%` }} />
                       </div>
                     )}
-                    <div className="text-muted-foreground mt-1 text-xs">Aggiunto il {formatUnix(l.addedOn)}</div>
+                    <div className="text-muted-foreground mt-1 text-xs">Added on {formatUnix(l.addedOn)}</div>
                     <div className="text-muted-foreground mt-1 font-mono text-xs break-all">{l.savePath}</div>
                     {(l.category || l.tags) && (
                       <div className="text-muted-foreground mt-1 text-xs">
-                        {l.category && <>Categoria: {l.category} </>}
-                        {l.tags && <>· Tag: {l.tags.split(",").join(", ")}</>}
+                        {l.category && <>Category: {l.category} </>}
+                        {l.tags && <>· Tags: {l.tags.split(",").join(", ")}</>}
                       </div>
                     )}
                   </li>
@@ -357,12 +357,12 @@ export function TorrentSheet({
           <Separator />
 
           <Section
-            title={`Spostato su disco (${t.archives.length})`}
+            title={`Moved to disk (${t.archives.length})`}
             icon={HardDrive}
             action={
               !addingArchive && (
                 <Button size="sm" variant="outline" onClick={() => setAddingArchive(true)}>
-                  <HardDrive /> Sposta su disco
+                  <HardDrive /> Move to disk
                 </Button>
               )
             }
@@ -370,14 +370,14 @@ export function TorrentSheet({
             {t.hasTorrentFile && (
               <Button variant="outline" size="sm" className="w-fit" asChild>
                 <a href={api.torrentFileUrl(t.hash)} download>
-                  <FileDown /> Scarica il file .torrent
+                  <FileDown /> Download the .torrent file
                 </a>
               </Button>
             )}
             {t.archives.length === 0 && !addingArchive && (
               <p className="text-muted-foreground text-sm">
-                Non è stato spostato su nessun disco.
-                {onClient && " Registra lo spostamento prima di toglierlo dal client: la rimozione non verrà segnalata."}
+                Not moved to any disk.
+                {onClient && " Record the move before removing it from the client: the removal won't raise an alert."}
               </p>
             )}
             <ul className="grid gap-2">
@@ -385,7 +385,7 @@ export function TorrentSheet({
                 <li key={a.id} className="flex items-start gap-2 rounded-lg border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{a.diskLabel || "Senza disco"}</span>
+                      <span className="font-medium">{a.diskLabel || "No disk"}</span>
                       {a.diskKind && <Badge variant="outline">{a.diskKind}</Badge>}
                       {a.diskSerial && <span className="text-muted-foreground font-mono text-xs">SN {a.diskSerial}</span>}
                     </div>
@@ -393,8 +393,8 @@ export function TorrentSheet({
                     {a.notes && <div className="mt-1 text-xs">{a.notes}</div>}
                     <div className="text-muted-foreground mt-1 text-xs">
                       {a.source === "s3"
-                        ? `Trovato nel bucket il ${formatDate(a.createdAt)}: si aggiorna da solo a ogni lettura`
-                        : `Spostato il ${formatDate(a.createdAt)}`}
+                        ? `Found in the bucket on ${formatDate(a.createdAt)}: updated by itself on every read`
+                        : `Moved on ${formatDate(a.createdAt)}`}
                     </div>
                   </div>
                   {a.source !== "s3" && (
@@ -402,7 +402,7 @@ export function TorrentSheet({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => delArchive.mutate(a.id)}
-                      aria-label="Rimuovi spostamento"
+                      aria-label="Remove move"
                     >
                       <Trash2 />
                     </Button>
@@ -415,7 +415,7 @@ export function TorrentSheet({
                 <ArchiveFields value={archive} onChange={setArchive} />
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => setAddingArchive(false)}>
-                    Annulla
+                    Cancel
                   </Button>
                   <Button
                     size="sm"
@@ -429,7 +429,7 @@ export function TorrentSheet({
                       })
                     }
                   >
-                    Registra spostamento
+                    Save move
                   </Button>
                 </div>
               </div>
@@ -439,18 +439,18 @@ export function TorrentSheet({
           <Separator />
 
           <Section
-            title={`Adottato da (${t.adoptions.length})`}
+            title={`Adopted by (${t.adoptions.length})`}
             icon={HandHeart}
             action={
               !addingAdoption && (
                 <Button size="sm" variant="outline" onClick={() => setAddingAdoption(true)}>
-                  <Plus /> Aggiungi
+                  <Plus /> Add
                 </Button>
               )
             }
           >
             {t.adoptions.length === 0 && !addingAdoption && (
-              <p className="text-muted-foreground text-sm">Nessuno l'ha adottato.</p>
+              <p className="text-muted-foreground text-sm">Nobody adopted it.</p>
             )}
             <ul className="grid gap-2">
               {t.adoptions.map((a) => (
@@ -458,9 +458,9 @@ export function TorrentSheet({
                   <div className="min-w-0 flex-1">
                     <span className="font-medium">{a.adopterName}</span>
                     {a.notes && <div className="mt-1 text-xs">{a.notes}</div>}
-                    <div className="text-muted-foreground mt-1 text-xs">Dal {formatDate(a.createdAt)}</div>
+                    <div className="text-muted-foreground mt-1 text-xs">Since {formatDate(a.createdAt)}</div>
                   </div>
-                  <Button variant="ghost" size="icon-sm" onClick={() => delAdoption.mutate(a.id)} aria-label="Rimuovi adozione">
+                  <Button variant="ghost" size="icon-sm" onClick={() => delAdoption.mutate(a.id)} aria-label="Remove adoption">
                     <Trash2 />
                   </Button>
                 </li>
@@ -469,7 +469,7 @@ export function TorrentSheet({
             {addingAdoption && (
               <div className="grid gap-3 rounded-lg border p-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="ts-adopter">Adottatore</Label>
+                  <Label htmlFor="ts-adopter">Adopter</Label>
                   <AdopterSelect
                     id="ts-adopter"
                     value={adopterId}
@@ -478,12 +478,12 @@ export function TorrentSheet({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="ts-adoption-notes">Note adozione</Label>
+                  <Label htmlFor="ts-adoption-notes">Adoption notes</Label>
                   <Input id="ts-adoption-notes" value={adoptionNotes} onChange={(e) => setAdoptionNotes(e.target.value)} />
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => setAddingAdoption(false)}>
-                    Annulla
+                    Cancel
                   </Button>
                   <Button
                     size="sm"
@@ -501,7 +501,7 @@ export function TorrentSheet({
                       )
                     }
                   >
-                    Salva adozione
+                    Save adoption
                   </Button>
                 </div>
               </div>
@@ -510,15 +510,15 @@ export function TorrentSheet({
 
           <Separator />
 
-          <Section title="Dati personali">
+          <Section title="Your data">
             {t.manual && (
               <div className="grid gap-2">
-                <Label htmlFor="ts-name">Nome</Label>
+                <Label htmlFor="ts-name">Name</Label>
                 <Input id="ts-name" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
             )}
             <div className="grid gap-2">
-              <Label htmlFor="ts-tags">Tag (separati da virgola)</Label>
+              <Label htmlFor="ts-tags">Tags (comma separated)</Label>
               <Input
                 id="ts-tags"
                 value={tags}
@@ -528,12 +528,12 @@ export function TorrentSheet({
               />
               {onClient && (
                 <span className="text-muted-foreground text-xs">
-                  Il torrent è su un client: i tag si cambiano in qBittorrent e bookrr li legge alla sincronizzazione.
+                  The torrent is on a client: change its tags in qBittorrent and bookrr reads them on sync.
                 </span>
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ts-notes">Note</Label>
+              <Label htmlFor="ts-notes">Notes</Label>
               <Textarea id="ts-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
@@ -544,7 +544,7 @@ export function TorrentSheet({
                 onCheckedChange={(v) => update.mutate({ personalRelease: v })}
               />
               <Label htmlFor="ts-personal">Personal Release</Label>
-              {onClient && <span className="text-muted-foreground text-xs">(dal tag sul client)</span>}
+              {onClient && <span className="text-muted-foreground text-xs">(from the tag on the client)</span>}
             </div>
             <div className="flex justify-end">
               <Button
@@ -557,7 +557,7 @@ export function TorrentSheet({
                   })
                 }
               >
-                Salva
+                Save
               </Button>
             </div>
           </Section>
@@ -568,24 +568,24 @@ export function TorrentSheet({
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" className="text-destructive w-fit">
-                    <Trash2 /> Elimina da bookrr
+                    <Trash2 /> Delete from bookrr
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Eliminare questo torrent?</AlertDialogTitle>
+                    <AlertDialogTitle>Delete this torrent?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Verranno cancellati da bookrr anche spostamenti, adozioni, note e segnalazioni. I file sui dischi non
-                      vengono toccati.
+                      Its moves, adoptions, notes and alerts will be deleted from bookrr too. The files on the disks are not
+                      touched.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Annulla</AlertDialogCancel>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       className="bg-destructive hover:bg-destructive/90 text-white"
                       onClick={() => del.mutate(undefined, { onSuccess: onClose })}
                     >
-                      Elimina
+                      Delete
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

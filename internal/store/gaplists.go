@@ -47,7 +47,7 @@ func (s *Store) AddGapList(ctx context.Context, l GapList) (GapList, error) {
 		l.Source, l.Path, l.Title, l.CreatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			return l, fmt.Errorf("collezione %w", ErrExists)
+			return l, fmt.Errorf("collection %w", ErrExists)
 		}
 		return l, err
 	}

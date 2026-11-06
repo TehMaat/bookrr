@@ -43,7 +43,7 @@ func TestBucketScanKeepsArchivesInSync(t *testing.T) {
 		t.Fatalf("h1 should be archived on the bucket: %+v", tr)
 	}
 	all, _ := s.ListAlerts(ctx, false, "h1")
-	if len(all) != 1 || all[0].ResolvedAt == nil || all[0].Resolution != "Spostato su Scaleway · s3://archivio/torrent/Gone/" {
+	if len(all) != 1 || all[0].ResolvedAt == nil || all[0].Resolution != "Moved to Scaleway · s3://archivio/torrent/Gone/" {
 		t.Fatalf("alert should be resolved by the bucket: %+v", all)
 	}
 	// Already in the bucket when it leaves the client: no new alert.
@@ -77,7 +77,7 @@ func TestBucketScanKeepsArchivesInSync(t *testing.T) {
 		t.Fatalf("result %+v", res)
 	}
 	tr, _ = s.GetTorrent(ctx, "h1")
-	if tr.Status != StatusMissing || len(tr.Archives) != 0 || tr.OpenAlert.Message != "Rimosso da Scaleway" {
+	if tr.Status != StatusMissing || len(tr.Archives) != 0 || tr.OpenAlert.Message != "Removed from Scaleway" {
 		t.Fatalf("h1 should be missing: %+v", tr)
 	}
 	tr, _ = s.GetTorrent(ctx, "h2")

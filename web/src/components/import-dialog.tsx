@@ -14,29 +14,32 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { api, type Adopter, type Disk, type ImportResult, type TorrentInput } from "@/lib/api"
 import { parseCsv, toCsv } from "@/lib/csv"
-import { formatBytes, parseBytes } from "@/lib/format"
+import { formatBytes, parseBytes, plural } from "@/lib/format"
 import { buildTorrentInput, isValidHash, type ManualFields } from "@/lib/manual"
 import { useAdopters, useDisks, useInfo, useRefreshAll } from "@/lib/queries"
 
-/** Accepted header names for each field, compared without case, accents, spaces and punctuation. */
+/**
+ * Accepted header names for each field, compared without case, accents, spaces and punctuation. The Italian ones are
+ * from before the interface was in English, so that older files still import.
+ */
 const columns = {
-  name: ["nome", "name", "titolo", "release"],
+  name: ["name", "title", "release", "nome", "titolo"],
   hash: ["hash", "infohash", "infohashv1", "infohashv2"],
-  size: ["dimensione", "size", "peso"],
+  size: ["size", "dimensione", "peso"],
   tags: ["tag", "tags"],
   personal: ["personalrelease", "personal", "pr"],
-  notes: ["note", "notes"],
-  disk: ["disco", "disk", "seriale", "serial", "sn"],
-  path: ["percorso", "path", "cartella", "folder"],
-  archiveNotes: ["notearchivio", "archivenotes", "notedisco"],
-  adopter: ["adottatoda", "adottatore", "adopter", "adoptedby"],
+  notes: ["notes", "note"],
+  disk: ["disk", "serial", "sn", "disco", "seriale"],
+  path: ["path", "folder", "percorso", "cartella"],
+  archiveNotes: ["archivenotes", "disknotes", "notearchivio", "notedisco"],
+  adopter: ["adoptedby", "adopter", "adottatoda", "adottatore"],
 } as const
 
 type Column = keyof typeof columns
 
 const template = [
-  ["Nome", "Hash", "Dimensione", "Tag", "Personal Release", "Note", "Disco", "Percorso", "Note archivio", "Adottato da"],
-  ["La.Mia.Release.2024", "", "12,5 GB", "Personal Release", "sì", "", "Archivio 1", "/Release/2024", "", ""],
+  ["Name", "Hash", "Size", "Tags", "Personal Release", "Notes", "Disk", "Path", "Archive notes", "Adopted by"],
+  ["My.Release.2024", "", "12.5 GB", "Personal Release", "yes", "", "Archive 1", "/Release/2024", "", ""],
 ]
 
 const normalizeHeader = (h: string) =>
@@ -74,7 +77,7 @@ function parse(text: string, disks: Disk[], adopters: Adopter[], defaultDisk: nu
     }
   })
   if (idx.name === undefined) {
-    return { rows: [], error: 'La prima riga deve contenere le intestazioni delle colonne, almeno "Nome".' }
+    return { rows: [], error: 'The first line must hold the column headers, at least "Name".' }
   }
 
   const rows = table.slice(1).map((cells, i): ParsedRow => {
@@ -94,8 +97,8 @@ function parse(text: string, disks: Disk[], adopters: Adopter[], defaultDisk: nu
         diskLabel = diskValue
         errors.push(
           found.length === 0
-            ? `disco "${diskValue}" non trovato: crealo prima nella scheda Dischi`
-            : `"${diskValue}" corrisponde a più dischi: usa il numero di serie`
+            ? `disk "${diskValue}" not found: create it first in the Disks page`
+            : `"${diskValue}" matches several disks: use the serial number`
         )
       }
     }
@@ -105,14 +108,14 @@ function parse(text: string, disks: Disk[], adopters: Adopter[], defaultDisk: nu
     if (adopterValue) {
       const a = adopters.find((a) => a.name.toLowerCase() === adopterValue.toLowerCase())
       if (a) adopterId = a.id
-      else errors.push(`adottatore "${adopterValue}" non trovato: crealo prima nella scheda Adottatori`)
+      else errors.push(`adopter "${adopterValue}" not found: create it first in the Adopters page`)
     }
 
     let personal = defaultPersonal
     const personalValue = get("personal").toLowerCase()
     if (truthy.has(personalValue)) personal = true
     else if (falsy.has(personalValue)) personal = false
-    else if (personalValue) errors.push(`Personal Release "${get("personal")}" non riconosciuto (usa sì/no)`)
+    else if (personalValue) errors.push(`Personal Release "${get("personal")}" not recognized (use yes/no)`)
 
     const fields: ManualFields = {
       name: get("name"),
@@ -124,10 +127,10 @@ function parse(text: string, disks: Disk[], adopters: Adopter[], defaultDisk: nu
       adopterId,
       archive: { diskId, path: get("path"), notes: get("archiveNotes") },
     }
-    if (!fields.name) errors.push("manca il nome")
-    if (!isValidHash(fields.hash)) errors.push("info hash non valido: servono 40 o 64 caratteri esadecimali")
-    if (fields.size && parseBytes(fields.size) === 0) errors.push(`dimensione "${fields.size}" non leggibile`)
-    if (!diskId && !fields.archive.path && !diskValue) errors.push("manca il disco o il percorso")
+    if (!fields.name) errors.push("name missing")
+    if (!isValidHash(fields.hash)) errors.push("invalid info hash: 40 or 64 hex characters needed")
+    if (fields.size && parseBytes(fields.size) === 0) errors.push(`size "${fields.size}" not readable`)
+    if (!diskId && !fields.archive.path && !diskValue) errors.push("disk or path missing")
 
     return { line: i + 2, fields, diskLabel, errors }
   })
@@ -139,7 +142,7 @@ function downloadTemplate() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = "bookrr-archiviati.csv"
+  a.download = "bookrr-archived.csv"
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -201,12 +204,12 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     mutationFn: () => api.importTorrents(items, false),
     onSuccess: (res) => {
       if (res.imported > 0) {
-        toast.success(`${res.imported} torrent importati`)
+        toast.success(`${plural(res.imported, "torrent")} imported`)
         refresh()
         onOpenChange(false)
       } else {
         setRejected(res)
-        toast.error("Import annullato: correggi le righe segnalate")
+        toast.error("Import cancelled: fix the flagged rows")
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -223,19 +226,19 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Importa torrent archiviati</DialogTitle>
+          <DialogTitle>Import archived torrents</DialogTitle>
           <DialogDescription>
-            Carica o incolla un file CSV (anche esportato da Excel): ogni riga viene salvata esattamente come se la
-            inserissi con "Aggiungi". Colonne: Nome (obbligatoria), Hash, Dimensione, Tag, Personal Release, Note,
-            Disco (nome o numero di serie), Percorso, Note archivio, Adottato da.
+            Load or paste a CSV file (also exported from Excel): each row is saved exactly as if you entered it with
+            "Add". Columns: Name (required), Hash, Size, Tags, Personal Release, Notes, Disk (name or serial number),
+            Path, Archive notes, Adopted by.
             {info.data?.unit3d &&
-              " Se manca l'hash, dopo l'import bookrr lo cerca da solo per nome sul tracker UNIT3D configurato."}
+              " If the hash is missing, after the import bookrr looks it up by name on the configured UNIT3D tracker."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-2">
-            <Label htmlFor="import-file">File CSV</Label>
+            <Label htmlFor="import-file">CSV file</Label>
             <Input
               id="import-file"
               type="file"
@@ -245,11 +248,11 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           </div>
           <div className="flex items-end">
             <Button type="button" variant="outline" onClick={downloadTemplate}>
-              <Download /> Scarica modello
+              <Download /> Download template
             </Button>
           </div>
           <div className="grid gap-2 sm:col-span-2">
-            <Label htmlFor="import-text">Oppure incolla qui</Label>
+            <Label htmlFor="import-text">Or paste here</Label>
             <Textarea
               id="import-text"
               value={text}
@@ -259,7 +262,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             />
           </div>
           <div className="grid gap-2">
-            <Label>Disco per le righe senza disco</Label>
+            <Label>Disk for rows without a disk</Label>
             <Select
               value={defaultDisk ? String(defaultDisk) : "none"}
               onValueChange={(v) => setDefaultDisk(v === "none" ? null : Number(v))}
@@ -268,7 +271,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Nessuno (indicato nel file)</SelectItem>
+                <SelectItem value="none">None (given in the file)</SelectItem>
                 {disks.data?.map((d) => (
                   <SelectItem key={d.id} value={String(d.id)}>
                     {d.label}
@@ -284,7 +287,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               checked={defaultPersonal}
               onCheckedChange={setDefaultPersonal}
             />
-            <Label htmlFor="import-personal">Personal Release se la colonna è vuota</Label>
+            <Label htmlFor="import-personal">Personal Release when the column is empty</Label>
           </div>
         </div>
 
@@ -295,11 +298,11 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead>Riga</TableHead>
-                  <TableHead className="w-full">Nome</TableHead>
-                  <TableHead className="text-right">Dimensione</TableHead>
-                  <TableHead>Archiviato su</TableHead>
-                  <TableHead className="min-w-[260px]">Esito</TableHead>
+                  <TableHead>Row</TableHead>
+                  <TableHead className="w-full">Name</TableHead>
+                  <TableHead className="text-right">Size</TableHead>
+                  <TableHead>Archived on</TableHead>
+                  <TableHead className="min-w-[260px]">Result</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -325,7 +328,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             <CircleCheck /> OK
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-xs">verifica…</span>
+                          <span className="text-muted-foreground text-xs">checking…</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -335,25 +338,25 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             </Table>
             {parsed.rows.length > PREVIEW_LIMIT && (
               <p className="text-muted-foreground border-t px-3 py-2 text-xs">
-                Anteprima delle prime {PREVIEW_LIMIT} righe su {parsed.rows.length}
-                {errorCount > 0 && ` · righe con errori in totale: ${errorCount}`}.
+                Preview of the first {PREVIEW_LIMIT} rows of {parsed.rows.length}
+                {errorCount > 0 && ` · rows with errors in total: ${errorCount}`}.
               </p>
             )}
           </div>
         )}
-        {check.isError && <p className="text-destructive text-sm">Verifica non riuscita: {check.error.message}</p>}
+        {check.isError && <p className="text-destructive text-sm">Check failed: {check.error.message}</p>}
 
         <DialogFooter className="items-center">
           {parsed.rows.length > 0 && (
             <span className="text-muted-foreground mr-auto text-sm">
-              {parsed.rows.length} righe{errorCount > 0 && <span className="text-destructive"> · {errorCount} con errori</span>}
+              {plural(parsed.rows.length, "row")}{errorCount > 0 && <span className="text-destructive"> · {errorCount} with errors</span>}
             </span>
           )}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Annulla
+            Cancel
           </Button>
           <Button type="button" disabled={!ready || run.isPending} onClick={() => run.mutate()}>
-            <Upload /> Importa {items.length > 0 ? items.length : ""}
+            <Upload /> Import {items.length > 0 ? items.length : ""}
           </Button>
         </DialogFooter>
       </DialogContent>

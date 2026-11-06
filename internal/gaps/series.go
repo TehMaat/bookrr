@@ -65,7 +65,7 @@ func (c *Checker) checkSeries(ctx context.Context) (string, error) {
 			if !ok {
 				found, err = tmdbRetry(ctx, func() (int64, error) { return c.tmdb.FindTVByTVDB(ctx, u.TvdbID) })
 				if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
-					return "", fmt.Errorf("ricerca su TMDB dell'id TVDB %d: %w", u.TvdbID, err)
+					return "", fmt.Errorf("TMDB lookup of TVDB id %d: %w", u.TvdbID, err)
 				}
 				tvdbCache[u.TvdbID] = found
 			}
@@ -75,9 +75,9 @@ func (c *Checker) checkSeries(ctx context.Context) (string, error) {
 			byTmdb[id] = append(byTmdb[id], su)
 			continue
 		}
-		key, note := "title:"+unit3d.Title(u.Name), "nessun id TMDB né TVDB sul tracker"
+		key, note := "title:"+unit3d.Title(u.Name), "no TMDB or TVDB id on the tracker"
 		if u.TvdbID != 0 {
-			key, note = "tvdb:"+strconv.FormatInt(u.TvdbID, 10), fmt.Sprintf("l'id TVDB %d non corrisponde a nessuna serie su TMDB", u.TvdbID)
+			key, note = "tvdb:"+strconv.FormatInt(u.TvdbID, 10), fmt.Sprintf("the TVDB id %d matches no series on TMDB", u.TvdbID)
 		}
 		g := unknown[key]
 		if g == nil {
@@ -110,12 +110,12 @@ func (c *Checker) checkSeries(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	res := fmt.Sprintf("%d serie, %d stagioni mancanti", len(groups), missing)
+	res := fmt.Sprintf("%d series, %d missing %s", len(groups), missing, plural(missing, "season", "seasons"))
 	switch {
 	case unver == 1:
-		res += ", 1 non verificabile"
+		res += ", 1 that can't be checked"
 	case unver > 1:
-		res += fmt.Sprintf(", %d non verificabili", unver)
+		res += fmt.Sprintf(", %d that can't be checked", unver)
 	}
 	return res, nil
 }
@@ -134,11 +134,11 @@ func (c *Checker) series(ctx context.Context, id int64, mine []seriesUpload) (*G
 
 	show, err := tmdbRetry(ctx, func() (tmdb.Show, error) { return c.tmdb.TV(ctx, id) })
 	if errors.Is(err, tmdb.ErrNotFound) {
-		g.Status, g.Note = StatusUnverifiable, fmt.Sprintf("serie con id TMDB %d non trovata su TMDB", id)
+		g.Status, g.Note = StatusUnverifiable, fmt.Sprintf("series with TMDB id %d not found on TMDB", id)
 		return g, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("serie %d su TMDB: %w", id, err)
+		return nil, fmt.Errorf("series %d on TMDB: %w", id, err)
 	}
 	if show.Name != "" {
 		g.Title = show.Name
@@ -149,24 +149,24 @@ func (c *Checker) series(ctx context.Context, id int64, mine []seriesUpload) (*G
 		if s.Number > 0 && s.Aired(today) {
 			name := s.Name
 			if name == "" {
-				name = "Stagione " + strconv.Itoa(s.Number)
+				name = "Season " + strconv.Itoa(s.Number)
 			}
 			g.Units = append(g.Units, Unit{Number: s.Number, Name: name, AirDate: s.AirDate, Episodes: s.Episodes})
 		}
 	}
 	sort.Slice(g.Units, func(i, j int) bool { return g.Units[i].Number < g.Units[j].Number })
 	if len(g.Units) == 0 {
-		g.Status, g.Note = StatusUnverifiable, "nessuna stagione già uscita secondo TMDB"
+		g.Status, g.Note = StatusUnverifiable, "no season out yet according to TMDB"
 		return g, nil
 	}
 
 	user, err := c.user(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("nome utente sul tracker: %w", err)
+		return nil, fmt.Errorf("username on the tracker: %w", err)
 	}
 	listed, err := unit3d.WithRetry(ctx, func() ([]unit3d.Upload, error) { return c.tracker.ByTmdb(ctx, id, user) })
 	if err != nil {
-		return nil, fmt.Errorf("torrent della serie %d sul tracker: %w", id, err)
+		return nil, fmt.Errorf("torrents of series %d on the tracker: %w", id, err)
 	}
 
 	// TMDB numbers movies and series separately: keep the torrents in the

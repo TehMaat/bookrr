@@ -124,7 +124,7 @@ func TestMoveResolvesAlert(t *testing.T) {
 		t.Fatalf("moves should resolve alerts: %+v", open)
 	}
 	all, _ := s.ListAlerts(ctx, false, "h1")
-	if len(all) != 1 || all[0].Resolution != "Spostato su Archivio 1 (SN WD-1) · /x" {
+	if len(all) != 1 || all[0].Resolution != "Moved to Archivio 1 (SN WD-1) · /x" {
 		t.Fatalf("unexpected resolution: %+v", all)
 	}
 	tr, _ := s.GetTorrent(ctx, "h2")
@@ -194,7 +194,7 @@ func TestRemovalAfterMoveIsNotFlagged(t *testing.T) {
 		t.Fatalf("expected archived: %+v", tr)
 	}
 	all, _ := s.ListAlerts(ctx, false, "h1")
-	if len(all) != 1 || all[0].ResolvedAt == nil || all[0].Resolution != "Già spostato su archivio · /archivio/Mine" {
+	if len(all) != 1 || all[0].ResolvedAt == nil || all[0].Resolution != "Already moved to archive · /archivio/Mine" {
 		t.Fatalf("expected a resolved alert in the history: %+v", all)
 	}
 }

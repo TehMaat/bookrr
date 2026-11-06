@@ -73,7 +73,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api, type Alert, type BestResolution, type ReleaseStatus, type TrackerRelease } from "@/lib/api"
-import { formatBytes, formatDate, formatRelative } from "@/lib/format"
+import { formatBytes, formatDate, formatRelative, plural } from "@/lib/format"
 import { useAction, useInfo, useReleases, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -97,7 +97,7 @@ const releaseStatuses: ReleaseStatus[] = ["client", "missing", "archived", "adop
 
 /** The distinct non-empty values, sorted. */
 function distinct(values: string[]) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "it", { numeric: true }))
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
 }
 
 function matches(r: TrackerRelease, f: Filter) {
@@ -128,7 +128,7 @@ function BestBadge({ b }: { b: BestResolution | null }) {
   const kind = bestKind(b)
   if (!b || !kind) return <span className="text-muted-foreground text-xs">—</span>
   const mine = grade(b.mine, b.mineType)
-  const searched = b.checkedAt ? ` · cercata ${formatRelative(b.checkedAt)}` : ""
+  const searched = b.checkedAt ? ` · searched ${formatRelative(b.checkedAt)}` : ""
   const found = b.name && `${b.name}${b.indexer ? ` (${b.indexer})` : ""}`
   const badge =
     kind === "better" ? (
@@ -137,7 +137,7 @@ function BestBadge({ b }: { b: BestResolution | null }) {
       </Badge>
     ) : kind === "none" ? (
       <Badge variant="outline" className="text-muted-foreground border-dashed">
-        <SearchX /> Non trovata
+        <SearchX /> Not found
       </Badge>
     ) : (
       <Badge variant="outline" className="text-muted-foreground">
@@ -146,12 +146,12 @@ function BestBadge({ b }: { b: BestResolution | null }) {
     )
   const tip =
     kind === "better"
-      ? `Esiste in ${grade(b.resolution, b.type)}, tu ce l'hai in ${mine || "qualità ignota"}: ${found}`
+      ? `Exists in ${grade(b.resolution, b.type)}, you have it in ${mine || "unknown quality"}: ${found}`
       : kind === "none"
-        ? "Prowlarr non ha trovato release di questo film con una risoluzione nota"
+        ? "Prowlarr found no release of this film with a known resolution"
         : b.checkedAt
-          ? `Hai già la versione migliore che esiste${found ? `: la migliore trovata è ${found}` : ""}`
-          : `Ce l'hai già in ${mine}: non serve cercarla`
+          ? `You already have the best existing version${found ? `: the best found is ${found}` : ""}`
+          : `You already have it in ${mine}: no need to search`
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -177,10 +177,10 @@ export function ReleaseStatusBadge({ status }: { status: ReleaseStatus }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <Badge variant="outline" className="border-dashed">
-          <CircleHelp /> Sconosciuta
+          <CircleHelp /> Unknown
         </Badge>
       </TooltipTrigger>
-      <TooltipContent>Sul tracker, ma bookrr non conosce nessun torrent con questo hash</TooltipContent>
+      <TooltipContent>On the tracker, but bookrr knows no torrent with this hash</TooltipContent>
     </Tooltip>
   )
 }
@@ -269,7 +269,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
       if (sort.key === "date") c = a.createdAt.localeCompare(b.createdAt) || a.id - b.id
       else if (sort.key === "seeders") c = a.seeders - b.seeders
       else if (sort.key === "completed") c = a.timesCompleted - b.timesCompleted
-      if (c === 0) c = a.name.localeCompare(b.name, "it", { sensitivity: "base" })
+      if (c === 0) c = a.name.localeCompare(b.name, "en", { sensitivity: "base" })
       return c * dir
     })
     return out
@@ -298,34 +298,34 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
 
   const refresh = () =>
     syncNow.mutate(undefined, {
-      onSuccess: () => toast.success("Aggiornamento avviato", { description: "Gli upload vengono letti dal tracker in background." }),
+      onSuccess: () => toast.success("Refresh started", { description: "Uploads are being read from the tracker in the background." }),
     })
   const addOne = (r: TrackerRelease) =>
     add.mutate([r.id], {
       onSuccess: () => {
-        toast.success("Release aggiunta a bookrr", { description: "Apri la scheda per indicare dove si trova." })
+        toast.success("Release added to bookrr", { description: "Open its details to set where it is." })
         setSelected(r.hash)
       },
     })
 
   const tag = info.data?.releaseTag ?? "Personal Release"
   const unflagDone = (r: { unflagged: number; errors: string[] }) => {
-    const what = r.unflagged === 1 ? "1 torrent non è più" : `${r.unflagged} torrent non sono più`
+    const what = r.unflagged === 1 ? "1 torrent is no longer" : `${r.unflagged} torrents are no longer`
     if (r.errors.length === 0) toast.success(`${what} ${tag}`)
-    else toast.warning(`${what} ${tag}`, { description: `Tag non rimosso da: ${r.errors.join("; ")}` })
+    else toast.warning(`${what} ${tag}`, { description: `Tag not removed from: ${r.errors.join("; ")}` })
   }
 
   const allStats: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
-    { key: "all", label: "Totale", icon: Layers },
-    { key: "client", label: "Su client", icon: Server, tone: "text-sky-600 dark:text-sky-400" },
-    { key: "missing", label: "Da localizzare", icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
-    { key: "archived", label: "Archiviate", icon: HardDrive, tone: "text-violet-600 dark:text-violet-400" },
-    { key: "adopted", label: "Adottate", icon: HandHeart, tone: "text-emerald-600 dark:text-emerald-400" },
-    { key: "unknown", label: "Posizione ignota", icon: CircleHelp },
-    { key: "untracked", label: "Sconosciute", icon: FileWarning, tone: "text-amber-600 dark:text-amber-400" },
-    { key: "removed", label: "Rimosse", icon: CloudOff, tone: "text-destructive" },
-    { key: "archivable", label: "Archiviabili", icon: Archive, tone: archivableTone },
-    { key: "better", label: "Migliorabili", icon: CircleArrowUp, tone: "text-amber-600 dark:text-amber-400" },
+    { key: "all", label: "Total", icon: Layers },
+    { key: "client", label: "On a client", icon: Server, tone: "text-sky-600 dark:text-sky-400" },
+    { key: "missing", label: "To locate", icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
+    { key: "archived", label: "Archived", icon: HardDrive, tone: "text-violet-600 dark:text-violet-400" },
+    { key: "adopted", label: "Adopted", icon: HandHeart, tone: "text-emerald-600 dark:text-emerald-400" },
+    { key: "unknown", label: "Unknown location", icon: CircleHelp },
+    { key: "untracked", label: "Unknown", icon: FileWarning, tone: "text-amber-600 dark:text-amber-400" },
+    { key: "removed", label: "Removed", icon: CloudOff, tone: "text-destructive" },
+    { key: "archivable", label: "Archivable", icon: Archive, tone: archivableTone },
+    { key: "better", label: "Upgradable", icon: CircleArrowUp, tone: "text-amber-600 dark:text-amber-400" },
   ]
   // Dead uploads are still on the tracker: none is removed. Without Prowlarr no film is searched.
   const stats = allStats.filter((s) => !(dead && s.key === "removed") && (best || s.key !== "better"))
@@ -334,7 +334,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
   if (releases.isError)
     return (
       <Card>
-        <CardContent className="text-destructive py-6 text-center text-sm">Errore nel caricamento: {releases.error.message}</CardContent>
+        <CardContent className="text-destructive py-6 text-center text-sm">Loading failed: {releases.error.message}</CardContent>
       </Card>
     )
 
@@ -343,11 +343,11 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CloudOff className="size-4" /> Storico release non attivo
+            <CloudOff className="size-4" /> Release history not enabled
           </CardTitle>
           <CardDescription>
-            Lo storico dei tuoi upload richiede un tracker UNIT3D: impostalo nelle Impostazioni (icona in basso a sinistra),
-            scheda Tracker.
+            The history of your uploads needs a UNIT3D tracker: set it in Settings (icon at the bottom left), Tracker
+            tab.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -357,16 +357,16 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-sm">
-          {dead ? "I tuoi upload ancora sul tracker" : "Tutti i torrent che hai caricato sul tracker"}
+          {dead ? "Your uploads still on the tracker" : "All the torrents you uploaded to the tracker"}
           {state?.username && (
             <>
               {" "}
-              come <span className="text-foreground font-medium">{state.username}</span>
+              as <span className="text-foreground font-medium">{state.username}</span>
             </>
           )}
           {dead
-            ? " che nessuno ha in seed: rimettili in seed da un client o da un archivio."
-            : ", collegati ai torrent di bookrr con lo stesso hash."}
+            ? " that nobody is seeding: seed them again from a client or an archive."
+            : ", linked to the bookrr torrents with the same hash."}
         </p>
         <div className="ml-auto flex items-center gap-2">
           <Tooltip>
@@ -374,19 +374,19 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
               <span className="text-muted-foreground text-xs">
                 {running
                   ? state?.pending
-                    ? `Scarico i .torrent (${state.pending} da fare)…`
-                    : "Aggiornamento in corso…"
-                  : `Aggiornato ${formatRelative(data?.syncedAt)}`}
+                    ? `Downloading the .torrent files (${state.pending} to go)…`
+                    : "Refreshing…"
+                  : `Refreshed ${formatRelative(data?.syncedAt)}`}
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              {state?.lastResult || "Nessun aggiornamento ancora"}
-              {info.data?.releasesInterval && ` · ogni ${info.data.releasesInterval}`}
+              {state?.lastResult || "No refresh yet"}
+              {info.data?.releasesInterval && ` · every ${info.data.releasesInterval}`}
             </TooltipContent>
           </Tooltip>
           {data?.enabled && (
             <Button variant="outline" size="sm" disabled={running} onClick={refresh}>
-              <RefreshCw className={cn(running && "animate-spin")} /> Aggiorna ora
+              <RefreshCw className={cn(running && "animate-spin")} /> Refresh now
             </Button>
           )}
         </div>
@@ -395,16 +395,16 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
       {data && !data.enabled && (
         <AlertBox variant="warning">
           <CloudOff />
-          <AlertTitle>Tracker UNIT3D non configurato</AlertTitle>
+          <AlertTitle>UNIT3D tracker not configured</AlertTitle>
           <AlertDescription>
-            Le release non vengono più aggiornate: imposta il tracker nelle Impostazioni, scheda Tracker.
+            Releases are no longer refreshed: set the tracker in Settings, Tracker tab.
           </AlertDescription>
         </AlertBox>
       )}
       {state?.lastError && (
         <AlertBox variant="destructive">
           <TriangleAlert />
-          <AlertTitle>Ultimo aggiornamento non riuscito</AlertTitle>
+          <AlertTitle>Last refresh failed</AlertTitle>
           <AlertDescription>{state.lastError}</AlertDescription>
         </AlertBox>
       )}
@@ -412,7 +412,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
       {best?.lastError && (
         <AlertBox variant="destructive">
           <TriangleAlert />
-          <AlertTitle>Ultima ricerca con Prowlarr non riuscita</AlertTitle>
+          <AlertTitle>Last Prowlarr search failed</AlertTitle>
           <AlertDescription>{best.lastError}</AlertDescription>
         </AlertBox>
       )}
@@ -422,16 +422,16 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TriangleAlert className="size-4 text-amber-600" />
-              {tag} non trovate tra i tuoi upload ({data.notOnTracker.length})
+              {tag} not found among your uploads ({data.notOnTracker.length})
             </CardTitle>
             <CardDescription>
-              Torrent di bookrr con il flag {tag} il cui hash non è tra i tuoi upload sul tracker: cancellati o sostituiti,
-              caricati altrove, o aggiunti senza hash. Se non sono tue release, togli il flag: il tag viene tolto anche su
-              qBittorrent.
+              bookrr torrents flagged {tag} whose hash is not among your uploads on the tracker: deleted or replaced, uploaded
+              elsewhere, or added without a hash. If they aren't your releases, remove the flag: the tag is removed on
+              qBittorrent too.
             </CardDescription>
             <CardAction>
               <Button variant="outline" size="sm" disabled={unflag.isPending} onClick={() => setUnflaggingAll(true)}>
-                <TagX /> Togli il flag a tutte
+                <TagX /> Unflag all
               </Button>
             </CardAction>
           </CardHeader>
@@ -451,7 +451,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                     </button>
                     {m.hash.startsWith("manual-") && (
                       <Badge variant="outline" className="text-muted-foreground">
-                        senza hash
+                        no hash
                       </Badge>
                     )}
                     {t && <StatusBadge status={t.status} />}
@@ -460,14 +460,14 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Togli il flag ${tag}`}
+                          aria-label={`Remove the ${tag} flag`}
                           disabled={unflag.isPending}
                           onClick={() => unflag.mutate([m.hash], { onSuccess: unflagDone })}
                         >
                           <TagX />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Togli il flag {tag}, anche da qBittorrent</TooltipContent>
+                      <TooltipContent>Remove the {tag} flag, on qBittorrent too</TooltipContent>
                     </Tooltip>
                   </li>
                 )
@@ -500,19 +500,19 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
           <Input
             value={query}
             onChange={(e) => reset(setQuery)(e.target.value)}
-            placeholder="Cerca per nome, tipo, risoluzione, categoria, hash…"
+            placeholder="Search by name, type, resolution, category, hash…"
             className="pl-8"
           />
         </div>
         <div className="flex items-center gap-2 px-1">
           <Switch id="releases-personal" checked={onlyPersonal} onCheckedChange={reset(setOnlyPersonal)} />
           <Label htmlFor="releases-personal" className="whitespace-nowrap">
-            Solo Personal Release
+            Only Personal Release
           </Label>
         </div>
         {!dead && addable.length > 0 && (
           <Button onClick={() => setAddingAll(true)} disabled={add.isPending}>
-            <Plus /> Aggiungi tutte ({addable.length})
+            <Plus /> Add all ({addable.length})
           </Button>
         )}
       </div>
@@ -540,16 +540,16 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               {picking && (
                 <TableHead className="w-0">
-                  <PickBox label="Seleziona tutte" checked={picker.all} indeterminate={picker.some} onChange={picker.toggleAll} />
+                  <PickBox label="Select all" checked={picker.all} indeterminate={picker.some} onChange={picker.toggleAll} />
                 </TableHead>
               )}
               <TableHead className="w-full">
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
-                    Nome <SortIcon k="name" />
+                    Name <SortIcon k="name" />
                   </button>
-                  <ColumnFilter label="Nome" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
-                    <TextFilter value={cf.name} onChange={(v) => columns.set("name", v)} placeholder="Nome, categoria, hash, ID…" />
+                  <ColumnFilter label="Name" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
+                    <TextFilter value={cf.name} onChange={(v) => columns.set("name", v)} placeholder="Name, category, hash, ID…" />
                   </ColumnFilter>
                 </div>
               </TableHead>
@@ -557,18 +557,18 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                 <div className="flex items-center gap-1">
                   Tipo
                   <ColumnFilter
-                    label="Tipo"
+                    label="Type"
                     active={isActive(cf.type) || isActive(cf.resolution)}
                     onClear={() => columns.clear("type", "resolution")}
                   >
                     <OptionsFilter
-                      title="Tipo"
+                      title="Type"
                       options={types.map((t) => ({ value: t, label: t }))}
                       value={cf.type}
                       onChange={(v) => columns.set("type", v)}
                     />
                     <OptionsFilter
-                      title="Risoluzione"
+                      title="Resolution"
                       options={resolutions.map((t) => ({ value: t, label: t }))}
                       value={cf.resolution}
                       onChange={(v) => columns.set("resolution", v)}
@@ -584,22 +584,22 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                         <span>Max</span>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-sm">
-                        La versione migliore che esiste di ogni film, in qualsiasi lingua, cercata con Prowlarr una volta al
-                        giorno (ogni film ogni {best.recheck}): conta prima il tipo (Remux &gt; Encode &gt; WEB-DL &gt; WEBRip
-                        &gt; HDTV), poi la risoluzione, quindi un 1080p Remux batte un 2160p WEB-DL.{" "}
+                        The best existing version of each film, in any language, searched with Prowlarr once a day (each film
+                        every {best.recheck}): the type counts first (Remux &gt; Encode &gt; WEB-DL &gt; WEBRip &gt; HDTV), then the
+                        resolution, so a 1080p Remux beats a 2160p WEB-DL.{" "}
                         {best.running
-                          ? `Ricerca in corso: ${best.done} di ${best.total} film.`
+                          ? `Searching: ${best.done} of ${best.total} films.`
                           : best.lastRunAt
-                            ? `Ultima ricerca ${formatRelative(best.lastRunAt)}: ${best.lastResult}.`
-                            : `Prima ricerca ${formatRelative(best.nextRunAt)}.`}
+                            ? `Last search ${formatRelative(best.lastRunAt)}: ${best.lastResult}.`
+                            : `First search ${formatRelative(best.nextRunAt)}.`}
                       </TooltipContent>
                     </Tooltip>
                     <ColumnFilter label="Max" active={isActive(cf.best)} onClear={() => columns.clear("best")}>
                       <OptionsFilter
                         options={[
-                          { value: "better", label: "Esiste in una versione migliore" },
-                          { value: "max", label: "Hai già la migliore" },
-                          { value: "none", label: "Non trovata" },
+                          { value: "better", label: "Exists in a better version" },
+                          { value: "max", label: "You have the best" },
+                          { value: "none", label: "Not found" },
                         ]}
                         value={cf.best}
                         onChange={(v) => columns.set("best", v)}
@@ -611,9 +611,9 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
               <TableHead className="hidden lg:table-cell">
                 <div className="flex items-center gap-1">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("date")}>
-                    Caricata <SortIcon k="date" />
+                    Uploaded <SortIcon k="date" />
                   </button>
-                  <ColumnFilter label="Caricata" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
+                  <ColumnFilter label="Uploaded" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
                     <RangeFilter type="date" value={cf.date} onChange={(v) => columns.set("date", v)} />
                   </ColumnFilter>
                 </div>
@@ -621,20 +621,20 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
               <TableHead className="hidden sm:table-cell">
                 <span className="flex items-center gap-2">
                   <button className="flex items-center gap-1" onClick={() => toggleSort("seeders")}>
-                    Seed <SortIcon k="seeders" />
+                    Seeds <SortIcon k="seeders" />
                   </button>
                   <span className="text-muted-foreground">/</span>
                   <button className="flex items-center gap-1" onClick={() => toggleSort("completed")}>
-                    Completati <SortIcon k="completed" />
+                    Completed <SortIcon k="completed" />
                   </button>
                   <ColumnFilter
-                    label="Seed / Completati"
+                    label="Seeds / Completed"
                     active={isActive(cf.seeders) || isActive(cf.completed)}
                     onClear={() => columns.clear("seeders", "completed")}
                   >
-                    <RangeFilter title="Seeder" value={cf.seeders} onChange={(v) => columns.set("seeders", v)} parse={parseCount} />
+                    <RangeFilter title="Seeders" value={cf.seeders} onChange={(v) => columns.set("seeders", v)} parse={parseCount} />
                     <RangeFilter
-                      title="Completati"
+                      title="Completed"
                       value={cf.completed}
                       onChange={(v) => columns.set("completed", v)}
                       parse={parseCount}
@@ -645,7 +645,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
               <TableHead>
                 <div className="flex items-center gap-1">
                   Stato
-                  <ColumnFilter label="Stato" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
+                  <ColumnFilter label="Status" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
                     <OptionsFilter
                       options={[
                         ...releaseStatuses.map((st) => ({ value: st, label: <ReleaseStatusBadge status={st} /> })),
@@ -653,7 +653,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                           value: "archivable",
                           label: (
                             <Badge variant="outline" className="border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300">
-                              <Archive /> Archiviabile
+                              <Archive /> Archivable
                             </Badge>
                           ),
                         },
@@ -661,7 +661,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                           value: "never",
                           label: (
                             <Badge variant="outline" className="text-muted-foreground">
-                              <ArchiveX /> Da non archiviare
+                              <ArchiveX /> Never archive
                             </Badge>
                           ),
                         },
@@ -669,7 +669,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                           value: "removed",
                           label: (
                             <Badge variant="destructive">
-                              <CloudOff /> Rimossa
+                              <CloudOff /> Removed
                             </Badge>
                           ),
                         },
@@ -689,9 +689,9 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                 <TableCell colSpan={cols} className="text-muted-foreground py-10 text-center">
                   {all.length === 0
                     ? running
-                      ? "Sto leggendo i tuoi upload dal tracker…"
-                      : "Nessun upload trovato sul tracker."
-                    : "Nessuna release corrisponde ai filtri."}
+                      ? "Reading your uploads from the tracker…"
+                      : "No uploads found on the tracker."
+                    : "No releases match the filters."}
                 </TableCell>
               </TableRow>
             )}
@@ -707,7 +707,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                     <TableCell>
                       {r.archivable && (
                         <PickBox
-                          label={`Seleziona ${r.name}`}
+                          label={`Select ${r.name}`}
                           checked={picker.isPicked(r.torrentHash)}
                           onChange={(on) => picker.toggle(r.torrentHash, on)}
                         />
@@ -724,15 +724,15 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Badge variant="destructive">
-                              <CloudOff /> Rimossa
+                              <CloudOff /> Removed
                             </Badge>
                           </TooltipTrigger>
-                          <TooltipContent>Non più tra i tuoi upload dal {formatDate(r.removedAt)}</TooltipContent>
+                          <TooltipContent>No longer among your uploads since {formatDate(r.removedAt)}</TooltipContent>
                         </Tooltip>
                       )}
                     </div>
                     <div className="text-muted-foreground truncate text-xs">
-                      {[r.category, formatBytes(r.size), r.hash ? null : r.hashError ? `hash non calcolato: ${r.hashError}` : "hash da calcolare"]
+                      {[r.category, formatBytes(r.size), r.hash ? null : r.hashError ? `hash not computed: ${r.hashError}` : "hash to compute"]
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
@@ -755,7 +755,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                   <TableCell>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <ReleaseStatusBadge status={r.status} />
-                      <ArchivableBadge a={r.archivable} label="Archiviabile" />
+                      <ArchivableBadge a={r.archivable} label="Archivable" />
                       <NeverArchiveBadge a={r.archivable} />
                       {r.status === "untracked" && (
                         <Button
@@ -763,13 +763,13 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                           variant="outline"
                           className="h-7"
                           disabled={!r.hash || add.isPending}
-                          title={r.hash ? undefined : "Hash non ancora calcolato"}
+                          title={r.hash ? undefined : "Hash not computed yet"}
                           onClick={(e) => {
                             e.stopPropagation()
                             addOne(r)
                           }}
                         >
-                          <Plus /> Aggiungi a bookrr
+                          <Plus /> Add to bookrr
                         </Button>
                       )}
                     </div>
@@ -777,7 +777,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
                   <TableCell>
                     {r.detailsLink && (
                       <Button variant="ghost" size="icon-sm" asChild onClick={(e) => e.stopPropagation()}>
-                        <a href={r.detailsLink} target="_blank" rel="noreferrer" aria-label="Apri sul tracker">
+                        <a href={r.detailsLink} target="_blank" rel="noreferrer" aria-label="Open on the tracker">
                           <ExternalLink />
                         </a>
                       </Button>
@@ -790,7 +790,7 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
         </Table>
         <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
           <span>
-            {rows.length} release · {formatBytes(rows.reduce((s, r) => s + r.size, 0))}
+            {plural(rows.length, "release")} · {formatBytes(rows.reduce((s, r) => s + r.size, 0))}
           </span>
           <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           {pages > 1 && (
@@ -813,35 +813,35 @@ export function ReleasesPage({ onResolve, dead = false }: { onResolve: (a: Alert
       <AlertDialog open={unflaggingAll} onOpenChange={setUnflaggingAll}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Togliere il flag {tag} a {data?.notOnTracker.length} torrent?</AlertDialogTitle>
+            <AlertDialogTitle>Remove the {tag} flag from {plural(data?.notOnTracker.length ?? 0, "torrent")}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Non saranno più considerate tue release: bookrr non le segnala più quando spariscono dai client. Sui client
-              qBittorrent viene tolto solo il tag «{tag}»: torrent e file restano dove sono.
+              They won't be considered your releases anymore: bookrr no longer reports them when they disappear from the
+              clients. On the qBittorrent clients only the "{tag}" tag is removed: torrents and files stay where they are.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
-            <AlertDialogAction onClick={() => unflag.mutate("all", { onSuccess: unflagDone })}>Togli il flag</AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => unflag.mutate("all", { onSuccess: unflagDone })}>Remove flag</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={addingAll} onOpenChange={setAddingAll}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Aggiungere {addable.length} release a bookrr?</AlertDialogTitle>
+            <AlertDialogTitle>Add {plural(addable.length, "release")} to bookrr?</AlertDialogTitle>
             <AlertDialogDescription>
-              Ogni release sconosciuta diventa un torrent con il suo hash, nome, dimensione, file .torrent e il flag Personal
-              Release. Poi potrai indicare dove si trova (disco, adottatore) dalla scheda del torrent.
+              Each unknown release becomes a torrent with its hash, name, size, .torrent file and the Personal Release
+              flag. You can then set where it is (disk, adopter) from the torrent details.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                add.mutate("all", { onSuccess: (r) => toast.success(`${r.added} release aggiunte a bookrr`) })
+                add.mutate("all", { onSuccess: (r) => toast.success(`${plural(r.added, "release")} added to bookrr`) })
               }
             >
-              Aggiungi tutte
+              Add all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

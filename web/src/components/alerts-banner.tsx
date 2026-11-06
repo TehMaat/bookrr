@@ -21,8 +21,8 @@ export function AlertsBanner({
       <TriangleAlert />
       <AlertTitle>
         {alerts.length === 1
-          ? "1 Personal Release è stata rimossa: dove l'hai spostata?"
-          : `${alerts.length} Personal Release sono state rimosse: dove le hai spostate?`}
+          ? "1 Personal Release was removed: where did you move it?"
+          : `${alerts.length} Personal Releases were removed: where did you move them?`}
       </AlertTitle>
       <AlertDescription>
         <ul className="w-full space-y-1.5 pt-1">
@@ -33,14 +33,14 @@ export function AlertsBanner({
                 {a.message} · {formatRelative(a.createdAt)}
               </span>
               <Button size="sm" variant="outline" className="h-7" onClick={() => onResolve(a)}>
-                Indica posizione
+                Set location
               </Button>
             </li>
           ))}
         </ul>
         {alerts.length > shown.length && (
           <Button variant="link" className="h-auto p-0 text-current" onClick={onShowAll}>
-            Vedi tutte ({alerts.length})
+            Show all ({alerts.length})
           </Button>
         )}
       </AlertDescription>

@@ -25,7 +25,7 @@ const maxPlanBulk = 200
 // planDisabled says why films cannot be added to the release plan, "" if they can.
 func (s *Server) planDisabled() string {
 	if s.current().TMDB == nil {
-		return "Serve una chiave TMDB: impostala nelle Impostazioni, scheda Mancanti."
+		return "A TMDB key is needed: set it in Settings, Missing tab."
 	}
 	return ""
 }
@@ -37,9 +37,9 @@ func (s *Server) planSearchDisabled() string {
 	case svc.Best != nil:
 		return ""
 	case svc.Config.ProwlarrURL == "":
-		return "Collega Prowlarr nelle Impostazioni (scheda Prowlarr) per la risoluzione massima di ogni film."
+		return "Connect Prowlarr in Settings (Prowlarr tab) for the max resolution of each film."
 	default:
-		return "Prowlarr cerca i film solo con un tracker UNIT3D: impostalo nelle Impostazioni, scheda Tracker."
+		return "Prowlarr searches films only with a UNIT3D tracker: set it in Settings, Tracker tab."
 	}
 }
 
@@ -173,7 +173,7 @@ func planTmdbID(ctx context.Context, c *tmdb.Client, q string) (int64, error) {
 	q = strings.TrimSpace(q)
 	if m := tmdbLinkRe.FindStringSubmatch(q); m != nil {
 		if m[1] == "tv" {
-			return 0, errors.New("è una serie TV: il piano per ora accetta solo film")
+			return 0, errors.New("it's a TV series: the plan only takes films for now")
 		}
 		return strconv.ParseInt(m[2], 10, 64)
 	}
@@ -184,18 +184,18 @@ func planTmdbID(ctx context.Context, c *tmdb.Client, q string) (int64, error) {
 		n, _ := strconv.ParseInt(m[1], 10, 64)
 		id, err := c.FindMovieByIMDB(ctx, n)
 		if errors.Is(err, tmdb.ErrNotFound) {
-			return 0, errors.New("nessun film su TMDB con questo id IMDb")
+			return 0, errors.New("no film on TMDB with this IMDb id")
 		}
 		return id, err
 	}
-	return 0, errors.New("scrivi l'id TMDB del film, il suo link su themoviedb.org o l'id IMDb (tt…)")
+	return 0, errors.New("enter the film's TMDB id, its themoviedb.org link or its IMDb id (tt…)")
 }
 
 // planMovie reads a film from TMDB, as an entry of the plan.
 func planMovie(ctx context.Context, c *tmdb.Client, id int64) (store.PlanEntry, error) {
 	m, err := c.Movie(ctx, id)
 	if errors.Is(err, tmdb.ErrNotFound) {
-		return store.PlanEntry{}, fmt.Errorf("nessun film su TMDB con id %d", id)
+		return store.PlanEntry{}, fmt.Errorf("no film on TMDB with id %d", id)
 	}
 	if err != nil {
 		return store.PlanEntry{}, err
@@ -265,7 +265,7 @@ func (s *Server) addPlan(w http.ResponseWriter, r *http.Request) {
 	e.Source, e.SourceTitle, e.Note = in.Source, in.SourceTitle, in.Note
 	e, err = s.store.AddPlanEntry(ctx, e)
 	if errors.Is(err, store.ErrExists) {
-		writeError(w, http.StatusConflict, "il film è già nel piano")
+		writeError(w, http.StatusConflict, "the film is already in the plan")
 		return
 	}
 	if err != nil {
@@ -296,7 +296,7 @@ func (s *Server) addPlanBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(in.TmdbIDs) == 0 || len(in.TmdbIDs) > maxPlanBulk {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("da 1 a %d film alla volta", maxPlanBulk))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("from 1 to %d films at a time", maxPlanBulk))
 		return
 	}
 	added := []store.PlanEntry{}
@@ -392,7 +392,7 @@ func (s *Server) updatePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Status != nil && !store.ValidPlanStatus(*in.Status) {
-		writeError(w, http.StatusBadRequest, "stato non valido")
+		writeError(w, http.StatusBadRequest, "invalid status")
 		return
 	}
 	e, err := s.store.UpdatePlanEntry(r.Context(), id, in)

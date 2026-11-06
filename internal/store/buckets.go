@@ -81,7 +81,7 @@ func (s *Store) SetBucketError(ctx context.Context, diskID int64, scanErr error)
 }
 
 // ErrBucketChanged means the archive was pointed elsewhere during the scan.
-var ErrBucketChanged = errors.New("il bucket dell'archivio è cambiato durante la lettura")
+var ErrBucketChanged = errors.New("the archive's bucket changed while being read")
 
 // ApplyBucketScan keeps the archives found in a bucket in sync with what it
 // holds now. A torrent that appears there is recorded as moved to the disk,

@@ -284,7 +284,7 @@ type TorrentInput struct {
 	Notes           string   `json:"notes"`
 }
 
-var ErrExists = errors.New("esiste già")
+var ErrExists = errors.New("already exists")
 
 // ManualInput is a torrent added by hand, optionally already moved to a disk
 // or adopted. The "Aggiungi" form and the bulk import both create torrents
@@ -425,7 +425,7 @@ func (s *Store) UpdateTorrent(ctx context.Context, hash string, p TorrentPatch) 
 	return s.GetTorrent(ctx, hash)
 }
 
-var ErrOnClient = errors.New("il torrent è ancora presente su un client")
+var ErrOnClient = errors.New("the torrent is still on a client")
 
 func (s *Store) DeleteTorrent(ctx context.Context, hash string) error {
 	var n int
@@ -445,7 +445,7 @@ func (s *Store) DeleteTorrent(ctx context.Context, hash string) error {
 	return nil
 }
 
-var ErrLastCopy = errors.New("non è presente completo su nessun altro client: questa è l'unica copia")
+var ErrLastCopy = errors.New("it is not complete on any other client: this is the only copy")
 
 // CheckRemovableLocation verifies that the torrent is on the given client and
 // that at least one other client holds a complete copy, so removing it from
@@ -508,7 +508,7 @@ func (s *Store) AddArchive(ctx context.Context, hash string, in ArchiveInput) er
 
 // describeArchive renders a move as "Spostato su Disco (SN 123) · /path".
 func describeArchive(ctx context.Context, q txLike, in ArchiveInput) (string, error) {
-	where := "archivio"
+	where := "archive"
 	if in.DiskID != nil {
 		var label, serial string
 		err := q.QueryRowContext(ctx, `SELECT label, serial FROM disks WHERE id = ?`, *in.DiskID).Scan(&label, &serial)
@@ -522,7 +522,7 @@ func describeArchive(ctx context.Context, q txLike, in ArchiveInput) (string, er
 			}
 		}
 	}
-	desc := "Spostato su " + where
+	desc := "Moved to " + where
 	if in.Path != "" {
 		desc += " · " + in.Path
 	}

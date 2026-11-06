@@ -16,13 +16,13 @@ import (
 	"time"
 )
 
-var ErrNotFound = errors.New("non trovato su TMDB")
+var ErrNotFound = errors.New("not found on TMDB")
 
 // RateLimitError means TMDB asked to slow down (HTTP 429).
 type RateLimitError struct{ RetryAfter time.Duration }
 
 func (e *RateLimitError) Error() string {
-	return fmt.Sprintf("limite di richieste di TMDB raggiunto, riprovo tra %s", e.RetryAfter)
+	return fmt.Sprintf("TMDB rate limit reached, retrying in %s", e.RetryAfter)
 }
 
 type Client struct {
@@ -240,12 +240,12 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	case resp.StatusCode == http.StatusNotFound:
 		return ErrNotFound
 	case resp.StatusCode == http.StatusUnauthorized:
-		return errors.New("TMDB ha rifiutato la chiave: controlla BOOKRR_TMDB_API_KEY")
+		return errors.New("TMDB rejected the key: check BOOKRR_TMDB_API_KEY")
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("TMDB ha risposto HTTP %d", resp.StatusCode)
+		return fmt.Errorf("TMDB answered HTTP %d", resp.StatusCode)
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(out); err != nil {
-		return fmt.Errorf("risposta di TMDB non valida: %w", err)
+		return fmt.Errorf("invalid TMDB response: %w", err)
 	}
 	return nil
 }

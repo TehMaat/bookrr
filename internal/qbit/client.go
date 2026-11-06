@@ -54,7 +54,7 @@ func New(baseURL, username, password string, skipTLSVerify bool) *Client {
 	}
 }
 
-var ErrAuth = errors.New("autenticazione fallita (utente/password errati?)")
+var ErrAuth = errors.New("authentication failed (wrong username/password?)")
 
 func (c *Client) login(ctx context.Context) error {
 	form := url.Values{"username": {c.username}, "password": {c.password}}
@@ -76,7 +76,7 @@ func (c *Client) login(ctx context.Context) error {
 	// answer 204 No Content on success and 401 on wrong credentials.
 	switch {
 	case resp.StatusCode == http.StatusForbidden:
-		return errors.New("IP bannato da qBittorrent per troppi tentativi falliti")
+		return errors.New("IP banned by qBittorrent after too many failed attempts")
 	case resp.StatusCode == http.StatusUnauthorized:
 		return ErrAuth
 	case !success(resp.StatusCode):
@@ -110,7 +110,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 		if resp.StatusCode == http.StatusForbidden && attempt == 0 {
 			resp.Body.Close()
 			if c.username == "" {
-				return errors.New("qBittorrent richiede l'autenticazione: imposta utente e password")
+				return errors.New("qBittorrent requires authentication: set username and password")
 			}
 			if err := c.login(ctx); err != nil {
 				return err
@@ -167,7 +167,7 @@ func (c *Client) post(ctx context.Context, path string, form url.Values) error {
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusForbidden && attempt == 0 {
 			if c.username == "" {
-				return errors.New("qBittorrent richiede l'autenticazione: imposta utente e password")
+				return errors.New("qBittorrent requires authentication: set username and password")
 			}
 			if err := c.login(ctx); err != nil {
 				return err

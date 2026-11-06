@@ -126,7 +126,7 @@ func TestList(t *testing.T) {
 			t.Errorf("%s: %v", p, err)
 		}
 	}
-	if _, err := c.List(ctx, "user/limit"); err == nil || !strings.Contains(err.Error(), "limite") {
+	if _, err := c.List(ctx, "user/limit"); err == nil || !strings.Contains(err.Error(), "rate limit") {
 		t.Errorf("limit: %v", err)
 	}
 	if _, err := c.List(ctx, "user/key"); err == nil || !strings.Contains(err.Error(), "BOOKRR_MDBLIST_API_KEY") {

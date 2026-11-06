@@ -138,69 +138,69 @@ function filmLabel(u: GapUnit, prefix: number) {
 const kinds: Record<GapKind, KindText> = {
   series: {
     icon: Tv,
-    noun: "Serie",
-    one: "serie",
-    byPart: "Per stagione",
-    search: "Cerca una serie…",
+    noun: "Series",
+    one: "series",
+    byPart: "By season",
+    search: "Search a series…",
     tmdbUrl: (id) => `https://www.themoviedb.org/tv/${id}`,
-    units: (n) => (n === 1 ? "stagione uscita" : "stagioni uscite"),
-    mine: (n) => (n === 1 ? "tuo upload" : "tuoi upload"),
+    units: (n) => (n === 1 ? "season out" : "seasons out"),
+    mine: () => "uploaded by you",
     cellLabel: (u) => `S${String(u.number).padStart(2, "0")}`,
     intro:
-      "Per ogni serie di cui hai caricato almeno un season pack: le stagioni che mancano e se sul tracker le hanno caricate altri. Per stagione: la versione migliore di ogni stagione, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità (tipo, risoluzione, HDR e lingue audio) in cui l'hai caricata. Gli episodi singoli non contano.",
-    empty: "Nessuna serie tra i tuoi upload: servono season pack (S01, S01-S05, Complete).",
-    checking: "Sto controllando le tue serie…",
-    noMatch: "Nessuna serie corrisponde ai filtri.",
-    unverifiableTitle: "Serie non verificabili",
+      "For every series you uploaded at least one season pack of: the missing seasons and whether others uploaded them to the tracker. By season: the best version of each season, missing only when below the minimum quality. By quality: a row for each quality (type, resolution, HDR and audio languages) you uploaded it in. Single episodes don't count.",
+    empty: "No series among your uploads: season packs are needed (S01, S01-S05, Complete).",
+    checking: "Checking your series…",
+    noMatch: "No series match the filters.",
+    unverifiableTitle: "Series that can't be checked",
     unverifiableHint:
-      "Serie di cui non si conoscono le stagioni: sul tracker manca l'id TMDB (e quello TVDB non porta a nessuna serie su TMDB), oppure TMDB non la conosce.",
+      "Series whose seasons are unknown: the TMDB id is missing on the tracker (and the TVDB one leads to no series on TMDB), or TMDB doesn't know it.",
   },
   saga: {
     icon: Clapperboard,
-    noun: "Saghe",
+    noun: "Sagas",
     one: "saga",
-    byPart: "Per film",
-    search: "Cerca una saga o un film…",
+    byPart: "By film",
+    search: "Search a saga or a film…",
     tmdbUrl: (id) => `https://www.themoviedb.org/collection/${id}`,
-    units: (n) => (n === 1 ? "film uscito" : "film usciti"),
-    mine: (n) => (n === 1 ? "tuo upload" : "tuoi upload"),
+    units: (n) => (n === 1 ? "film out" : "films out"),
+    mine: () => "uploaded by you",
     cellLabel: filmLabel,
     intro:
-      "Per ogni film che hai caricato e che su TMDB appartiene a una saga: gli altri film della saga che mancano e se sul tracker li hanno caricati altri. Per film: la versione migliore di ogni film, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità (tipo, risoluzione, HDR e lingue audio) in cui hai caricato la saga. I film non ancora usciti non contano.",
-    empty: "Nessuno dei tuoi film appartiene a una saga su TMDB.",
-    checking: "Sto controllando i tuoi film…",
-    noMatch: "Nessuna saga corrisponde ai filtri.",
-    unverifiableTitle: "Film non verificabili",
+      "For every film you uploaded that belongs to a saga on TMDB: the other films of the saga that are missing and whether others uploaded them to the tracker. By film: the best version of each film, missing only when below the minimum quality. By quality: a row for each quality (type, resolution, HDR and audio languages) you uploaded the saga in. Films not out yet don't count.",
+    empty: "None of your films belongs to a saga on TMDB.",
+    checking: "Checking your films…",
+    noMatch: "No sagas match the filters.",
+    unverifiableTitle: "Films that can't be checked",
     unverifiableHint:
-      "Film di cui non si sa se appartengono a una saga: sul tracker manca l'id TMDB (e quello IMDb non porta a nessun film su TMDB), oppure TMDB non lo conosce.",
+      "Films not known to belong to a saga or not: the TMDB id is missing on the tracker (and the IMDb one leads to no film on TMDB), or TMDB doesn't know it.",
   },
   list: {
     icon: Library,
-    noun: "Collezioni",
-    one: "collezione",
-    byPart: "Per film",
-    search: "Cerca una collezione o un film…",
+    noun: "Collections",
+    one: "collection",
+    byPart: "By film",
+    search: "Search a collection or a film…",
     tmdbUrl: (id) => `https://www.themoviedb.org/movie/${id}`,
-    units: (n) => (n === 1 ? "film uscito" : "film usciti"),
-    mine: (n) => (n === 1 ? "tuo upload" : "tuoi upload"),
+    units: (n) => (n === 1 ? "film out" : "films out"),
+    mine: () => "uploaded by you",
     cellLabel: filmLabel,
     intro:
-      "Per ogni collezione che segui (una lista di film su MDBList: un universo come l'MCU, i film Pixar, i classici Disney): i film che mancano e se sul tracker li hanno caricati altri, anche se non ne hai caricato nessuno. Per film: la versione migliore di ogni film, mancante solo se sotto la qualità minima. Per qualità: una riga per ogni qualità in cui hai caricato film della collezione. I film non ancora usciti non contano. Le collezioni sono indipendenti dalle saghe: le scelte fatte qui valgono solo qui.",
-    empty: "Nessuna collezione: aggiungine una qui sopra con il link di una lista MDBList.",
-    checking: "Sto controllando le tue collezioni…",
-    noMatch: "Nessuna collezione corrisponde ai filtri.",
-    unverifiableTitle: "Liste non trovate",
+      "For every collection you follow (a list of films on MDBList: a universe like the MCU, the Pixar films, the Disney classics): the missing films and whether others uploaded them to the tracker, even if you uploaded none. By film: the best version of each film, missing only when below the minimum quality. By quality: a row for each quality you uploaded films of the collection in. Films not out yet don't count. Collections are independent of sagas: the choices made here only apply here.",
+    empty: "No collections: add one above with the link of an MDBList list.",
+    checking: "Checking your collections…",
+    noMatch: "No collections match the filters.",
+    unverifiableTitle: "Lists not found",
     unverifiableHint:
-      "Collezioni la cui lista non c'è più su MDBList (cancellata o resa privata): correggi il link o smetti di seguirle.",
+      "Collections whose list is gone from MDBList (deleted or made private): fix the link or stop following them.",
   },
 }
 
 const phases: Record<MissingCheckState["phase"], string> = {
   "": "",
-  series: "serie",
-  movies: "film",
-  sagas: "saghe",
-  lists: "collezioni",
+  series: "series",
+  movies: "films",
+  sagas: "sagas",
+  lists: "collections",
 }
 
 type Look = { label: string; hint: string; icon: React.ElementType; className: string }
@@ -215,69 +215,69 @@ const looks = {
 
 /** States of a cell of the view by quality. */
 const states: Record<GapState, Look> = {
-  mine: { label: "Mia", hint: "Caricata da te in questa qualità", icon: Check, className: looks.mine },
+  mine: { label: "Mine", hint: "Uploaded by you in this quality", icon: Check, className: looks.mine },
   available: {
-    label: "C'è, di altri",
-    hint: "Caricata da altri nella stessa qualità",
+    label: "There, by others",
+    hint: "Uploaded by others in the same quality",
     icon: Users,
     className: looks.available,
   },
   banned: {
-    label: "Solo gruppi bannati",
-    hint: "Caricata da altri nella stessa qualità, ma solo da gruppi che hai bannato: manca, con meno priorità",
+    label: "Banned groups only",
+    hint: "Uploaded by others in the same quality, but only by groups you banned: missing, with less priority",
     icon: Ban,
     className: looks.banned,
   },
   other_quality: {
-    label: "Solo altra qualità",
-    hint: "Sul tracker c'è, ma solo in altre qualità",
+    label: "Other quality only",
+    hint: "It's on the tracker, but only in other qualities",
     icon: Shuffle,
     className: looks.other,
   },
-  absent: { label: "Assente", hint: "Non c'è sul tracker in nessuna qualità", icon: X, className: looks.absent },
+  absent: { label: "Absent", hint: "Not on the tracker in any quality", icon: X, className: looks.absent },
 }
 
 /** States of a cell of the view by part. */
 const partStates: Record<GapPartState, Look> = {
-  mine: { label: "Tua", hint: "Caricata da te, almeno nella qualità minima", icon: Check, className: looks.mine },
+  mine: { label: "Yours", hint: "Uploaded by you, at least in the minimum quality", icon: Check, className: looks.mine },
   available: {
-    label: "C'è, di altri",
-    hint: "Caricata da altri, almeno nella qualità minima",
+    label: "There, by others",
+    hint: "Uploaded by others, at least in the minimum quality",
     icon: Users,
     className: looks.available,
   },
   banned: {
-    label: "Solo gruppi bannati",
-    hint: "Caricata da altri almeno nella qualità minima, ma solo da gruppi che hai bannato: manca, con meno priorità",
+    label: "Banned groups only",
+    hint: "Uploaded by others at least in the minimum quality, but only by groups you banned: missing, with less priority",
     icon: Ban,
     className: looks.banned,
   },
   below: {
-    label: "Sotto la soglia",
-    hint: "Sul tracker c'è, ma solo sotto la qualità minima",
+    label: "Below the threshold",
+    hint: "It's on the tracker, but only below the minimum quality",
     icon: ArrowDown,
     className: looks.other,
   },
-  absent: { label: "Assente", hint: "Non c'è sul tracker in nessuna qualità", icon: X, className: looks.absent },
+  absent: { label: "Absent", hint: "Not on the tracker in any quality", icon: X, className: looks.absent },
 }
 
 /** The user's choices, shown over the state. */
 const marks: Record<Exclude<GapMarkState, "">, Look> = {
   accepted: {
-    label: "Va bene così",
-    hint: "Hai accettato una release di altri: non conta come mancante",
+    label: "Good enough",
+    hint: "You accepted a release by others: it doesn't count as missing",
     icon: ThumbsUp,
     className: "border-sky-500/50 bg-sky-500/10 text-sky-800 dark:text-sky-200",
   },
   ignored: {
-    label: "Ignorata",
-    hint: "L'hai ignorata: non conta come mancante",
+    label: "Ignored",
+    hint: "You ignored it: it doesn't count as missing",
     icon: EyeOff,
     className: "border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground",
   },
   complete: {
-    label: "Segnata completa",
-    hint: "Hai segnato completa la collezione: non conta come mancante",
+    label: "Marked complete",
+    hint: "You marked the collection complete: it doesn't count as missing",
     icon: CheckCheck,
     className: "border-muted-foreground/30 bg-muted text-muted-foreground",
   },
@@ -289,9 +289,9 @@ const noPrefs: GapPrefs = { type: "", resolution: "", lang: "", othersCount: fal
 
 const noGroups: string[] = []
 
-/** "Remux · 1080p · ITA", or "qualsiasi". */
+/** "Remux · 1080p · ITA", or "any". */
 function thresholdLabel(t: GapThreshold) {
-  return [t.type, t.resolution, t.lang].filter(Boolean).join(" · ") || "qualsiasi"
+  return [t.type, t.resolution, t.lang].filter(Boolean).join(" · ") || "any"
 }
 
 /** "2160p Remux DV HDR": the quality without the languages, for the cells. */
@@ -348,7 +348,7 @@ function urgentIn(s: GapGroup, layout: Layout) {
 
 /** The release group of a torrent, for the hints. */
 function groupOf(r: GapRef) {
-  return r.group || "gruppo sconosciuto"
+  return r.group || "unknown group"
 }
 
 const layoutKey = (kind: GapKind) => `bookrr.missing.layout.${kind}`
@@ -459,7 +459,7 @@ function CellButton({
           <look.icon className="size-3 shrink-0" />
           <span className="truncate">{label}</span>
           {quality && <span className="shrink-0 font-normal opacity-75">· {quality}</span>}
-          {planned && <ListTodo className="size-3 shrink-0 opacity-75" aria-label="Nel piano release" />}
+          {planned && <ListTodo className="size-3 shrink-0 opacity-75" aria-label="In the release plan" />}
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">
@@ -469,8 +469,8 @@ function CellButton({
         </div>
         <div>{look.hint}</div>
         {hint && <div className="opacity-80">{hint}</div>}
-        {planned && <div className="opacity-80">Nel piano release</div>}
-        <div className="opacity-80">Clic per i link al tracker e le scelte</div>
+        {planned && <div className="opacity-80">In the release plan</div>}
+        <div className="opacity-80">Click for the tracker links and choices</div>
       </TooltipContent>
     </Tooltip>
   )
@@ -496,7 +496,7 @@ function TorrentLinks({
   /** Bans the release group of a torrent of others, or lets it back. */
   onBan?: (group: string, ban: boolean) => void
 }) {
-  if (refs.length === 0) return <p className="text-muted-foreground text-sm">Nessun torrent sul tracker.</p>
+  if (refs.length === 0) return <p className="text-muted-foreground text-sm">No torrents on the tracker.</p>
   return (
     <ul className="max-h-80 divide-y overflow-y-auto rounded-lg border">
       {refs.map((r) => (
@@ -514,22 +514,22 @@ function TorrentLinks({
               )}
               {r.mine && (
                 <Badge variant="brand" className="px-1.5 py-0">
-                  tua
+                  yours
                 </Badge>
               )}
               {r.banned && (
                 <Badge variant="pink" className="px-1.5 py-0">
-                  <Ban /> gruppo bannato
+                  <Ban /> banned group
                 </Badge>
               )}
               {"meets" in r && !r.meets && (
                 <Badge variant="warning" className="px-1.5 py-0">
-                  sotto la soglia
+                  below threshold
                 </Badge>
               )}
               {r.id === accepted && (
                 <Badge variant="info" className="px-1.5 py-0">
-                  <ThumbsUp /> accettata
+                  <ThumbsUp /> accepted
                 </Badge>
               )}
             </div>
@@ -541,7 +541,7 @@ function TorrentLinks({
                   variant="ghost"
                   size="icon-sm"
                   className={cn(r.banned && "text-pink-600 dark:text-pink-400")}
-                  aria-label={r.banned ? `Togli il ban a ${r.group}` : `Banna ${r.group}`}
+                  aria-label={r.banned ? `Unban ${r.group}` : `Ban ${r.group}`}
                   onClick={() => onBan(r.group, !r.banned)}
                 >
                   <Ban />
@@ -549,8 +549,8 @@ function TorrentLinks({
               </TooltipTrigger>
               <TooltipContent>
                 {r.banned
-                  ? `Togli il ban a ${r.group}: le sue release tornano a contare come le altre`
-                  : `Banna ${r.group}: le sue release segnalano la parte come mancante, con meno priorità`}
+                  ? `Unban ${r.group}: its releases count like the others again`
+                  : `Ban ${r.group}: its releases flag the part as missing, with less priority`}
               </TooltipContent>
             </Tooltip>
           )}
@@ -558,16 +558,16 @@ function TorrentLinks({
             onAccept &&
             (r.id === accepted ? (
               <Button variant="ghost" size="sm" onClick={onUnaccept}>
-                <Undo2 /> Annulla
+                <Undo2 /> Undo
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={() => onAccept(r.id)}>
-                <ThumbsUp /> Va bene questa
+                <ThumbsUp /> This one is fine
               </Button>
             ))}
           {r.url && (
             <Button variant="ghost" size="icon-sm" asChild>
-              <a href={r.url} target="_blank" rel="noreferrer" aria-label="Apri sul tracker">
+              <a href={r.url} target="_blank" rel="noreferrer" aria-label="Open on the tracker">
                 <ExternalLink />
               </a>
             </Button>
@@ -616,61 +616,61 @@ function ThresholdDialog({
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label>Tipo minimo</Label>
+            <Label>Minimum type</Label>
             <Select value={t.type || ANY} onValueChange={pick("type")}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ANY}>Qualsiasi</SelectItem>
+                <SelectItem value={ANY}>Any</SelectItem>
                 {types.map((v) => (
                   <SelectItem key={v} value={v}>
-                    {v} o meglio
+                    {v} or better
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
-            <Label>Risoluzione minima</Label>
+            <Label>Minimum resolution</Label>
             <Select value={t.resolution || ANY} onValueChange={pick("resolution")}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ANY}>Qualsiasi</SelectItem>
+                <SelectItem value={ANY}>Any</SelectItem>
                 {[...resolutions].reverse().map((v) => (
                   <SelectItem key={v} value={v}>
-                    {v} o più
+                    {v} or higher
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="threshold-lang">Lingua audio richiesta</Label>
+            <Label htmlFor="threshold-lang">Required audio language</Label>
             <Input
               id="threshold-lang"
               value={t.lang}
               maxLength={8}
-              placeholder="Qualsiasi (es. ITA)"
+              placeholder="Any (e.g. ITA)"
               onChange={(e) => setT({ ...t, lang: e.target.value.toUpperCase() })}
             />
             <p className="text-muted-foreground text-xs">
-              Le release di cui non si conoscono le lingue (o solo MULTI) contano come se l'avessero.
+              Releases whose languages are unknown (or just MULTI) count as if they had it.
             </p>
           </div>
         </div>
         <DialogFooter>
           {onReset && (
             <Button variant="ghost" className="mr-auto" onClick={onReset}>
-              Usa quella generale
+              Use the general one
             </Button>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Annulla
+            Cancel
           </Button>
-          <Button onClick={() => onSave(t)}>Salva</Button>
+          <Button onClick={() => onSave(t)}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -709,7 +709,7 @@ function GroupCard({
   const addToPlan = useAction((ids: number[]) =>
     api.addPlanBulk(ids, planSource(s)).then((r) => {
       toast.success(
-        r.added.length === 1 ? "1 film aggiunto al piano" : `${r.added.length} film aggiunti al piano`,
+        r.added.length === 1 ? "1 film added to the plan" : `${r.added.length} films added to the plan`,
         r.errors.length ? { description: r.errors.join(" · ") } : undefined
       )
       return r
@@ -723,26 +723,26 @@ function GroupCard({
           <span>{s.title}</span>
           {s.year && <span className="text-muted-foreground font-normal">({s.year})</span>}
           {!parts && s.rows.length === 0 ? (
-            <Badge variant="secondary">Nessun tuo upload</Badge>
+            <Badge variant="secondary">None uploaded by you</Badge>
           ) : urgent > 0 ? (
             <Badge variant="warning">
-              {urgent} {urgent === 1 ? "mancante" : "mancanti"}
+              {urgent} missing
             </Badge>
           ) : t.banned > 0 ? null : s.completed ? (
             <Badge variant="secondary">
-              <CheckCheck /> Segnata completa
+              <CheckCheck /> Marked complete
             </Badge>
           ) : (
             <Badge variant="success">
-              <Check /> Completa
+              <Check /> Complete
             </Badge>
           )}
           {t.banned > 0 && (
-            <Badge variant="pink" title="Mancanti che sul tracker ci sono solo da gruppi che hai bannato: meno priorità">
-              <Ban /> {t.banned} {t.banned === 1 ? "mancante" : "mancanti"}, solo bannati
+            <Badge variant="pink" title="Missing parts that are on the tracker only by groups you banned: less priority">
+              <Ban /> {t.banned} missing, banned only
             </Badge>
           )}
-          {t.available > 0 && <Badge variant="success">{t.available} da altri</Badge>}
+          {t.available > 0 && <Badge variant="success">{t.available} by others</Badge>}
           <span className="ml-auto flex items-center gap-1">
             {s.searchUrl && (
               <Button variant="ghost" size="sm" asChild>
@@ -767,22 +767,22 @@ function GroupCard({
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Altre azioni">
+                <Button variant="ghost" size="icon-sm" aria-label="More actions">
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {s.completed ? (
                   <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "complete" }, true)}>
-                    <Undo2 /> Togli il segno di completa
+                    <Undo2 /> Unmark as complete
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "complete" })}>
-                    <CheckCheck /> Segna come completa
+                    <CheckCheck /> Mark as complete
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => onThreshold(s)}>
-                  <Gauge /> Qualità minima di questa {k.one}…
+                  <Gauge /> Minimum quality of this {k.one}…
                 </DropdownMenuItem>
                 {s.kind !== "series" && (
                   <DropdownMenuItem
@@ -791,13 +791,13 @@ function GroupCard({
                   >
                     <ListPlus />{" "}
                     {toPlan.length > 0
-                      ? `Aggiungi i mancanti al piano (${toPlan.length})`
-                      : "Nessun mancante da aggiungere al piano"}
+                      ? `Add the missing ones to the plan (${toPlan.length})`
+                      : "Nothing missing to add to the plan"}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "hide" })}>
-                  <EyeOff /> Nascondi questa {k.one}
+                  <EyeOff /> Hide this {k.one}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -805,8 +805,8 @@ function GroupCard({
         </CardTitle>
         <CardDescription>
           {s.units.length} {k.units(s.units.length)} · {s.mine.length} {k.mine(s.mine.length)}
-          {s.customThreshold && <> · qualità minima di questa {k.one}: {thresholdLabel(s.threshold)}</>}
-          {layout === "parts" && s.stale && <> · vista {k.byPart.toLowerCase()} dopo il prossimo controllo</>}
+          {s.customThreshold && <> · minimum quality of this {k.one}: {thresholdLabel(s.threshold)}</>}
+          {layout === "parts" && s.stale && <> · {k.byPart.toLowerCase()} view after the next check</>}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 px-4">
@@ -828,7 +828,7 @@ function GroupCard({
                   quality={shown ? shortQuality(shown.q) : undefined}
                   hint={
                     shown &&
-                    `${shown.mine ? "Tua" : shown.banned ? `Di ${shown.group}, bannato` : "Di altri"}: ${shown.quality}${shown.group && !shown.banned ? ` · ${shown.group}` : ""}`
+                    `${shown.mine ? "Yours" : shown.banned ? `By ${shown.group}, banned` : "By others"}: ${shown.quality}${shown.group && !shown.banned ? ` · ${shown.group}` : ""}`
                   }
                   onOpen={() => onOpen({ group: s.key, unit: p.unit, row: null })}
                 />
@@ -842,10 +842,10 @@ function GroupCard({
               className="group/row grid gap-1.5 md:grid-cols-[minmax(180px,240px)_1fr] md:items-start md:gap-3"
             >
               <div className="flex flex-wrap items-center gap-1 pt-1.5 text-sm">
-                <span className="font-medium">{row.quality.label || "Qualità sconosciuta"}</span>
+                <span className="font-medium">{row.quality.label || "Unknown quality"}</span>
                 {row.missing > 0 && (
                   <span className="text-muted-foreground text-xs whitespace-nowrap">
-                    · {row.missing} {row.missing === 1 ? "mancante" : "mancanti"}
+                    · {row.missing} missing
                   </span>
                 )}
                 <Tooltip>
@@ -854,13 +854,13 @@ function GroupCard({
                       variant="ghost"
                       size="icon-sm"
                       className="text-muted-foreground size-6 opacity-60 group-hover/row:opacity-100"
-                      aria-label="Nascondi questa qualità"
+                      aria-label="Hide this quality"
                       onClick={() => onMark({ group: s.key, action: "hide", quality: row.quality.key })}
                     >
                       <EyeOff className="size-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Nascondi questa qualità: non conta più</TooltipContent>
+                  <TooltipContent>Hide this quality: it no longer counts</TooltipContent>
                 </Tooltip>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -892,24 +892,24 @@ function GroupCard({
         )}
         {!parts && s.rows.length === 0 && (
           <p className="text-muted-foreground text-sm">
-            Non hai ancora caricato film di questa {k.one}: le righe per qualità compaiono dal primo. La vista{" "}
-            {k.byPart.toLowerCase()} mostra già cosa c'è sul tracker.
+            You haven't uploaded any film of this {k.one} yet: the rows by quality show up from the first one. The{" "}
+            {k.byPart.toLowerCase()} view already shows what is on the tracker.
           </p>
         )}
         {!parts && hiddenRows.length > 0 && (
           <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
             <EyeOff className="size-3.5" />
-            {hiddenRows.length === 1 ? "Qualità nascosta:" : "Qualità nascoste:"}
+            {hiddenRows.length === 1 ? "Hidden quality:" : "Hidden qualities:"}
             {hiddenRows.map((r) => (
               <Button
                 key={r.quality.key}
                 variant="outline"
                 size="sm"
                 className="h-6 px-2 text-xs"
-                title="Mostra di nuovo"
+                title="Show again"
                 onClick={() => onMark({ group: s.key, action: "hide", quality: r.quality.key }, true)}
               >
-                <Eye /> {r.quality.label || "Qualità sconosciuta"}
+                <Eye /> {r.quality.label || "Unknown quality"}
               </Button>
             ))}
           </div>
@@ -922,20 +922,20 @@ function GroupCard({
 /** A film of a saga or list in the release plan, or the button that adds it. */
 function PlanPart({ s, tmdbId }: { s: GapGroup; tmdbId: number }) {
   const entry = useContext(Planned).get(tmdbId)
-  const add = useAction(() => api.addPlan(String(tmdbId), "", planSource(s)), "Film aggiunto al piano")
+  const add = useAction(() => api.addPlan(String(tmdbId), "", planSource(s)), "Film added to the plan")
   if (entry)
     return (
       <div className="flex items-center gap-2 text-sm">
         <PlanStatusBadge status={entry.status} />
         <a href="#plan" className="text-muted-foreground text-xs hover:underline">
-          Apri il piano
+          Open the plan
         </a>
       </div>
     )
   return (
     <div>
       <Button variant="outline" size="sm" disabled={add.isPending} onClick={() => add.mutate(undefined)}>
-        <ListPlus /> Aggiungi al piano release
+        <ListPlus /> Add to the release plan
       </Button>
     </div>
   )
@@ -984,8 +984,8 @@ function CellDialog({
           <DialogDescription>
             {look.hint}
             {row
-              ? `${cell!.state === "other_quality" ? ": cercavi " : " · "}${row.quality.label}`
-              : ` · qualità minima: ${thresholdLabel(s.threshold)}`}
+              ? `${cell!.state === "other_quality" ? ": you wanted " : " · "}${row.quality.label}`
+              : ` · minimum quality: ${thresholdLabel(s.threshold)}`}
           </DialogDescription>
         </DialogHeader>
         {cell?.state === "other_quality" && (
@@ -998,7 +998,7 @@ function CellDialog({
           </div>
         )}
         {mark && mark !== "complete" && cell && markScope === "" && (
-          <p className="text-muted-foreground text-xs">Scelta fatta per tutte le qualità, dalla vista {kinds[s.kind].byPart.toLowerCase()}.</p>
+          <p className="text-muted-foreground text-xs">Choice made for all qualities, from the {kinds[s.kind].byPart.toLowerCase()} view.</p>
         )}
         <TorrentLinks
           refs={refs}
@@ -1010,8 +1010,8 @@ function CellDialog({
         {!mine && (
           <p className="text-muted-foreground text-xs">
             {row
-              ? `"Va bene questa" e "Ignora" valgono solo per ${row.quality.label || "questa qualità"}.`
-              : `"Va bene questa" e "Ignora" valgono per tutte le qualità, anche nella vista per qualità.`}
+              ? `"This one is fine" and "Ignore" only apply to ${row.quality.label || "this quality"}.`
+              : `"This one is fine" and "Ignore" apply to all qualities, also in the by-quality view.`}
           </p>
         )}
         {unit.tmdbId && !mine ? <PlanPart s={s} tmdbId={unit.tmdbId} /> : null}
@@ -1019,7 +1019,7 @@ function CellDialog({
           {unit.tmdbId ? (
             <Button variant="ghost" size="sm" asChild>
               <a href={`https://www.themoviedb.org/movie/${unit.tmdbId}`} target="_blank" rel="noreferrer">
-                <ExternalLink /> Il film su TMDB
+                <ExternalLink /> The film on TMDB
               </a>
             </Button>
           ) : (
@@ -1028,11 +1028,11 @@ function CellDialog({
           {!mine &&
             (mark === "ignored" ? (
               <Button variant="outline" size="sm" onClick={() => unset("ignore")}>
-                <Undo2 /> Non ignorare più
+                <Undo2 /> Stop ignoring
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={() => set("ignore")}>
-                <EyeOff /> Ignora: non è mancante
+                <EyeOff /> Ignore: not missing
               </Button>
             ))}
         </DialogFooter>
@@ -1091,23 +1091,23 @@ function BannedDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Gruppi bannati</DialogTitle>
+          <DialogTitle>Banned groups</DialogTitle>
           <DialogDescription>
-            Le release di questi gruppi non bastano: se sul tracker una stagione o un film c'è solo da loro, resta mancante
-            ma in rosa, con meno priorità. Il gruppo è quello dopo l'ultimo "-" del nome. Vale per serie, saghe e
-            collezioni; le tue release non contano mai come bannate.
+            Releases by these groups are not enough: if a season or a film is on the tracker only by them, it stays missing
+            but in pink, with less priority. The group is the part after the last "-" of the name. Applies to series, sagas
+            and collections; your own releases never count as banned.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={add} className="flex gap-2">
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Es. FLUX, YIFY"
-            aria-label="Gruppi da bannare"
+            placeholder="E.g. FLUX, YIFY"
+            aria-label="Groups to ban"
             className="flex-1"
           />
           <Button type="submit" variant="outline" disabled={!text.trim()}>
-            <Plus /> Aggiungi
+            <Plus /> Add
           </Button>
         </form>
         {list.length > 0 ? (
@@ -1118,7 +1118,7 @@ function BannedDialog({
                 <button
                   type="button"
                   className="hover:bg-pink-500/20 rounded p-0.5"
-                  aria-label={`Togli il ban a ${g}`}
+                  aria-label={`Unban ${g}`}
                   onClick={() => setList(list.filter((x) => x !== g))}
                 >
                   <X className="size-3" />
@@ -1127,14 +1127,14 @@ function BannedDialog({
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">Nessun gruppo bannato.</p>
+          <p className="text-muted-foreground text-sm">No banned groups.</p>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Annulla
+            Cancel
           </Button>
           <Button disabled={saving} onClick={() => onSave(text.trim() ? merge(words(text)) : list)}>
-            Salva
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1157,7 +1157,7 @@ function ListSources({
   const [url, setUrl] = useState("")
   const [removing, setRemoving] = useState<GapListSource | null>(null)
   const add = useAction((u: string) => api.addGapList(u))
-  const remove = useAction((id: number) => api.removeGapList(id), "Collezione rimossa")
+  const remove = useAction((id: number) => api.removeGapList(id), "Collection removed")
   const byKey = new Map(groups.map((g) => [g.key, g]))
 
   const submit = (e: React.FormEvent) => {
@@ -1166,8 +1166,8 @@ function ListSources({
     add.mutate(url.trim(), {
       onSuccess: (l) => {
         setUrl("")
-        toast.success(`Collezione "${l.title || l.path}" aggiunta`, {
-          description: "La controllo subito: tra poco compaiono i suoi film.",
+        toast.success(`Collection "${l.title || l.path}" added`, {
+          description: "Checking it right away: its films show up shortly.",
         })
       },
     })
@@ -1177,11 +1177,11 @@ function ListSources({
     <Card className="gap-3">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Library className="text-muted-foreground size-4" /> Collezioni seguite ({sources.length})
+          <Library className="text-muted-foreground size-4" /> Followed collections ({sources.length})
         </CardTitle>
         <CardDescription>
-          Incolla il link di una lista pubblica di MDBList: una fatta da te o da altri, anche copiata da IMDb o Trakt.
-          Ogni controllo la rilegge, quindi se cambia su MDBList cambia anche qui.
+          Paste the link of a public MDBList list: made by you or by others, even copied from IMDb or Trakt. Every check
+          reads it again, so if it changes on MDBList it changes here too.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -1190,12 +1190,12 @@ function ListSources({
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://mdblist.com/lists/utente/nome-lista"
-              aria-label="Link della lista su MDBList"
+              placeholder="https://mdblist.com/lists/user/list-name"
+              aria-label="Link of the list on MDBList"
               className="min-w-[240px] flex-1"
             />
             <Button type="submit" disabled={add.isPending || !url.trim()}>
-              <Plus /> Aggiungi
+              <Plus /> Add
             </Button>
           </form>
         ) : (
@@ -1206,10 +1206,10 @@ function ListSources({
             {sources.map((l) => {
               const g = byKey.get(`${l.source}:${l.path}`)
               const status = !g
-                ? "In attesa del controllo"
+                ? "Waiting for the check"
                 : g.status !== "ok"
-                  ? "Lista non trovata su MDBList"
-                  : `${g.units.length} ${kinds.list.units(g.units.length)} · ${g.mine.length} ${kinds.list.mine(g.mine.length)}${g.hidden ? " · nascosta" : ""}`
+                  ? "List not found on MDBList"
+                  : `${g.units.length} ${kinds.list.units(g.units.length)} · ${g.mine.length} ${kinds.list.mine(g.mine.length)}${g.hidden ? " · hidden" : ""}`
               return (
                 <li key={l.id} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
                   <div className="min-w-0 flex-1">
@@ -1224,11 +1224,11 @@ function ListSources({
                     </div>
                   </div>
                   <Button variant="ghost" size="icon-sm" asChild>
-                    <a href={l.url} target="_blank" rel="noreferrer" aria-label="Apri su MDBList">
+                    <a href={l.url} target="_blank" rel="noreferrer" aria-label="Open on MDBList">
                       <ExternalLink />
                     </a>
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label="Smetti di seguire" onClick={() => setRemoving(l)}>
+                  <Button variant="ghost" size="icon-sm" aria-label="Stop following" onClick={() => setRemoving(l)}>
                     <Trash2 />
                   </Button>
                 </li>
@@ -1240,19 +1240,19 @@ function ListSources({
       <AlertDialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Smettere di seguire "{removing?.title || removing?.path}"?</AlertDialogTitle>
+            <AlertDialogTitle>Stop following "{removing?.title || removing?.path}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Spariscono i suoi risultati e le scelte fatte sui suoi film (accettati, ignorati, qualità minima). La
-              lista su MDBList resta com'è.
+              Its results and the choices made on its films (accepted, ignored, minimum quality) go away. The list on
+              MDBList stays as it is.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => removing && remove.mutate(removing.id)}
             >
-              Smetti di seguire
+              Stop following
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1316,7 +1316,7 @@ function GapList({
   const onBan = (group: string, ban: boolean) =>
     saveBanned.mutate(
       ban ? [...bannedGroups, group] : bannedGroups.filter((g) => g.toLowerCase() !== group.toLowerCase()),
-      { onSuccess: () => toast.success(ban ? `${group} bannato` : `Ban tolto a ${group}`) }
+      { onSuccess: () => toast.success(ban ? `${group} banned` : `${group} unbanned`) }
     )
 
   const grid = layout === "grid"
@@ -1393,21 +1393,21 @@ function GapList({
 
   const statCards: { label: string; value: number; icon: React.ElementType; tone?: string }[] = [
     { label: k.noun, value: stats.groups, icon: Layers },
-    { label: "Con mancanti", value: stats.withMissing, icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
+    { label: "With missing", value: stats.withMissing, icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
     {
-      label: grid ? "Da altri, stessa qualità" : "Da altri, sopra la soglia",
+      label: grid ? "By others, same quality" : "By others, above threshold",
       value: stats.available,
       icon: Users,
       tone: "text-emerald-600 dark:text-emerald-400",
     },
-    { label: "Solo gruppi bannati", value: stats.banned, icon: Ban, tone: "text-pink-600 dark:text-pink-400" },
+    { label: "Banned groups only", value: stats.banned, icon: Ban, tone: "text-pink-600 dark:text-pink-400" },
     {
-      label: grid ? "Solo altra qualità" : "Sotto la soglia",
+      label: grid ? "Other quality only" : "Below threshold",
       value: stats.other,
       icon: grid ? Shuffle : ArrowDown,
       tone: "text-amber-600 dark:text-amber-400",
     },
-    { label: "Assenti dal tracker", value: stats.absent, icon: X, tone: "text-destructive" },
+    { label: "Absent from the tracker", value: stats.absent, icon: X, tone: "text-destructive" },
   ]
 
   const saveThreshold = (t: GapThreshold) => {
@@ -1443,7 +1443,7 @@ function GapList({
             className={cn("h-7", grid && "bg-background")}
             onClick={() => reset(onLayout)("grid")}
           >
-            <Grid3x3 /> Per qualità
+            <Grid3x3 /> By quality
           </Button>
         </div>
         <div className="relative min-w-[200px] flex-1">
@@ -1456,7 +1456,7 @@ function GapList({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tutte le qualità</SelectItem>
+              <SelectItem value="all">All qualities</SelectItem>
               {groups.map((g) => (
                 <SelectItem key={g} value={g}>
                   {g}
@@ -1468,14 +1468,14 @@ function GapList({
           <Button
             variant="outline"
             onClick={() =>
-              setEditing({ key: null, title: "Qualità minima", initial: prefs, custom: false })
+              setEditing({ key: null, title: "Minimum quality", initial: prefs, custom: false })
             }
           >
-            <Gauge /> Minima: {thresholdLabel(prefs)}
+            <Gauge /> Minimum: {thresholdLabel(prefs)}
           </Button>
         )}
-        <Button variant="outline" onClick={() => setEditingBanned(true)} title="Gruppi le cui release non bastano">
-          <Ban /> Gruppi bannati{bannedGroups.length > 0 && `: ${bannedGroups.length}`}
+        <Button variant="outline" onClick={() => setEditingBanned(true)} title="Groups whose releases are not enough">
+          <Ban /> Banned groups{bannedGroups.length > 0 && `: ${bannedGroups.length}`}
         </Button>
         <div className="flex items-center gap-2 px-1">
           <Switch
@@ -1484,14 +1484,14 @@ function GapList({
             disabled={savePrefs.isPending}
             onCheckedChange={(v) => savePrefs.mutate({ ...prefs, othersCount: v })}
           />
-          <Label htmlFor={`others-count-${kind}`} className="whitespace-nowrap" title="Quello che hanno caricato altri non conta come mancante">
-            Conta quelle di altri
+          <Label htmlFor={`others-count-${kind}`} className="whitespace-nowrap" title="What others uploaded doesn't count as missing">
+            Count others' uploads
           </Label>
         </div>
         <div className="flex items-center gap-2 px-1">
           <Switch id={`missing-only-${kind}`} checked={onlyMissing} onCheckedChange={reset(setOnlyMissing)} />
           <Label htmlFor={`missing-only-${kind}`} className="whitespace-nowrap">
-            Solo con mancanti
+            Only with missing
           </Label>
         </div>
       </div>
@@ -1499,14 +1499,14 @@ function GapList({
       {stale && (
         <AlertBox>
           <RefreshCw />
-          <AlertTitle>Serve un nuovo controllo</AlertTitle>
+          <AlertTitle>A new check is needed</AlertTitle>
           <AlertDescription>
             <span>
-              Questi risultati vengono da un controllo fatto prima della vista {k.byPart.toLowerCase()}: fino al prossimo
-              controllo sono mostrati per qualità.{" "}
+              These results come from a check made before the {k.byPart.toLowerCase()} view: until the next check they are
+              shown by quality.{" "}
               {onCheck && (
                 <Button variant="link" className="h-auto p-0" onClick={onCheck}>
-                  Controlla ora
+                  Check now
                 </Button>
               )}
             </span>
@@ -1526,7 +1526,7 @@ function GapList({
                 ? k.checking
                 : checkedAt
                   ? k.empty
-                  : "Nessun controllo ancora: avvialo con Controlla ora, o attendi quello notturno."
+                  : "No check yet: start one with Check now, or wait for the nightly one."
               : k.noMatch}
           </CardContent>
         </Card>
@@ -1542,7 +1542,7 @@ function GapList({
           onThreshold={(g) =>
             setEditing({
               key: g.key,
-              title: `Qualità minima: ${g.title}`,
+              title: `Minimum quality: ${g.title}`,
               initial: g.customThreshold ? g.threshold : prefs,
               custom: g.customThreshold,
             })
@@ -1570,12 +1570,12 @@ function GapList({
         <Card className="gap-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <EyeOff className="text-muted-foreground size-4" /> Nascoste ({hidden.length})
+              <EyeOff className="text-muted-foreground size-4" /> Hidden ({hidden.length})
               <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setShowHidden(!showHidden)}>
-                {showHidden ? "Chiudi" : "Mostra l'elenco"}
+                {showHidden ? "Close" : "Show the list"}
               </Button>
             </CardTitle>
-            <CardDescription>Non contano nei numeri qui sopra né tra le mancanti.</CardDescription>
+            <CardDescription>They count neither in the numbers above nor among the missing.</CardDescription>
           </CardHeader>
           {showHidden && (
             <CardContent>
@@ -1588,11 +1588,11 @@ function GapList({
                     </span>
                     {missingIn(s, layout) > 0 && (
                       <span className="text-muted-foreground text-xs">
-                        {missingIn(s, layout)} {missingIn(s, layout) === 1 ? "mancante" : "mancanti"}
+                        {missingIn(s, layout)} missing
                       </span>
                     )}
                     <Button variant="outline" size="sm" onClick={() => onMark({ group: s.key, action: "hide" }, true)}>
-                      <Eye /> Mostra
+                      <Eye /> Show
                     </Button>
                   </li>
                 ))}
@@ -1651,8 +1651,8 @@ function GapList({
         title={editing?.title ?? ""}
         description={
           editing?.key === null
-            ? `Sotto questa qualità ${kind === "series" ? "una stagione" : "un film"} conta come mancante, anche se l'hai caricato tu. Vale per ${k.noun.toLowerCase()} senza una qualità minima propria.`
-            : `Solo per questa ${k.one}, al posto della qualità minima generale (${thresholdLabel(prefs)}).`
+            ? `Below this quality ${kind === "series" ? "a season" : "a film"} counts as missing, even if you uploaded it. Applies to ${k.noun.toLowerCase()} without a minimum quality of their own.`
+            : `Only for this ${k.one}, instead of the general minimum quality (${thresholdLabel(prefs)}).`
         }
         initial={editing?.initial ?? prefs}
         types={types}
@@ -1693,8 +1693,8 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
   const run = () =>
     check.mutate(undefined, {
       onSuccess: () =>
-        toast.success("Controllo avviato", {
-          description: "Stagioni, saghe e collezioni da TMDB e MDBList e torrent dal tracker vengono letti in background.",
+        toast.success("Check started", {
+          description: "Seasons, sagas and collections from TMDB and MDBList and torrents from the tracker are being read in the background.",
         }),
     })
 
@@ -1703,7 +1703,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
   if (failed)
     return (
       <Card>
-        <CardContent className="text-destructive py-6 text-center text-sm">Errore nel caricamento: {failed.message}</CardContent>
+        <CardContent className="text-destructive py-6 text-center text-sm">Loading failed: {failed.message}</CardContent>
       </Card>
     )
 
@@ -1712,11 +1712,11 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CloudOff className="size-4" /> Controllo delle stagioni e dei film mancanti non attivo
+            <CloudOff className="size-4" /> Missing seasons and films check not enabled
           </CardTitle>
           <CardDescription>
-            {data.disabledReason} Da allora ogni notte verranno controllate le serie di cui hai caricato almeno una
-            stagione, le saghe di cui hai caricato almeno un film e le collezioni che segui.
+            {data.disabledReason} From then on, every night bookrr checks the series you uploaded at least one season of,
+            the sagas you uploaded at least one film of and the collections you follow.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -1730,7 +1730,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
         <div className="flex flex-wrap items-center gap-2">
           <TabsList>
             <TabsTrigger value="series">
-              <Tv /> Serie TV
+              <Tv /> TV series
               {missingOf(seriesAll, "series") > 0 && (
                 <Badge variant="warning" className="ml-1 px-1.5">
                   {missingOf(seriesAll, "series")}
@@ -1738,7 +1738,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
               )}
             </TabsTrigger>
             <TabsTrigger value="sagas">
-              <Clapperboard /> Saghe
+              <Clapperboard /> Sagas
               {missingOf(sagasAll, "saga") > 0 && (
                 <Badge variant="warning" className="ml-1 px-1.5">
                   {missingOf(sagasAll, "saga")}
@@ -1746,7 +1746,7 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
               )}
             </TabsTrigger>
             <TabsTrigger value="lists">
-              <Library /> Collezioni
+              <Library /> Collections
               {missingOf(listsAll, "list") > 0 && (
                 <Badge variant="warning" className="ml-1 px-1.5">
                   {missingOf(listsAll, "list")}
@@ -1760,19 +1760,19 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
                 <span className="text-muted-foreground text-xs">
                   {running
                     ? state?.total
-                      ? `Controllo in corso: ${phase} (${state.done}/${state.total})…`
-                      : "Controllo in corso…"
-                    : `Controllato ${formatRelative(data?.checkedAt)}`}
+                      ? `Checking: ${phase} (${state.done}/${state.total})…`
+                      : "Checking…"
+                    : `Checked ${formatRelative(data?.checkedAt)}`}
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {state?.lastResult || "Nessun controllo ancora"}
-                {data?.checkAt && ` · ogni notte alle ${data.checkAt}`}
+                {state?.lastResult || "No check yet"}
+                {data?.checkAt && ` · every night at ${data.checkAt}`}
               </TooltipContent>
             </Tooltip>
             {data?.enabled && (
               <Button variant="outline" size="sm" disabled={running} onClick={run}>
-                <RefreshCw className={cn(running && "animate-spin")} /> Controlla ora
+                <RefreshCw className={cn(running && "animate-spin")} /> Check now
               </Button>
             )}
           </div>
@@ -1781,14 +1781,14 @@ export function MissingPage({ view, onView }: { view: MissingView; onView: (v: M
         {data && !data.enabled && (
           <AlertBox variant="warning">
             <CloudOff />
-            <AlertTitle>Controllo non attivo</AlertTitle>
-            <AlertDescription>Questi risultati non vengono più aggiornati. {data.disabledReason}</AlertDescription>
+            <AlertTitle>Check not enabled</AlertTitle>
+            <AlertDescription>These results are no longer updated. {data.disabledReason}</AlertDescription>
           </AlertBox>
         )}
         {state?.lastError && (
           <AlertBox variant="destructive">
             <TriangleAlert />
-            <AlertTitle>Ultimo controllo non riuscito</AlertTitle>
+            <AlertTitle>Last check failed</AlertTitle>
             <AlertDescription>{state.lastError}</AlertDescription>
           </AlertBox>
         )}

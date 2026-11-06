@@ -31,8 +31,8 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const [deleting, setDeleting] = useState<Adopter | null>(null)
   const [adding, setAdding] = useState<Adopter | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
-  const del = useAction((id: number) => api.deleteAdopter(id), "Adottatore eliminato")
-  const unadopt = useAction((id: number) => api.deleteAdoption(id), "Adozione rimossa")
+  const del = useAction((id: number) => api.deleteAdopter(id), "Adopter deleted")
+  const unadopt = useAction((id: number) => api.deleteAdoption(id), "Adoption removed")
 
   const all = useMemo(() => torrents.data ?? [], [torrents.data])
   const byAdopter = useMemo(() => {
@@ -50,7 +50,7 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   return (
     <div className="grid gap-4">
       <div className="flex items-center gap-2">
-        <p className="text-muted-foreground text-sm">Persone che hanno adottato le tue release e continuano a condividerle.</p>
+        <p className="text-muted-foreground text-sm">People who adopted your releases and keep seeding them.</p>
         <Button
           className="ml-auto"
           onClick={() => {
@@ -58,7 +58,7 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             setOpen(true)
           }}
         >
-          <Plus /> Nuovo adottatore
+          <Plus /> New adopter
         </Button>
       </div>
 
@@ -66,7 +66,7 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       {adopters.data?.length === 0 && (
         <Card>
           <CardContent className="text-muted-foreground py-6 text-center text-sm">
-            Nessun adottatore registrato. Aggiungine uno per poterlo scegliere sui torrent.
+            No adopters yet. Add one to pick it on your torrents.
           </CardContent>
         </Card>
       )}
@@ -81,12 +81,12 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   <HandHeart className="size-4 text-emerald-600" />
                   {a.name}
                 </CardTitle>
-                <CardDescription className="break-all">{a.contact || "Contatto non indicato"}</CardDescription>
+                <CardDescription className="break-all">{a.contact || "No contact"}</CardDescription>
                 <CardAction className="flex gap-1">
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Modifica"
+                    aria-label="Edit"
                     onClick={() => {
                       setEditing(a)
                       setOpen(true)
@@ -94,7 +94,7 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                   >
                     <Pencil />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label="Elimina" onClick={() => setDeleting(a)}>
+                  <Button variant="ghost" size="icon-sm" aria-label="Delete" onClick={() => setDeleting(a)}>
                     <Trash2 />
                   </Button>
                 </CardAction>
@@ -102,10 +102,10 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               <CardContent className="grid gap-3 text-sm">
                 <div className="flex items-center gap-2">
                   <span>
-                    <span className="font-medium">{a.adoptedCount}</span> torrent · {formatBytes(a.adoptedSize)}
+                    <span className="font-medium">{a.adoptedCount}</span> {a.adoptedCount === 1 ? "torrent" : "torrents"} · {formatBytes(a.adoptedSize)}
                   </span>
                   <Button size="sm" variant="outline" className="ml-auto" onClick={() => setAdding(a)}>
-                    <Plus /> Aggiungi torrent
+                    <Plus /> Add torrents
                   </Button>
                 </div>
                 {adopted.length > 0 && (
@@ -125,7 +125,7 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                           variant="ghost"
                           size="icon-sm"
                           className="size-7 shrink-0"
-                          aria-label="Rimuovi adozione"
+                          aria-label="Remove adoption"
                           onClick={() => unadopt.mutate(adoptionId)}
                         >
                           <X />
@@ -152,20 +152,20 @@ export function AdoptersPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminare l'adottatore "{deleting?.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>Delete the adopter "{deleting?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleting?.adoptedCount
-                ? `Verranno rimosse anche le sue ${deleting.adoptedCount} adozioni.`
-                : "Non ha adottato nessun torrent."}
+                ? `Their ${deleting.adoptedCount} adoptions will be removed too.`
+                : "They have not adopted any torrent."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => deleting && del.mutate(deleting.id)}
             >
-              Elimina
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -185,7 +185,7 @@ function AddTorrentsDialog({
   onClose: () => void
 }) {
   const [query, setQuery] = useState("")
-  const add = useAction((hash: string) => api.addAdoption(hash, { adopterId: adopter!.id, notes: "" }), "Adozione aggiunta")
+  const add = useAction((hash: string) => api.addAdoption(hash, { adopterId: adopter!.id, notes: "" }), "Adoption added")
 
   useEffect(() => {
     if (adopter) setQuery("")
@@ -205,22 +205,22 @@ function AddTorrentsDialog({
     <Dialog open={adopter !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Torrent adottati da {adopter?.name}</DialogTitle>
-          <DialogDescription>Cerca un torrent e premi "Aggiungi". Le tue release sono in cima.</DialogDescription>
+          <DialogTitle>Torrents adopted by {adopter?.name}</DialogTitle>
+          <DialogDescription>Search a torrent and press "Add". Your releases are at the top.</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cerca per nome o hash…"
+            placeholder="Search by name or hash…"
             className="pl-8"
             autoFocus
           />
         </div>
         <ul className="max-h-[50vh] divide-y overflow-y-auto rounded-lg border">
           {results.length === 0 && (
-            <li className="text-muted-foreground py-6 text-center text-sm">Nessun torrent da aggiungere.</li>
+            <li className="text-muted-foreground py-6 text-center text-sm">No torrents to add.</li>
           )}
           {results.map((t) => (
             <li key={t.hash} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3 text-sm">
@@ -230,7 +230,7 @@ function AddTorrentsDialog({
               {t.personalRelease && <PersonalBadge />}
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{formatBytes(t.size)}</span>
               <Button size="sm" variant="outline" disabled={add.isPending} onClick={() => add.mutate(t.hash)}>
-                <Plus /> Aggiungi
+                <Plus /> Add
               </Button>
             </li>
           ))}

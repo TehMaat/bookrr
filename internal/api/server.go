@@ -211,7 +211,7 @@ func (s *Server) static() http.Handler {
 	files := http.FileServerFS(s.web)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			writeError(w, http.StatusNotFound, "endpoint inesistente")
+			writeError(w, http.StatusNotFound, "no such endpoint")
 			return
 		}
 		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
@@ -222,7 +222,7 @@ func (s *Server) static() http.Handler {
 			// SPA fallback.
 			index, err := fs.ReadFile(s.web, "index.html")
 			if err != nil {
-				http.Error(w, "frontend non compilato (esegui npm run build in web/)", http.StatusNotFound)
+				http.Error(w, "frontend not built (run npm run build in web/)", http.StatusNotFound)
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -258,9 +258,9 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrOnClient), errors.Is(err, store.ErrAlreadyAdopted), errors.Is(err, store.ErrLastCopy):
 		writeError(w, http.StatusConflict, err.Error())
 	case strings.Contains(err.Error(), "UNIQUE"):
-		writeError(w, http.StatusConflict, "esiste già un elemento con questo nome")
+		writeError(w, http.StatusConflict, "an item with this name already exists")
 	default:
-		slog.Error("errore api", "err", err)
+		slog.Error("api error", "err", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}
 }
@@ -272,7 +272,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	dec := json.NewDecoder(io.LimitReader(r.Body, limit))
 	if err := dec.Decode(v); err != nil {
-		writeError(w, http.StatusBadRequest, "JSON non valido: "+err.Error())
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return false
 	}
 	return true
@@ -281,7 +281,7 @@ func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) boo
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "id non valido")
+		writeError(w, http.StatusBadRequest, "invalid id")
 		return 0, false
 	}
 	return id, true
@@ -335,7 +335,7 @@ func (s *Server) getTorrent(w http.ResponseWriter, r *http.Request) {
 var hashRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // normalizeManual cleans up a hand-entered torrent the same way for the
-// "Aggiungi" form and for the bulk import.
+// "Add" form and for the bulk import.
 func normalizeManual(in *store.ManualInput) error {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Hash = strings.ToLower(strings.TrimSpace(in.Hash))
@@ -347,10 +347,10 @@ func normalizeManual(in *store.ManualInput) error {
 	}
 	in.Tags = tags
 	if in.Name == "" {
-		return errors.New("il nome è obbligatorio")
+		return errors.New("the name is required")
 	}
 	if in.Hash != "" && !hashRe.MatchString(in.Hash) {
-		return errors.New("info hash non valido: servono 40 o 64 caratteri esadecimali")
+		return errors.New("invalid info hash: 40 or 64 hex characters needed")
 	}
 	if in.Hash == "" {
 		b := make([]byte, 8)
@@ -451,12 +451,12 @@ func (s *Server) trackerMatch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) placeholder(w http.ResponseWriter, r *http.Request) (string, bool) {
 	svc := s.current()
 	if svc.Hashes == nil {
-		writeError(w, http.StatusBadRequest, "nessun tracker UNIT3D configurato: impostalo nelle Impostazioni, scheda Tracker")
+		writeError(w, http.StatusBadRequest, "no UNIT3D tracker configured: set it in Settings, Tracker tab")
 		return "", false
 	}
 	hash := r.PathValue("hash")
 	if !store.IsManualHash(hash) {
-		writeError(w, http.StatusBadRequest, "il torrent ha già il suo info hash")
+		writeError(w, http.StatusBadRequest, "the torrent already has its info hash")
 		return "", false
 	}
 	return hash, true
@@ -521,7 +521,7 @@ func (s *Server) neverArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(in.Hashes) == 0 {
-		writeError(w, http.StatusBadRequest, "nessun torrent indicato")
+		writeError(w, http.StatusBadRequest, "no torrent given")
 		return
 	}
 	n, err := s.store.SetNeverArchive(r.Context(), in.Hashes, in.Never)
@@ -529,7 +529,7 @@ func (s *Server) neverArchive(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	slog.Info("torrent da non archiviare", "never", in.Never, "count", n)
+	slog.Info("torrents never to archive", "never", in.Never, "count", n)
 	writeJSON(w, 200, map[string]int{"updated": n})
 }
 
@@ -554,7 +554,7 @@ func (s *Server) importTorrents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(in.Items) == 0 {
-		writeError(w, http.StatusBadRequest, "nessun torrent da importare")
+		writeError(w, http.StatusBadRequest, "no torrents to import")
 		return
 	}
 	ctx := r.Context()
@@ -592,7 +592,7 @@ func (s *Server) importTorrents(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"rows": rows, "imported": 0})
 		return
 	}
-	slog.Info("import torrent archiviati", "count", len(in.Items))
+	slog.Info("archived torrents imported", "count", len(in.Items))
 	hashes := make([]string, len(in.Items))
 	for i, item := range in.Items {
 		hashes[i] = item.Hash
@@ -606,17 +606,17 @@ func (s *Server) checkImportItem(ctx context.Context, item *store.ManualInput, s
 		return err
 	}
 	if !item.HasArchive() {
-		return errors.New("indica il disco o il percorso dove è archiviato")
+		return errors.New("give the disk or the path where it is archived")
 	}
 	if i, dup := seen[item.Hash]; dup {
-		return fmt.Errorf("hash ripetuto (riga %d)", i+1)
+		return fmt.Errorf("repeated hash (row %d)", i+1)
 	}
 	exists, err := s.store.TorrentExists(ctx, item.Hash)
 	if err != nil {
 		return err
 	}
 	if exists {
-		return errors.New("torrent già presente in bookrr")
+		return errors.New("torrent already in bookrr")
 	}
 	if id := item.Archive.DiskID; id != nil {
 		ok, known := disks[*id]
@@ -629,7 +629,7 @@ func (s *Server) checkImportItem(ctx context.Context, item *store.ManualInput, s
 			disks[*id] = ok
 		}
 		if !ok {
-			return errors.New("disco inesistente")
+			return errors.New("no such disk")
 		}
 	}
 	if item.HasAdoption() {
@@ -644,7 +644,7 @@ func (s *Server) checkImportItem(ctx context.Context, item *store.ManualInput, s
 			adopters[id] = ok
 		}
 		if !ok {
-			return errors.New("adottatore inesistente")
+			return errors.New("no such adopter")
 		}
 	}
 	return nil
@@ -679,7 +679,7 @@ func (s *Server) removeFromClient(w http.ResponseWriter, r *http.Request) {
 	hash := r.PathValue("hash")
 	clientID, err := strconv.ParseInt(r.PathValue("clientId"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "id client non valido")
+		writeError(w, http.StatusBadRequest, "invalid client id")
 		return
 	}
 	deleteFiles := r.URL.Query().Get("deleteFiles") == "1"
@@ -695,14 +695,14 @@ func (s *Server) removeFromClient(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if err := svc.Syncer.Qbit(c).DeleteTorrent(ctx, hash, deleteFiles); err != nil {
-		writeError(w, http.StatusBadGateway, "rimozione da "+c.Name+" non riuscita: "+err.Error())
+		writeError(w, http.StatusBadGateway, "removal from "+c.Name+" failed: "+err.Error())
 		return
 	}
 	if err := s.store.RemoveLocation(r.Context(), hash, clientID); err != nil {
 		s.fail(w, err)
 		return
 	}
-	slog.Info("torrent rimosso dal client", "hash", hash, "client", c.Name, "deleteFiles", deleteFiles)
+	slog.Info("torrent removed from the client", "hash", hash, "client", c.Name, "deleteFiles", deleteFiles)
 	t, err := s.store.GetTorrent(r.Context(), hash)
 	if err != nil {
 		s.fail(w, err)
@@ -824,7 +824,7 @@ func (s *Server) resolveAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(in.IDs) == 0 {
-		writeError(w, 400, "nessuna segnalazione selezionata")
+		writeError(w, 400, "no alerts selected")
 		return
 	}
 	if err := s.store.ResolveAlerts(r.Context(), in.IDs, in.ResolveInput); err != nil {
@@ -885,7 +885,7 @@ func normalizePublicURL(raw string) (string, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("indirizzo %q non valido (es. http://192.168.1.10:8080)", raw)
+		return "", fmt.Errorf("invalid address %q (e.g. http://192.168.1.10:8080)", raw)
 	}
 	return strings.TrimRight(u.String(), "/"), nil
 }
@@ -937,11 +937,11 @@ func (in *s3Input) bucket(old *store.DiskS3) (*store.DiskS3, error) {
 	}
 	switch {
 	case b.Endpoint == "" || b.Bucket == "":
-		return nil, errors.New("endpoint e bucket sono obbligatori")
+		return nil, errors.New("endpoint and bucket are required")
 	case strings.ContainsAny(b.Bucket, "/ "):
-		return nil, fmt.Errorf("nome del bucket %q non valido: indica la cartella nel prefisso", b.Bucket)
+		return nil, fmt.Errorf("invalid bucket name %q: put the folder in the prefix", b.Bucket)
 	case b.AccessKey == "" || b.SecretKey == "":
-		return nil, errors.New("access key e secret key sono obbligatorie")
+		return nil, errors.New("access key and secret key are required")
 	}
 	if _, err := bucket.Client(b); err != nil {
 		return nil, err
@@ -954,7 +954,7 @@ func validDisk(w http.ResponseWriter, in *diskInput, old *store.DiskS3) bool {
 	d.Label = strings.TrimSpace(d.Label)
 	d.Serial = strings.TrimSpace(d.Serial)
 	if d.Label == "" {
-		writeError(w, http.StatusBadRequest, "il nome del disco è obbligatorio")
+		writeError(w, http.StatusBadRequest, "the disk name is required")
 		return false
 	}
 	d.S3 = nil
@@ -1024,7 +1024,7 @@ func (s *Server) scanDisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.S3 == nil || svc.Buckets == nil {
-		writeError(w, http.StatusBadRequest, "questo archivio non è collegato a un bucket")
+		writeError(w, http.StatusBadRequest, "this archive is not linked to a bucket")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Minute)
@@ -1125,7 +1125,7 @@ func (s *Server) importSmart(w http.ResponseWriter, r *http.Request) {
 	case q.Get("id") != "":
 		id, err := strconv.ParseInt(q.Get("id"), 10, 64)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "id non valido")
+			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
 		if d, err = s.store.GetDisk(ctx, id); err != nil {
@@ -1139,7 +1139,7 @@ func (s *Server) importSmart(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			if info.Serial == "" && !dryRun {
-				writeError(w, http.StatusBadRequest, "numero di serie assente nei dati SMART: indica il disco da aggiornare (?id=) o creane uno nuovo (?new=1)")
+				writeError(w, http.StatusBadRequest, "no serial number in the SMART data: give the disk to update (?id=) or create a new one (?new=1)")
 				return
 			}
 			created = true
@@ -1149,7 +1149,7 @@ func (s *Server) importSmart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if created {
-		d = store.Disk{Label: firstNonEmpty(q.Get("label"), info.Model, info.Serial, "Nuovo disco"), Kind: "HDD"}
+		d = store.Disk{Label: firstNonEmpty(q.Get("label"), info.Model, info.Serial, "New disk"), Kind: "HDD"}
 	}
 	mergeSmart(&d, info)
 
@@ -1158,7 +1158,7 @@ func (s *Server) importSmart(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, err)
 			return
 		}
-		slog.Info("dati SMART importati", "disk", d.Label, "serial", d.Serial, "created", created)
+		slog.Info("SMART data imported", "disk", d.Label, "serial", d.Serial, "created", created)
 	}
 	status := http.StatusOK
 	if created && !dryRun {
@@ -1221,7 +1221,7 @@ func validAdopter(w http.ResponseWriter, a *store.Adopter) bool {
 	a.Name = strings.TrimSpace(a.Name)
 	a.Contact = strings.TrimSpace(a.Contact)
 	if a.Name == "" {
-		writeError(w, http.StatusBadRequest, "il nome dell'adottatore è obbligatorio")
+		writeError(w, http.StatusBadRequest, "the adopter name is required")
 		return false
 	}
 	return true
@@ -1285,12 +1285,12 @@ func (in *clientInput) validate(w http.ResponseWriter) bool {
 	in.Name = strings.TrimSpace(in.Name)
 	in.URL = strings.TrimRight(strings.TrimSpace(in.URL), "/")
 	if in.Name == "" || in.URL == "" {
-		writeError(w, http.StatusBadRequest, "nome e URL sono obbligatori")
+		writeError(w, http.StatusBadRequest, "name and URL are required")
 		return false
 	}
 	u, err := url.Parse(in.URL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		writeError(w, http.StatusBadRequest, "URL non valido (es. http://192.168.1.10:8080)")
+		writeError(w, http.StatusBadRequest, "invalid URL (e.g. http://192.168.1.10:8080)")
 		return false
 	}
 	return true
@@ -1433,7 +1433,7 @@ func (s *Server) syncInBackground() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		if _, err := svc.Syncer.SyncAll(ctx); err != nil {
-			slog.Error("sync fallito", "err", err)
+			slog.Error("sync failed", "err", err)
 		}
 	}()
 }
@@ -1454,7 +1454,7 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 			tok = strings.TrimPrefix(auth, "Bearer ")
 		}
 		if subtle.ConstantTimeCompare([]byte(tok), []byte(svc.Config.WebhookToken)) != 1 {
-			writeError(w, http.StatusUnauthorized, "token non valido")
+			writeError(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
 	}
@@ -1473,7 +1473,7 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 	}
 	hash := strings.ToLower(pick("hash", "infohash", "info_hash", "infohash_v1", "hash_v1", "torrent_hash", "id"))
 	if hash == "" {
-		writeError(w, http.StatusBadRequest, "manca l'hash del torrent (campo 'hash')")
+		writeError(w, http.StatusBadRequest, "the torrent hash is missing ('hash' field)")
 		return
 	}
 	size, _ := strconv.ParseInt(pick("size", "total_size"), 10, 64)
@@ -1490,7 +1490,7 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	slog.Info("webhook rimozione", "hash", hash, "name", ev.Name, "client", ev.ClientName, "alert", created)
+	slog.Info("removal webhook", "hash", hash, "name", ev.Name, "client", ev.ClientName, "alert", created)
 	writeJSON(w, 200, map[string]any{"ok": true, "alert": created})
 }
 
@@ -1521,7 +1521,7 @@ func webhookFields(r *http.Request) (map[string]string, error) {
 			if errors.Is(err, io.EOF) {
 				return out, nil
 			}
-			return nil, errors.New("body JSON non valido")
+			return nil, errors.New("invalid JSON body")
 		}
 		flatten(out, body)
 	}

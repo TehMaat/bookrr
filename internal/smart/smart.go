@@ -15,7 +15,7 @@ import (
 )
 
 // ErrNoData means the input doesn't look like a SMART report.
-var ErrNoData = errors.New("nessun dato SMART riconosciuto: incolla l'output di smartctl (-a, -x o -j) o di CrystalDiskInfo")
+var ErrNoData = errors.New("no SMART data recognized: paste the output of smartctl (-a, -x or -j) or of CrystalDiskInfo")
 
 type Info struct {
 	Model        string `json:"model"`
@@ -32,7 +32,7 @@ func Parse(data []byte) (Info, error) {
 	var info Info
 	if len(data) > 0 && data[0] == '{' {
 		if err := parseJSON(data, &info); err != nil {
-			return info, errors.New("JSON di smartctl non valido: " + err.Error())
+			return info, errors.New("invalid smartctl JSON: " + err.Error())
 		}
 	} else {
 		parseText(data, &info)

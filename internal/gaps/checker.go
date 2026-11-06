@@ -177,9 +177,9 @@ var checks = []struct {
 	kind, name string
 	run        func(*Checker, context.Context) (string, error)
 }{
-	{KindSeries, "stagioni mancanti", (*Checker).checkSeries},
-	{KindSaga, "film mancanti delle saghe", (*Checker).checkSagas},
-	{KindList, "film mancanti delle collezioni", (*Checker).checkLists},
+	{KindSeries, "missing seasons", (*Checker).checkSeries},
+	{KindSaga, "missing saga films", (*Checker).checkSagas},
+	{KindList, "missing collection films", (*Checker).checkLists},
 }
 
 // Check runs every check now and stores the results.
@@ -202,11 +202,11 @@ func (c *Checker) check(ctx context.Context, kinds map[string]bool) {
 		}
 		switch {
 		case err != nil && ctx.Err() == nil:
-			slog.Warn("controllo "+ch.name, "err", err)
+			slog.Warn("check of "+ch.name, "err", err)
 			c.errs[ch.kind] = err.Error()
 		case err == nil:
 			if res != "" {
-				slog.Info("controllo "+ch.name, "result", res)
+				slog.Info("check of "+ch.name, "result", res)
 			}
 			delete(c.errs, ch.kind)
 		}

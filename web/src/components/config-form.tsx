@@ -12,12 +12,12 @@ import { useAction, useConfig } from "@/lib/queries"
 /** The connections each group can try, with the label of their button. */
 const tests: Record<ConfigGroup, { service: ConfigService; label: string }[]> = {
   general: [],
-  unit3d: [{ service: "unit3d", label: "Prova il tracker" }],
+  unit3d: [{ service: "unit3d", label: "Test the tracker" }],
   missing: [
-    { service: "tmdb", label: "Prova TMDB" },
-    { service: "mdblist", label: "Prova MDBList" },
+    { service: "tmdb", label: "Test TMDB" },
+    { service: "mdblist", label: "Test MDBList" },
   ],
-  prowlarr: [{ service: "prowlarr", label: "Prova Prowlarr" }],
+  prowlarr: [{ service: "prowlarr", label: "Test Prowlarr" }],
 }
 
 /** What the form holds for an option: the value typed and, for a secret, whether it is to be removed. */
@@ -51,14 +51,14 @@ export function ConfigForm({ group, open }: { group: ConfigGroup; open: boolean 
 
   const values = changes(opts, form)
   const changed = Object.keys(values).length > 0
-  const save = useAction(() => api.saveConfig(values), "Configurazione salvata e applicata")
+  const save = useAction(() => api.saveConfig(values), "Configuration saved and applied")
   const [testing, setTesting] = useState<ConfigService | null>(null)
   const test = async (service: ConfigService) => {
     setTesting(service)
     try {
       const r = await api.testConfig(service, values)
-      if (r.ok) toast.success(r.message ?? "Connessione riuscita")
-      else toast.error("Connessione non riuscita", { description: r.error })
+      if (r.ok) toast.success(r.message ?? "Connection successful")
+      else toast.error("Connection failed", { description: r.error })
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -68,7 +68,7 @@ export function ConfigForm({ group, open }: { group: ConfigGroup; open: boolean 
   const set = (key: string, f: Partial<Field>) => setForm((s) => ({ ...s, [key]: { ...s[key], ...f } }))
 
   if (config.isLoading) return <Skeleton className="h-40 w-full" />
-  if (config.isError) return <p className="text-destructive text-sm">Errore nel caricamento: {config.error.message}</p>
+  if (config.isError) return <p className="text-destructive text-sm">Loading failed: {config.error.message}</p>
 
   return (
     <form
@@ -96,11 +96,11 @@ export function ConfigForm({ group, open }: { group: ConfigGroup; open: boolean 
                 placeholder={
                   o.secret
                     ? o.locked
-                      ? "impostata dall'ambiente"
+                      ? "set by the environment"
                       : f.clear
-                        ? "verrà rimossa"
+                        ? "will be removed"
                         : o.set
-                          ? "impostata: lascia vuoto per non cambiarla"
+                          ? "set: leave empty to keep it"
                           : ""
                     : o.default
                 }
@@ -111,8 +111,8 @@ export function ConfigForm({ group, open }: { group: ConfigGroup; open: boolean 
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={f.clear ? "Non rimuovere" : "Rimuovi"}
-                  title={f.clear ? "Non rimuovere" : "Rimuovi"}
+                  aria-label={f.clear ? "Keep" : "Remove"}
+                  title={f.clear ? "Keep" : "Remove"}
                   onClick={() => set(o.key, { clear: !f.clear, value: "" })}
                 >
                   <X />
@@ -122,7 +122,7 @@ export function ConfigForm({ group, open }: { group: ConfigGroup; open: boolean 
             <p className="text-muted-foreground text-xs">
               {o.locked && (
                 <span className="text-foreground mr-1 inline-flex items-center gap-1">
-                  <Lock className="size-3" /> Impostata dalla variabile d'ambiente: per cambiarla toglila dal docker-compose.
+                  <Lock className="size-3" /> Set by the environment variable: remove it from the docker-compose to change it.
                 </span>
               )}
               {o.help}
@@ -133,11 +133,11 @@ export function ConfigForm({ group, open }: { group: ConfigGroup; open: boolean 
       <div className="flex flex-wrap items-center gap-2">
         {tests[group].map((t) => (
           <Button key={t.service} type="button" variant="outline" disabled={testing !== null} onClick={() => test(t.service)}>
-            <PlugZap /> {testing === t.service ? "Provo…" : t.label}
+            <PlugZap /> {testing === t.service ? "Testing…" : t.label}
           </Button>
         ))}
         <Button type="submit" className="ml-auto" disabled={!changed || save.isPending}>
-          {save.isPending ? "Applico…" : "Salva"}
+          {save.isPending ? "Applying…" : "Save"}
         </Button>
       </div>
     </form>

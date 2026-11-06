@@ -91,7 +91,7 @@ func (c *Client) SearchMovie(ctx context.Context, imdbID, tmdbID int64) ([]Relea
 		q += fmt.Sprintf("{TmdbId:%d}", tmdbID)
 	}
 	if q == "" {
-		return nil, errors.New("film senza id IMDb né TMDB")
+		return nil, errors.New("film with neither IMDb nor TMDB id")
 	}
 	var res []release
 	if err := c.get(ctx, "/api/v1/search", url.Values{"query": {q}, "type": {"movie"}, "categories": {"2000"}, "limit": {"100"}}, &res); err != nil {
@@ -139,13 +139,13 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return errors.New("Prowlarr ha rifiutato la chiave: controlla BOOKRR_PROWLARR_API_KEY")
+		return errors.New("Prowlarr rejected the key: check BOOKRR_PROWLARR_API_KEY")
 	case resp.StatusCode != http.StatusOK:
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
-		return fmt.Errorf("Prowlarr ha risposto HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		return fmt.Errorf("Prowlarr answered HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(out); err != nil {
-		return fmt.Errorf("risposta di Prowlarr non valida: %w", err)
+		return fmt.Errorf("invalid Prowlarr response: %w", err)
 	}
 	return nil
 }

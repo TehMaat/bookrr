@@ -25,7 +25,7 @@ Inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qual
 - 📜 **Log**: la pagina **Log** mostra cosa sta facendo bookrr e cosa ha fatto nei giorni passati (sync dei client, tracker, controlli, errori), con filtri, ricerca e aggiornamento automatico; i log restano in un file al giorno nella cartella dati, anche dopo riavvii e aggiornamenti del container.
 - 🐳 Un solo container, ~9 MB, per **amd64, 386 (32 bit), arm64, armv7, armv6** (Raspberry Pi incluso).
 
-Interfaccia web in italiano basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro e **colore a scelta** (icona 🎨 in alto a destra): il logo, l'icona della scheda e il colore dei pulsanti seguono il colore della spada laser che scegli. La scelta viene ricordata dal browser.
+Interfaccia web in inglese basata su [shadcn/ui](https://ui.shadcn.com), con tema chiaro/scuro e **colore a scelta** (icona 🎨 in alto a destra): il logo, l'icona della scheda e il colore dei pulsanti seguono il colore della spada laser che scegli. La scelta viene ricordata dal browser.
 
 <p align="center">
   <img src="docs/logo/bookrr-viola.svg" alt="Viola" width="56">
@@ -197,19 +197,21 @@ sudo smartctl -a -j /dev/sdb | curl -X POST --data-binary @- -H "Content-Type: t
 Senza `id` né `new=1` un rapporto privo di numero di serie viene rifiutato.
 ### Import degli archiviati
 
-In **Torrent → Importa** puoi caricare (o incollare) un file CSV con molti torrent già spostati su disco. Separatore `;`, `,` o tabulazione, prima riga con le intestazioni (c'è un modello da scaricare):
+In **Torrents → Import** puoi caricare (o incollare) un file CSV con molti torrent già spostati su disco. Separatore `;`, `,` o tabulazione, prima riga con le intestazioni (c'è un modello da scaricare):
 
 | Colonna | Note |
 |---|---|
-| `Nome` | obbligatoria |
+| `Name` | obbligatoria |
 | `Hash` | facoltativo, 40 o 64 caratteri esadecimali |
-| `Dimensione` | `12,5 GB`, `1.5 TB`, byte… |
-| `Tag` | separati da virgola |
-| `Personal Release` | sì/no; se vuota vale l'interruttore nella finestra |
-| `Note` | |
-| `Disco` | nome o numero di serie di un disco già registrato; se vuota vale il disco scelto nella finestra |
-| `Percorso`, `Note archivio` | serve almeno il disco o il percorso |
-| `Adottato da` | nome di un adottatore già registrato |
+| `Size` | `12.5 GB`, `1.5 TB`, byte… |
+| `Tags` | separati da virgola |
+| `Personal Release` | yes/no (anche sì/no); se vuota vale l'interruttore nella finestra |
+| `Notes` | |
+| `Disk` | nome o numero di serie di un disco già registrato; se vuota vale il disco scelto nella finestra |
+| `Path`, `Archive notes` | serve almeno il disco o il percorso |
+| `Adopted by` | nome di un adottatore già registrato |
+
+Vanno bene anche le intestazioni italiane dei file fatti prima (`Nome`, `Dimensione`, `Tag`, `Note`, `Disco`, `Percorso`, `Note archivio`, `Adottato da`).
 
 Prima dell'import ogni riga viene verificata (anche dal server: hash già presente, ripetuto nel file, …). L'import è tutto-o-niente: se una riga non va bene non viene scritto nulla. Il form e l'import usano lo stesso codice (`POST /api/torrents` e `POST /api/torrents/import` con gli stessi campi), quindi i dati salvati sono identici.
 

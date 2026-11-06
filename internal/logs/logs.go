@@ -145,7 +145,7 @@ func (w *Writer) open(day string, newDay bool) error {
 func (w *Writer) report(err error) {
 	if !w.failed {
 		w.failed = true
-		fmt.Fprintf(os.Stderr, "log su file non scritto in %s: %v\n", w.dir, err)
+		fmt.Fprintf(os.Stderr, "file log not written in %s: %v\n", w.dir, err)
 	}
 }
 
@@ -177,7 +177,7 @@ func (w *Writer) cleanup(today string) {
 	for _, f := range w.list() {
 		if f.Day < oldest {
 			if err := os.Remove(filepath.Join(w.dir, f.Name)); err != nil && !os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "log %s non cancellato: %v\n", f.Name, err)
+				fmt.Fprintf(os.Stderr, "log %s not deleted: %v\n", f.Name, err)
 			}
 		}
 	}

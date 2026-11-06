@@ -92,7 +92,7 @@ func Resolve(stored map[string]string) (Config, error) {
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)
 	if err != nil {
-		return c, fmt.Errorf("BOOKRR_SYNC_INTERVAL %q non valido: %w", interval, err)
+		return c, fmt.Errorf("BOOKRR_SYNC_INTERVAL %q invalid: %w", interval, err)
 	}
 	if d < 30*time.Second {
 		d = 30 * time.Second
@@ -100,59 +100,59 @@ func Resolve(stored map[string]string) (Config, error) {
 	c.SyncInterval = d
 	interval = env("BOOKRR_S3_SCAN_INTERVAL", "1h")
 	if d, err = time.ParseDuration(interval); err != nil {
-		return c, fmt.Errorf("BOOKRR_S3_SCAN_INTERVAL %q non valido: %w", interval, err)
+		return c, fmt.Errorf("BOOKRR_S3_SCAN_INTERVAL %q invalid: %w", interval, err)
 	}
 	c.S3ScanInterval = max(d, time.Minute)
 	interval = env("BOOKRR_UNIT3D_RELEASES_INTERVAL", "6h")
 	if d, err = time.ParseDuration(interval); err != nil {
-		return c, fmt.Errorf("BOOKRR_UNIT3D_RELEASES_INTERVAL %q non valido: %w", interval, err)
+		return c, fmt.Errorf("BOOKRR_UNIT3D_RELEASES_INTERVAL %q invalid: %w", interval, err)
 	}
 	c.Unit3DReleasesInterval = max(d, 15*time.Minute)
 	interval = env("BOOKRR_PROWLARR_RECHECK", "7d")
 	if d, err = days(interval); err != nil {
-		return c, fmt.Errorf("BOOKRR_PROWLARR_RECHECK %q non valido (es. 7d o 36h): %w", interval, err)
+		return c, fmt.Errorf("BOOKRR_PROWLARR_RECHECK %q invalid (e.g. 7d or 36h): %w", interval, err)
 	}
 	c.ProwlarrRecheck = max(d, 24*time.Hour)
 	retention := env("BOOKRR_LOG_RETENTION", "30d")
 	if d, err = days(retention); err != nil || d < 0 {
-		return c, fmt.Errorf("BOOKRR_LOG_RETENTION %q non valido (es. 30d, 0 per sempre)", retention)
+		return c, fmt.Errorf("BOOKRR_LOG_RETENTION %q invalid (e.g. 30d, 0 forever)", retention)
 	}
 	// Whole days, at least one.
 	c.LogRetentionDays = int((d + 24*time.Hour - 1) / (24 * time.Hour))
 	size := env("BOOKRR_LOG_MAX_SIZE", "50MB")
 	if c.LogMaxSize, err = bytesize(size); err != nil {
-		return c, fmt.Errorf("BOOKRR_LOG_MAX_SIZE %q non valido (es. 50MB, 0 senza limite)", size)
+		return c, fmt.Errorf("BOOKRR_LOG_MAX_SIZE %q invalid (e.g. 50MB, 0 for no limit)", size)
 	}
 	if c.LogMaxSize > 0 {
 		c.LogMaxSize = max(c.LogMaxSize, 1<<20)
 	}
 	level := env("BOOKRR_LOG_LEVEL", "info")
 	if err := c.LogLevel.UnmarshalText([]byte(strings.TrimSpace(level))); err != nil {
-		return c, fmt.Errorf("BOOKRR_LOG_LEVEL %q non valido (debug, info, warn o error)", level)
+		return c, fmt.Errorf("BOOKRR_LOG_LEVEL %q invalid (debug, info, warn or error)", level)
 	}
 	at := env("BOOKRR_MISSING_CHECK_AT", "04:00")
 	t, err := time.Parse("15:04", at)
 	if err != nil {
-		return c, fmt.Errorf("BOOKRR_MISSING_CHECK_AT %q non valido (es. 04:00)", at)
+		return c, fmt.Errorf("BOOKRR_MISSING_CHECK_AT %q invalid (e.g. 04:00)", at)
 	}
 	c.MissingCheckAt = t.Hour()*60 + t.Minute()
 	if (c.AuthUser == "") != (c.AuthPassword == "") {
-		return c, fmt.Errorf("BOOKRR_AUTH_USER e BOOKRR_AUTH_PASSWORD vanno impostati insieme")
+		return c, fmt.Errorf("BOOKRR_AUTH_USER e BOOKRR_AUTH_PASSWORD must be set together")
 	}
 	if (c.Unit3DURL == "") != (c.Unit3DAPIKey == "") {
-		return c, fmt.Errorf("BOOKRR_UNIT3D_URL e BOOKRR_UNIT3D_API_KEY vanno impostati insieme")
+		return c, fmt.Errorf("BOOKRR_UNIT3D_URL e BOOKRR_UNIT3D_API_KEY must be set together")
 	}
 	if c.Unit3DURL != "" {
 		if u, err := url.Parse(c.Unit3DURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return c, fmt.Errorf("BOOKRR_UNIT3D_URL %q non valido (es. https://tracker.example)", c.Unit3DURL)
+			return c, fmt.Errorf("BOOKRR_UNIT3D_URL %q invalid (e.g. https://tracker.example)", c.Unit3DURL)
 		}
 	}
 	if (c.ProwlarrURL == "") != (c.ProwlarrAPIKey == "") {
-		return c, fmt.Errorf("BOOKRR_PROWLARR_URL e BOOKRR_PROWLARR_API_KEY vanno impostati insieme")
+		return c, fmt.Errorf("BOOKRR_PROWLARR_URL e BOOKRR_PROWLARR_API_KEY must be set together")
 	}
 	if c.ProwlarrURL != "" {
 		if u, err := url.Parse(c.ProwlarrURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return c, fmt.Errorf("BOOKRR_PROWLARR_URL %q non valido (es. http://prowlarr:9696)", c.ProwlarrURL)
+			return c, fmt.Errorf("BOOKRR_PROWLARR_URL %q invalid (e.g. http://prowlarr:9696)", c.ProwlarrURL)
 		}
 	}
 	return c, nil
@@ -174,7 +174,7 @@ func bytesize(s string) (int64, error) {
 	}
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil || v < 0 {
-		return 0, fmt.Errorf("dimensione %q non valida", s)
+		return 0, fmt.Errorf("invalid size %q", s)
 	}
 	return int64(v * float64(mult)), nil
 }

@@ -48,10 +48,10 @@ func New(cfg Config) (*Client, error) {
 	cfg.Endpoint = strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/")
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, fmt.Errorf("endpoint %q non valido (es. https://s3.fr-par.scw.cloud)", cfg.Endpoint)
+		return nil, fmt.Errorf("invalid endpoint %q (e.g. https://s3.fr-par.scw.cloud)", cfg.Endpoint)
 	}
 	if cfg.Bucket == "" {
-		return nil, errors.New("bucket non indicato")
+		return nil, errors.New("bucket not set")
 	}
 	if cfg.Region == "" {
 		cfg.Region = "us-east-1"
@@ -125,7 +125,7 @@ func (c *Client) ListPage(ctx context.Context, prefix, token string, max int) (P
 		}
 	}
 	if err := xml.Unmarshal(body, &res); err != nil {
-		return Page{}, fmt.Errorf("risposta non valida: %w", err)
+		return Page{}, fmt.Errorf("invalid response: %w", err)
 	}
 	p := Page{Truncated: res.IsTruncated, NextToken: res.NextContinuationToken, Objects: make([]Object, 0, len(res.Contents))}
 	for _, o := range res.Contents {
@@ -142,13 +142,13 @@ func responseError(status int, body []byte) error {
 	xml.Unmarshal(body, &e)
 	switch e.Code {
 	case "NoSuchBucket":
-		return errors.New("il bucket non esiste (controlla nome e regione)")
+		return errors.New("the bucket does not exist (check name and region)")
 	case "InvalidAccessKeyId":
-		return errors.New("access key non valida")
+		return errors.New("invalid access key")
 	case "SignatureDoesNotMatch":
-		return errors.New("secret key errata")
+		return errors.New("wrong secret key")
 	case "AccessDenied":
-		return errors.New("accesso negato: la chiave non può leggere questo bucket")
+		return errors.New("access denied: the key can't read this bucket")
 	}
 	msg := fmt.Sprintf("HTTP %d", status)
 	if e.Code != "" {

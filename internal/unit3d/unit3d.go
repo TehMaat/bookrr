@@ -21,16 +21,16 @@ import (
 )
 
 var (
-	ErrNotFound  = errors.New("nessun torrent con questo nome sul tracker")
-	ErrAmbiguous = errors.New("più torrent con questo nome sul tracker")
-	ErrNoHash    = errors.New("il tracker non fornisce né l'hash né il file .torrent")
+	ErrNotFound  = errors.New("no torrent with this name on the tracker")
+	ErrAmbiguous = errors.New("several torrents with this name on the tracker")
+	ErrNoHash    = errors.New("the tracker provides neither the hash nor the .torrent file")
 )
 
 // RateLimitError means the tracker asked to slow down (HTTP 429).
 type RateLimitError struct{ RetryAfter time.Duration }
 
 func (e *RateLimitError) Error() string {
-	return fmt.Sprintf("limite di richieste del tracker raggiunto, riprovo tra %s", e.RetryAfter)
+	return fmt.Sprintf("tracker rate limit reached, retrying in %s", e.RetryAfter)
 }
 
 // Final reports whether err is a definitive answer about the torrent (not
@@ -147,7 +147,7 @@ func (c *Client) FindHash(ctx context.Context, name string, size int64) (Match, 
 		}
 		if len(ts) > 0 {
 			// Something similar exists: let the user choose.
-			err = fmt.Errorf("%w; %d simili: scegli quello giusto con \"Scegli dal tracker\"", err, len(ts))
+			err = fmt.Errorf("%w; %d similar: pick the right one with \"Pick from the tracker\"", err, len(ts))
 			break
 		}
 	}
@@ -207,7 +207,7 @@ func (c *Client) Candidates(ctx context.Context, name, query string, size int64)
 // this id, as chosen by the user.
 func (c *Client) Fetch(ctx context.Context, id string) (Match, error) {
 	if _, err := strconv.ParseUint(id, 10, 64); err != nil {
-		return Match{}, errors.New("id del torrent sul tracker non valido")
+		return Match{}, errors.New("invalid torrent id on the tracker")
 	}
 	// UNIT3D answers with the torrent itself; be lenient with forks that
 	// wrap it in "data".
@@ -397,7 +397,7 @@ func (c *Client) hashOf(ctx context.Context, t torrent) (string, []byte, error) 
 		if known != "" && !errors.As(err, &rl) {
 			return known, nil, nil
 		}
-		return "", nil, fmt.Errorf("download del .torrent: %w", err)
+		return "", nil, fmt.Errorf("download of the .torrent: %w", err)
 	}
 	return hash, body, nil
 }
@@ -408,7 +408,7 @@ func (c *Client) getJSON(ctx context.Context, u string, out any) error {
 		return err
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("risposta del tracker non valida (è un sito UNIT3D?): %w", err)
+		return fmt.Errorf("invalid tracker response (is it a UNIT3D site?): %w", err)
 	}
 	return nil
 }
@@ -444,9 +444,9 @@ func (c *Client) get(ctx context.Context, u string, auth bool, limit int64) ([]b
 		}
 		return nil, &RateLimitError{RetryAfter: wait}
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, fmt.Errorf("accesso negato dal tracker (HTTP %d): controlla BOOKRR_UNIT3D_API_KEY", resp.StatusCode)
+		return nil, fmt.Errorf("access denied by the tracker (HTTP %d): check BOOKRR_UNIT3D_API_KEY", resp.StatusCode)
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("il tracker ha risposto HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("the tracker answered HTTP %d", resp.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, limit))
 }

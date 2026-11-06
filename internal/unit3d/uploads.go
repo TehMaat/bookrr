@@ -108,7 +108,7 @@ func (c *Client) Username(ctx context.Context) (string, error) {
 		}
 	}
 	if name = strings.TrimSpace(name); name == "" {
-		return "", errors.New("il tracker non ha indicato il nome utente (/api/user)")
+		return "", errors.New("the tracker did not give the username (/api/user)")
 	}
 	return name, nil
 }
@@ -159,11 +159,11 @@ func (c *Client) filterChecked(ctx context.Context, params url.Values, username 
 	seen := map[string]bool{}
 	for page := 0; ; page++ {
 		if page >= maxUploadPages {
-			return nil, fmt.Errorf("troppe pagine di torrent (oltre %d)", maxUploadPages)
+			return nil, fmt.Errorf("too many pages of torrents (over %d)", maxUploadPages)
 		}
 		key := q.Encode()
 		if seen[key] {
-			return nil, errors.New("il tracker ripete la stessa pagina di torrent")
+			return nil, errors.New("the tracker repeats the same page of torrents")
 		}
 		seen[key] = true
 		var res struct {
@@ -243,17 +243,17 @@ func nextPage(base url.Values, cursor, link string) url.Values {
 func parseUpload(raw json.RawMessage) (Upload, error) {
 	var t torrent
 	if err := json.Unmarshal(raw, &t); err != nil {
-		return Upload{}, fmt.Errorf("upload non valido: %w", err)
+		return Upload{}, fmt.Errorf("invalid upload: %w", err)
 	}
 	var w struct {
 		Attributes uploadAttrs `json:"attributes"`
 	}
 	if err := json.Unmarshal(raw, &w); err != nil {
-		return Upload{}, fmt.Errorf("upload non valido: %w", err)
+		return Upload{}, fmt.Errorf("invalid upload: %w", err)
 	}
 	id, err := strconv.ParseInt(strings.TrimSpace(string(t.ID)), 10, 64)
 	if err != nil || id <= 0 {
-		return Upload{}, fmt.Errorf("id dell'upload non valido: %q", t.ID)
+		return Upload{}, fmt.Errorf("invalid upload id: %q", t.ID)
 	}
 	a, x := t.Attributes, w.Attributes
 	return Upload{

@@ -107,7 +107,7 @@ func ValidThreshold(t store.GapThreshold) (store.GapThreshold, error) {
 			}
 		}
 		if out.Type == "" {
-			return out, errors.New("tipo minimo non valido: " + t.Type)
+			return out, errors.New("invalid minimum type: " + t.Type)
 		}
 	}
 	if t.Resolution = strings.ToLower(strings.TrimSpace(t.Resolution)); t.Resolution != "" {
@@ -117,12 +117,12 @@ func ValidThreshold(t store.GapThreshold) (store.GapThreshold, error) {
 			}
 		}
 		if out.Resolution == "" {
-			return out, errors.New("risoluzione minima non valida: " + t.Resolution)
+			return out, errors.New("invalid minimum resolution: " + t.Resolution)
 		}
 	}
 	if t.Lang = strings.ToUpper(strings.TrimSpace(t.Lang)); t.Lang != "" {
 		if len(t.Lang) < 2 || len(t.Lang) > 8 || strings.IndexFunc(t.Lang, func(r rune) bool { return r < 'A' || r > 'Z' }) >= 0 {
-			return out, errors.New("lingua non valida: " + t.Lang)
+			return out, errors.New("invalid language: " + t.Lang)
 		}
 		out.Lang = t.Lang
 	}
@@ -164,7 +164,7 @@ func ValidBannedGroups(groups []string) ([]string, error) {
 			continue
 		}
 		if strings.IndexFunc(g, func(r rune) bool { return r > unicode.MaxASCII || (!unicode.IsLetter(r) && !unicode.IsDigit(r)) }) >= 0 {
-			return nil, errors.New("gruppo non valido (solo lettere e numeri): " + g)
+			return nil, errors.New("invalid group (letters and digits only): " + g)
 		}
 		if k := strings.ToLower(g); !seen[k] {
 			seen[k] = true

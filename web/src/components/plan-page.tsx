@@ -62,10 +62,10 @@ import { useAction, usePlan } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 export const planStatuses: { value: PlanStatus; label: string; icon: React.ElementType; tone: string }[] = [
-  { value: "todo", label: "Da fare", icon: CircleDashed, tone: "text-sky-600 dark:text-sky-400" },
-  { value: "doing", label: "In corso", icon: Hammer, tone: "text-amber-600 dark:text-amber-400" },
-  { value: "done", label: "Fatto", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
-  { value: "dropped", label: "Scartato", icon: Ban, tone: "text-muted-foreground" },
+  { value: "todo", label: "To do", icon: CircleDashed, tone: "text-sky-600 dark:text-sky-400" },
+  { value: "doing", label: "In progress", icon: Hammer, tone: "text-amber-600 dark:text-amber-400" },
+  { value: "done", label: "Done", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
+  { value: "dropped", label: "Dropped", icon: Ban, tone: "text-muted-foreground" },
 ]
 const statusOf = (s: PlanStatus) => planStatuses.find((x) => x.value === s)!
 
@@ -97,7 +97,7 @@ const posterUrl = (path: string) => `https://image.tmdb.org/t/p/w92${path}`
 /** Where the film was added from, as "Saga: Matrix". */
 function sourceLabel(it: { source: string; sourceTitle: string }) {
   if (!it.source) return ""
-  const kind = it.source.startsWith("saga:") ? "Saga" : it.source.startsWith("list:") ? "Collezione" : "Da"
+  const kind = it.source.startsWith("saga:") ? "Saga" : it.source.startsWith("list:") ? "Collection" : "From"
   return `${kind}: ${it.sourceTitle || it.source}`
 }
 
@@ -110,8 +110,8 @@ export function PlanPage() {
   const [editing, setEditing] = useState<PlanItem | null>(null)
   const [removing, setRemoving] = useState<PlanItem | null>(null)
   const update = useAction(({ id, status }: { id: number; status: PlanStatus }) => api.updatePlan(id, { status }))
-  const remove = useAction((id: number) => api.deletePlan(id), "Film tolto dal piano")
-  const search = useAction((id: number) => api.searchPlan(id), "Ricerca su Prowlarr avviata")
+  const remove = useAction((id: number) => api.deletePlan(id), "Film removed from the plan")
+  const search = useAction((id: number) => api.searchPlan(id), "Prowlarr search started")
 
   const all = useMemo(() => data?.entries ?? [], [data])
   const open = (it: PlanItem) => it.status === "todo" || it.status === "doing"
@@ -151,20 +151,20 @@ export function PlanPage() {
 
   const best = data?.best
   const stats: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
-    { key: "open", label: "Da rilasciare", icon: ListTodo, tone: "text-sky-600 dark:text-sky-400" },
+    { key: "open", label: "To release", icon: ListTodo, tone: "text-sky-600 dark:text-sky-400" },
     ...(data?.searchEnabled
       ? [
           {
             key: "available" as Filter,
-            label: "Trovati",
+            label: "Found",
             icon: CircleArrowUp,
             tone: "text-amber-600 dark:text-amber-400",
           },
         ]
       : []),
-    { key: "doing", label: "In corso", icon: Hammer },
-    { key: "done", label: "Fatti", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
-    { key: "all", label: "Tutti", icon: ListTodo },
+    { key: "doing", label: "In progress", icon: Hammer },
+    { key: "done", label: "Done", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
+    { key: "all", label: "All", icon: ListTodo },
   ]
 
   return (
@@ -186,33 +186,33 @@ export function PlanPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground max-w-3xl text-sm">
-          I film che vuoi rilasciare: aggiungili con il loro TMDB, o dai Mancanti. Per ognuno bookrr cerca con Prowlarr
-          la versione migliore che esiste (prima il tipo, poi la risoluzione), e lo segna come fatto quando lo carichi
-          sul tracker.
+          The films you want to release: add them by their TMDB, or from Missing. For each one bookrr searches Prowlarr
+          for the best existing version (type first, then resolution), and marks it as done when you upload it to the
+          tracker.
         </p>
         <Button className="ml-auto" disabled={!data?.enabled} onClick={() => setAdding(true)}>
-          <Plus /> Aggiungi film
+          <Plus /> Add film
         </Button>
       </div>
 
       {data && !data.enabled && (
         <AlertBox>
           <TriangleAlert />
-          <AlertTitle>Non puoi aggiungere film</AlertTitle>
+          <AlertTitle>You can't add films</AlertTitle>
           <AlertDescription>{data.disabledReason}</AlertDescription>
         </AlertBox>
       )}
       {data && data.enabled && !data.searchEnabled && (
         <AlertBox>
           <SearchX />
-          <AlertTitle>Risoluzione massima non disponibile</AlertTitle>
+          <AlertTitle>Max resolution not available</AlertTitle>
           <AlertDescription>{data.searchDisabledReason}</AlertDescription>
         </AlertBox>
       )}
       {best?.lastError && (
         <AlertBox variant="destructive">
           <TriangleAlert />
-          <AlertTitle>Ultima ricerca con Prowlarr non riuscita</AlertTitle>
+          <AlertTitle>Last Prowlarr search failed</AlertTitle>
           <AlertDescription>{best.lastError}</AlertDescription>
         </AlertBox>
       )}
@@ -222,7 +222,7 @@ export function PlanPage() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cerca nel piano…"
+          placeholder="Search the plan…"
           className="pl-8"
         />
       </div>
@@ -235,9 +235,9 @@ export function PlanPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Film</TableHead>
-                <TableHead>Versione migliore</TableHead>
-                <TableHead className="hidden md:table-cell">Sul tracker</TableHead>
-                <TableHead>Stato</TableHead>
+                <TableHead>Best version</TableHead>
+                <TableHead className="hidden md:table-cell">On the tracker</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="w-0" />
               </TableRow>
             </TableHeader>
@@ -246,8 +246,8 @@ export function PlanPage() {
                 <TableRow>
                   <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
                     {all.length === 0
-                      ? "Il piano è vuoto: aggiungi un film con il suo TMDB, o dai Mancanti."
-                      : "Nessun film corrisponde ai filtri."}
+                      ? "The plan is empty: add a film by its TMDB, or from Missing."
+                      : "No films match the filters."}
                   </TableCell>
                 </TableRow>
               )}
@@ -320,34 +320,34 @@ export function PlanPage() {
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Altre azioni">
+                        <Button variant="ghost" size="icon-sm" aria-label="More actions">
                           <MoreHorizontal />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {data?.searchEnabled && (
                           <DropdownMenuItem disabled={it.searching} onClick={() => search.mutate(it.id)}>
-                            <Search /> Cerca ora su Prowlarr
+                            <Search /> Search Prowlarr now
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={() => setEditing(it)}>
-                          <Pencil /> Nota
+                          <Pencil /> Note
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <a href={tmdbUrl(it.tmdbId)} target="_blank" rel="noreferrer">
-                            <ExternalLink /> Il film su TMDB
+                            <ExternalLink /> The film on TMDB
                           </a>
                         </DropdownMenuItem>
                         {it.trackerUrl && (
                           <DropdownMenuItem asChild>
                             <a href={it.trackerUrl} target="_blank" rel="noreferrer">
-                              <ExternalLink /> Il film sul tracker
+                              <ExternalLink /> The film on the tracker
                             </a>
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onClick={() => setRemoving(it)}>
-                          <Trash2 /> Togli dal piano
+                          <Trash2 /> Remove from the plan
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -361,14 +361,14 @@ export function PlanPage() {
 
       {best && (
         <p className="text-muted-foreground text-xs">
-          Ogni film ancora da fare viene cercato su Prowlarr quando lo aggiungi e poi ogni {best.recheck}, con la
-          ricerca giornaliera della risoluzione massima;{" "}
+          Every film still to do is searched on Prowlarr when you add it and then every {best.recheck}, with the daily
+          max resolution search;{" "}
           {best.running
-            ? `ricerca in corso: ${best.done} di ${best.total} film.`
+            ? `searching: ${best.done} of ${best.total} films.`
             : best.lastRunAt
-              ? `ultima ricerca ${formatRelative(best.lastRunAt)}: ${best.lastResult}.`
-              : "nessuna ricerca ancora."}{" "}
-          I film non ancora usciti vengono cercati quando escono.
+              ? `last search ${formatRelative(best.lastRunAt)}: ${best.lastResult}.`
+              : "no search yet."}{" "}
+          Films not out yet are searched when they come out.
         </p>
       )}
 
@@ -377,19 +377,19 @@ export function PlanPage() {
       <AlertDialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Togliere "{removing?.title}" dal piano?</AlertDialogTitle>
+            <AlertDialogTitle>Remove "{removing?.title}" from the plan?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se vuoi solo ricordarti che non lo farai, segnalo come "Scartato": resta nel piano e non viene più
-              cercato.
+              If you just want to remember you won't do it, mark it as "Dropped": it stays in the plan and is no longer
+              searched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => removing && remove.mutate(removing.id)}
             >
-              Togli
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -404,17 +404,17 @@ function PlanBest({ it, searchEnabled }: { it: PlanItem; searchEnabled: boolean 
   if (it.searching)
     return (
       <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
-        <Loader2 className="size-3 animate-spin" /> Ricerca in corso…
+        <Loader2 className="size-3 animate-spin" /> Searching…
       </span>
     )
   if (!b) {
     if (!it.released)
       return (
         <Badge variant="outline" className="text-muted-foreground">
-          <CalendarClock /> {it.releaseDate ? `Esce il ${day(it.releaseDate)}` : "Uscita ignota"}
+          <CalendarClock /> {it.releaseDate ? `Out on ${day(it.releaseDate)}` : "Release date unknown"}
         </Badge>
       )
-    return <span className="text-muted-foreground text-xs">{searchEnabled ? "Da cercare" : "—"}</span>
+    return <span className="text-muted-foreground text-xs">{searchEnabled ? "To search" : "—"}</span>
   }
   const mine = grade(b.mine, b.mineType)
   if (b.checkedAt && !b.resolution)
@@ -422,12 +422,11 @@ function PlanBest({ it, searchEnabled }: { it: PlanItem; searchEnabled: boolean 
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge variant="outline" className="text-muted-foreground border-dashed">
-            <SearchX /> Non trovata
+            <SearchX /> Not found
           </Badge>
         </TooltipTrigger>
         <TooltipContent>
-          Prowlarr non ha trovato release di questo film con una risoluzione nota (cercato {formatRelative(b.checkedAt)}
-          )
+          Prowlarr found no release of this film with a known resolution (searched {formatRelative(b.checkedAt)})
         </TooltipContent>
       </Tooltip>
     )
@@ -455,12 +454,12 @@ function PlanBest({ it, searchEnabled }: { it: PlanItem; searchEnabled: boolean 
           )}
         </TooltipTrigger>
         <TooltipContent className="max-w-sm break-all">
-          {b.name ? `${b.name}${b.indexer ? ` (${b.indexer})` : ""}` : `Ce l'hai già in ${mine}: non serve cercarlo`}
-          {b.checkedAt && ` · cercato ${formatRelative(b.checkedAt)}`}
+          {b.name ? `${b.name}${b.indexer ? ` (${b.indexer})` : ""}` : `You already have it in ${mine}: no need to search`}
+          {b.checkedAt && ` · searched ${formatRelative(b.checkedAt)}`}
         </TooltipContent>
       </Tooltip>
       {mine && (
-        <span className="text-muted-foreground text-xs">{b.better ? `tu: ${mine}` : "hai già la migliore"}</span>
+        <span className="text-muted-foreground text-xs">{b.better ? `yours: ${mine}` : "you have the best"}</span>
       )}
     </div>
   )
@@ -476,7 +475,7 @@ function OnTracker({ it }: { it: PlanItem }) {
         rel="noreferrer"
         className="text-muted-foreground text-xs hover:underline"
       >
-        Cerca sul tracker
+        Search the tracker
       </a>
     ) : (
       <span className="text-muted-foreground text-xs">—</span>
@@ -487,7 +486,7 @@ function OnTracker({ it }: { it: PlanItem }) {
         <Tooltip key={u.id}>
           <TooltipTrigger asChild>
             <a href={u.url || undefined} target="_blank" rel="noreferrer">
-              <Badge variant="brand">Tuo · {u.quality || "?"}</Badge>
+              <Badge variant="brand">Yours · {u.quality || "?"}</Badge>
             </a>
           </TooltipTrigger>
           <TooltipContent className="break-all">{u.name}</TooltipContent>
@@ -521,7 +520,7 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   const [note, setNote] = useState("")
   const [found, setFound] = useState<PlanLookup | null>(null)
   const [looking, setLooking] = useState(false)
-  const add = useAction((args: { q: string; note: string }) => api.addPlan(args.q, args.note), "Film aggiunto al piano")
+  const add = useAction((args: { q: string; note: string }) => api.addPlan(args.q, args.note), "Film added to the plan")
 
   const reset = () => {
     setQ("")
@@ -551,9 +550,9 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Aggiungi un film al piano</DialogTitle>
+          <DialogTitle>Add a film to the plan</DialogTitle>
           <DialogDescription>
-            L'id TMDB del film (603), il suo link su themoviedb.org o il suo id IMDb (tt0133093).
+            The film's TMDB id (603), its themoviedb.org link or its IMDb id (tt0133093).
           </DialogDescription>
         </DialogHeader>
         <form
@@ -573,7 +572,7 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
             autoFocus
           />
           <Button type="submit" variant="outline" disabled={looking || !q.trim()}>
-            {looking ? <Loader2 className="animate-spin" /> : <Search />} Cerca
+            {looking ? <Loader2 className="animate-spin" /> : <Search />} Search
           </Button>
         </form>
         {found && (
@@ -600,26 +599,26 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
                 <div className="text-muted-foreground text-sm">
                   {[
                     found.movie.originalTitle !== found.movie.title && found.movie.originalTitle,
-                    found.movie.releaseDate ? day(found.movie.releaseDate) : "uscita ignota",
+                    found.movie.releaseDate ? day(found.movie.releaseDate) : "release date unknown",
                   ]
                     .filter(Boolean)
                     .join(" · ")}
                 </div>
                 {found.inPlan > 0 && (
                   <Badge variant="info" className="mt-1">
-                    Già nel piano
+                    Already in the plan
                   </Badge>
                 )}
               </div>
             </div>
             {found.inPlan === 0 && (
               <div className="grid gap-1.5">
-                <Label htmlFor="plan-note">Nota</Label>
+                <Label htmlFor="plan-note">Note</Label>
                 <Textarea
                   id="plan-note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Facoltativa: da dove prendere audio, sottotitoli…"
+                  placeholder="Optional: where to get audio, subtitles…"
                   rows={2}
                 />
               </div>
@@ -628,7 +627,7 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Chiudi
+            Close
           </Button>
           <Button
             disabled={!found || found.inPlan > 0 || add.isPending}
@@ -645,7 +644,7 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
               )
             }
           >
-            <Plus /> Aggiungi al piano
+            <Plus /> Add to the plan
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -662,25 +661,25 @@ function NoteDialog({ item, onClose }: { item: PlanItem | null; onClose: () => v
   }
   const save = useAction(
     (args: { id: number; note: string }) => api.updatePlan(args.id, { note: args.note }),
-    "Nota salvata",
+    "Note saved",
   )
   return (
     <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nota · {item?.title}</DialogTitle>
-          <DialogDescription>Cosa ti serve per fare questa release.</DialogDescription>
+          <DialogTitle>Note · {item?.title}</DialogTitle>
+          <DialogDescription>What you need to make this release.</DialogDescription>
         </DialogHeader>
         <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} autoFocus />
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Annulla
+            Cancel
           </Button>
           <Button
             disabled={save.isPending}
             onClick={() => item && save.mutate({ id: item.id, note }, { onSuccess: onClose })}
           >
-            Salva
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -693,7 +692,7 @@ export function PlanStatusBadge({ status }: { status: PlanStatus }) {
   const s = statusOf(status)
   return (
     <Badge variant="outline" className="gap-1">
-      <s.icon className={s.tone} /> Nel piano · {s.label}
+      <s.icon className={s.tone} /> In the plan · {s.label}
     </Badge>
   )
 }
