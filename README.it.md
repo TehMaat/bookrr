@@ -25,7 +25,7 @@ L'inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qu
 - 🚀 **Storico release** dal tracker UNIT3D (anche gli upload anonimi) con seeder e completati, collegato ai torrent di bookrr; l'**hash** dei torrent aggiunti senza viene cercato sul tracker.
 - 🧩 **Stagioni e film mancanti**: per le tue serie, per le **saghe** dei tuoi film (TMDB) e per le **collezioni** che segui (MDBList), cosa manca nella tua qualità, con qualità minima, gruppi bannati e le tue scelte.
 - 📺 **Risoluzione massima**: con Prowlarr, i film che esistono in una versione migliore della tua.
-- 📝 **Piano release**: i film che vuoi rilasciare, con la versione migliore che esiste, segnati come fatti quando li carichi.
+- 📝 **Piano release**: i film che vuoi rilasciare, con la versione migliore che esiste; carichi il loro .torrent (due per un merge), lo scarichi su un client e ne segui l'avanzamento; segnati come fatti quando li carichi.
 - 📦 **Release archiviabili**: le tue release ancora su un client che altri stanno già seminando.
 - 📜 Pagina dei **log**, con un file al giorno conservato nella cartella dati.
 - 🌗 Tema chiaro e scuro e sei **colori di spada laser** per il logo e i pulsanti.

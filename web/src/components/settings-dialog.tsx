@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react"
-import { Archive } from "lucide-react"
+import { Archive, Download } from "lucide-react"
 
 import { ConfigForm } from "@/components/config-form"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { api, type ConfigGroup, type Settings } from "@/lib/api"
-import { useAction, useInfo, useSettings } from "@/lib/queries"
+import { useAction, useClients, useInfo, useSettings } from "@/lib/queries"
 
 type ArchiveFields = Pick<Settings, "archiveMinSeeders" | "archiveMinCompleted" | "archiveDays">
 
@@ -70,6 +71,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         <Tabs defaultValue="archive">
           <TabsList className="h-auto w-full flex-wrap">
             <TabsTrigger value="archive">Archivable</TabsTrigger>
+            <TabsTrigger value="plan">Plan</TabsTrigger>
             {groups.map((g) => (
               <TabsTrigger key={g.group} value={g.group}>
                 {g.label}
@@ -122,6 +124,9 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </div>
             </form>
           </TabsContent>
+          <TabsContent value="plan" className="pt-2">
+            <PlanSettings open={open} />
+          </TabsContent>
           {groups.map((g) => (
             <TabsContent key={g.group} value={g.group} className="grid gap-4 pt-2">
               <p className="text-muted-foreground text-sm">{g.intro}</p>
@@ -140,3 +145,61 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 }
 
 const defaults: ArchiveFields = { archiveMinSeeders: 1, archiveMinCompleted: 1, archiveDays: 0 }
+
+/** The client the .torrent files of the plan go to without asking. */
+function PlanSettings({ open }: { open: boolean }) {
+  const settings = useSettings()
+  const clients = useClients()
+  const [clientId, setClientId] = useState("0")
+  useEffect(() => {
+    if (open && settings.data) setClientId(String(settings.data.planClientId))
+  }, [open, settings.data])
+  const save = useAction(() => api.saveSettings({ planClientId: Number(clientId) }), "Settings saved")
+  const changed = !!settings.data && Number(clientId) !== settings.data.planClientId
+  const list = clients.data ?? []
+  // A default client removed in the meantime still shows, to be changed.
+  const missing = clientId !== "0" && !list.some((c) => String(c.id) === clientId)
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (changed) save.mutate(undefined)
+      }}
+    >
+      <section className="grid gap-3">
+        <div className="flex items-center gap-2">
+          <Download className="text-muted-foreground size-4" />
+          <h3 className="text-sm font-semibold">Downloads of the plan</h3>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          The client the .torrent files loaded in the plan go to when you press Download. With "Ask every time" you
+          choose it each time, with category, tags and folder under Advanced.
+        </p>
+        <div className="grid max-w-sm gap-1.5">
+          <Label>Default client</Label>
+          <Select value={clientId} onValueChange={setClientId}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Ask every time</SelectItem>
+              {list.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                  {!c.enabled && " (disabled)"}
+                </SelectItem>
+              ))}
+              {missing && <SelectItem value={clientId}>Removed client</SelectItem>}
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={!changed || save.isPending}>
+          Save
+        </Button>
+      </div>
+    </form>
+  )
+}

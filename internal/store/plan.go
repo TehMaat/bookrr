@@ -9,16 +9,18 @@ import (
 
 // Statuses of a film of the release plan.
 const (
-	PlanTodo    = "todo"
-	PlanDoing   = "doing"
-	PlanDone    = "done"
-	PlanDropped = "dropped"
+	PlanTodo  = "todo"
+	PlanDoing = "doing"
+	// Its .torrent files are complete on a client: to be released.
+	PlanDownloaded = "downloaded"
+	PlanDone       = "done"
+	PlanDropped    = "dropped"
 )
 
 // ValidPlanStatus reports whether s is a status of the plan.
 func ValidPlanStatus(s string) bool {
 	switch s {
-	case PlanTodo, PlanDoing, PlanDone, PlanDropped:
+	case PlanTodo, PlanDoing, PlanDownloaded, PlanDone, PlanDropped:
 		return true
 	}
 	return false
@@ -44,10 +46,19 @@ type PlanEntry struct {
 	ReleaseID int64   `json:"releaseId"`
 	CreatedAt string  `json:"createdAt"`
 	DoneAt    *string `json:"doneAt"`
+	// When its .torrent files were complete on a client, nil if never
+	// (or not since they were last sent).
+	DownloadedAt *string `json:"downloadedAt"`
 }
 
-// Open reports whether the film is still to be released (todo or doing).
-func (e PlanEntry) Open() bool { return e.Status == PlanTodo || e.Status == PlanDoing }
+// Open reports whether the film is still to be released (todo, doing or downloaded).
+func (e PlanEntry) Open() bool {
+	return e.Status == PlanTodo || e.Status == PlanDoing || e.Status == PlanDownloaded
+}
+
+// Sourcing reports whether the source of the film is still to be found
+// (todo or doing): once downloaded, there is no need to search it.
+func (e PlanEntry) Sourcing() bool { return e.Status == PlanTodo || e.Status == PlanDoing }
 
 // Released reports whether the film was out on day (YYYY-MM-DD).
 func (e PlanEntry) Released(day string) bool { return e.ReleaseDate != "" && e.ReleaseDate <= day }
@@ -61,16 +72,14 @@ func (e PlanEntry) Year() string {
 }
 
 const planColumns = `id, tmdb_id, imdb_id, title, original_title, release_date, poster_path, status, source, source_title,
-	note, release_id, created_at, done_at`
+	note, release_id, created_at, done_at, downloaded_at`
 
 func scanPlan(row interface{ Scan(...any) error }) (PlanEntry, error) {
 	var e PlanEntry
-	var done sql.NullString
+	var done, downloaded sql.NullString
 	err := row.Scan(&e.ID, &e.TmdbID, &e.ImdbID, &e.Title, &e.OriginalTitle, &e.ReleaseDate, &e.PosterPath, &e.Status,
-		&e.Source, &e.SourceTitle, &e.Note, &e.ReleaseID, &e.CreatedAt, &done)
-	if done.Valid {
-		e.DoneAt = &done.String
-	}
+		&e.Source, &e.SourceTitle, &e.Note, &e.ReleaseID, &e.CreatedAt, &done, &downloaded)
+	e.DoneAt, e.DownloadedAt = nullStr(done), nullStr(downloaded)
 	return e, err
 }
 
@@ -141,7 +150,9 @@ type PlanUpdate struct {
 
 // UpdatePlanEntry changes status and note of a film of the plan. Done by
 // hand, it is linked to no upload; back to an open status, it forgets
-// the upload that completed it.
+// the upload that completed it. Downloaded by hand or not, it keeps when
+// it was downloaded: put back to do, it is not made downloaded again by
+// itself until its torrents are sent again.
 func (s *Store) UpdatePlanEntry(ctx context.Context, id int64, u PlanUpdate) (PlanEntry, error) {
 	e, err := s.PlanEntry(ctx, id)
 	if err != nil {
@@ -156,13 +167,16 @@ func (s *Store) UpdatePlanEntry(ctx context.Context, id int64, u PlanUpdate) (Pl
 		}
 		e.Status = *u.Status
 		e.DoneAt, e.ReleaseID = nil, 0
+		ts := now()
 		if e.Status == PlanDone {
-			ts := now()
 			e.DoneAt = &ts
 		}
+		if e.Status == PlanDownloaded && e.DownloadedAt == nil {
+			e.DownloadedAt = &ts
+		}
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE release_plan SET status = ?, note = ?, done_at = ?, release_id = ? WHERE id = ?`,
-		e.Status, e.Note, e.DoneAt, e.ReleaseID, id)
+	_, err = s.db.ExecContext(ctx, `UPDATE release_plan SET status = ?, note = ?, done_at = ?, release_id = ?, downloaded_at = ? WHERE id = ?`,
+		e.Status, e.Note, e.DoneAt, e.ReleaseID, e.DownloadedAt, id)
 	if err != nil {
 		return e, err
 	}
@@ -171,8 +185,8 @@ func (s *Store) UpdatePlanEntry(ctx context.Context, id int64, u PlanUpdate) (Pl
 
 // CompletePlanEntry marks an open film of the plan done by an upload of the user.
 func (s *Store) CompletePlanEntry(ctx context.Context, id, releaseID int64) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE release_plan SET status = ?, release_id = ?, done_at = ? WHERE id = ? AND status IN (?, ?)`,
-		PlanDone, releaseID, now(), id, PlanTodo, PlanDoing)
+	_, err := s.db.ExecContext(ctx, `UPDATE release_plan SET status = ?, release_id = ?, done_at = ? WHERE id = ? AND status IN (?, ?, ?)`,
+		PlanDone, releaseID, now(), id, PlanTodo, PlanDoing, PlanDownloaded)
 	return err
 }
 

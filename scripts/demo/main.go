@@ -17,7 +17,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -35,6 +37,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/mdblist"
 	"github.com/tehmaat/bookrr/internal/store"
 	"github.com/tehmaat/bookrr/internal/tmdb"
+	"github.com/tehmaat/bookrr/internal/unit3d"
 	"github.com/tehmaat/bookrr/web"
 )
 
@@ -241,7 +244,7 @@ func seed(ctx context.Context, base string, fakes map[string]*httptest.Server, q
 	}
 	id := func(m map[string]any) int64 { f, _ := m["id"].(float64); return int64(f) }
 
-	call("POST", "/api/clients", map[string]any{"name": "seedbox", "url": fakes["seedbox"].URL, "username": "admin", "password": "demo", "enabled": true})
+	seedbox := id(call("POST", "/api/clients", map[string]any{"name": "seedbox", "url": fakes["seedbox"].URL, "username": "admin", "password": "demo", "enabled": true}))
 	call("POST", "/api/clients", map[string]any{"name": "nas", "url": fakes["nas"].URL, "username": "admin", "password": "demo", "enabled": true})
 
 	orchid := id(call("POST", "/api/adopters", map[string]any{"name": "orchid", "contact": "tracker profile: orchid", "notes": "Keeps the series packs seeded."}))
@@ -312,7 +315,7 @@ ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_
 	call("PUT", "/api/missing/banned-groups", map[string]any{"groups": []string{"YIFX"}})
 	call("POST", "/api/missing/lists/sources", map[string]any{"url": "https://mdblist.com/lists/demo/neon-cinema"})
 	call("POST", "/api/releases/sync", nil)
-	call("POST", "/api/plan", map[string]any{"tmdb": "9061", "note": "Italian audio from the 2019 DVD"})
+	lantern := call("POST", "/api/plan", map[string]any{"tmdb": "9061", "note": "Italian audio from the 2019 DVD"})
 	call("POST", "/api/plan", map[string]any{"tmdb": "9071"})
 	call("POST", "/api/plan", map[string]any{"tmdb": "9033", "source": "saga:7011", "sourceTitle": "Iron Tide Collection"})
 	call("POST", "/api/plan", map[string]any{"tmdb": "9002", "source": "saga:7001", "sourceTitle": "Starfall Collection"})
@@ -329,8 +332,37 @@ ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_
 		}
 		time.Sleep(time.Second)
 	}
+	// Lantern Bay is a merge: the remux of others and the Italian audio of the DVD, downloading on the seedbox.
+	if id, ok := lantern["id"].(float64); ok {
+		plan := "/api/plan/" + strconv.FormatInt(int64(id), 10)
+		upload(ctx, base+plan+"/torrents", "Lantern.Bay.2019.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-ARCADE", 25*gb, "video")
+		upload(ctx, base+plan+"/torrents", "Lantern.Bay.2019.DVD9.ITA-OLDIES", 7*gb, "audio ITA")
+		call("POST", plan+"/torrents/send", map[string]any{"clientId": seedbox})
+	}
 	call("POST", "/api/sync", nil)
 	call("POST", "/api/disks/"+strconv.FormatInt(cloud, 10)+"/scan", nil)
+}
+
+// upload loads on a film of the plan a made-up .torrent of one file.
+func upload(ctx context.Context, url, name string, size int64, label string) {
+	info := fmt.Sprintf("d6:lengthi%de4:name%d:%s12:piece lengthi16777216e6:pieces20:%se", size, len(name), name, strings.Repeat("x", 20))
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	fw, _ := mw.CreateFormFile("file", name+".torrent")
+	fw.Write([]byte("d8:announce30:https://other.example/announce4:info" + info + "e"))
+	mw.WriteField("label", label)
+	mw.Close()
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("demo seed", "path", url, "err", err)
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		slog.Warn("demo seed", "path", url, "status", resp.StatusCode)
+	}
 }
 
 // qbitFake serves the torrents of two qBittorrent clients.
@@ -400,6 +432,31 @@ func (q *qbitFake) handler(client string) http.Handler {
 			q.mu.Lock()
 			defer q.mu.Unlock()
 			json.NewEncoder(w).Encode(q.torrents[client])
+		case "/api/v2/torrents/add":
+			// The .torrent files of the plan: the audio is quick, the video takes its time.
+			f, _, err := r.FormFile("torrents")
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			data, _ := io.ReadAll(f)
+			m, err := unit3d.ReadTorrent(data)
+			if err != nil {
+				w.WriteHeader(http.StatusUnsupportedMediaType)
+				return
+			}
+			state, progress := "downloading", 0.37
+			if strings.Contains(m.Name, "DVD") {
+				state, progress = "uploading", 1.0
+			}
+			q.mu.Lock()
+			defer q.mu.Unlock()
+			q.torrents[client] = append(q.torrents[client], map[string]any{
+				"hash": m.Hash, "name": m.Name, "size": m.Size, "total_size": m.Size, "category": r.FormValue("category"),
+				"tags": r.FormValue("tags"), "save_path": "/downloads/merge", "state": state, "progress": progress,
+				"added_on": time.Now().Unix(), "tracker": "https://other.example/announce",
+			})
+			w.Write([]byte("Ok."))
 		default:
 			w.WriteHeader(http.StatusOK)
 		}
