@@ -331,7 +331,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       value={it.status}
                       onValueChange={(v) => update.mutate({ id: it.id, status: v as PlanStatus })}
                     >
-                      <SelectTrigger size="sm" className="w-36">
+                      <SelectTrigger size="sm" className="w-40">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
