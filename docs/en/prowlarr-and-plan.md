@@ -42,8 +42,20 @@ For each film bookrr shows:
 
 - the **best version** that exists, searched with Prowlarr when you add it and then every `BOOKRR_PROWLARR_RECHECK` along with the daily max resolution search; the badge is yellow when it is better than what you already uploaded of that film. Films not out yet show their release date and are searched when they come out;
 - what is **on the tracker**: your uploads of the film and the torrents of others, with their quality;
-- its **status**: *To do*, *In progress*, *Done* or *Dropped*, and an optional note (where to take the audio, the subtitles…).
+- its **download**: the .torrent files you loaded and how they are doing on the clients (see below);
+- its **status**: *To do*, *In progress*, *Downloaded*, *Done* or *Dropped*, and an optional note (where to take the audio, the subtitles…).
 
-When you upload the film to the tracker, the next read of the release history marks it **Done** by itself. *Dropped* keeps it in the plan without searching it again. The counters at the top filter the films to release, those found in a better version, in progress, done or all of them.
+When you upload the film to the tracker, the next read of the release history (every `BOOKRR_UNIT3D_RELEASES_INTERVAL`) marks it **Done** by itself, also when it was *Downloaded*. *Dropped* keeps it in the plan without searching it again. The counters at the top filter the films to release, those found in a better version, in progress, downloaded, done or all of them.
 
-API: `GET /api/plan`, `GET /api/plan/lookup?q=…`, `POST /api/plan` with `{"tmdb": "603", "note": "…"}`, `POST /api/plan/bulk` with `{"tmdbIds": […]}`, `PATCH /api/plan/{id}` with `{"status": "doing", "note": "…"}`, `POST /api/plan/{id}/search`, `DELETE /api/plan/{id}`.
+### Downloading the source
+
+With **Load .torrent** you load on a film the .torrent file of its source: bookrr keeps it, also after sending it, so you can send it again. When the release is a **merge** of two sources (the video from one, the audio or the subtitles from the other) load a second one with **Second .torrent (merge)**; each can have a label (*video*, *audio ITA*) to remember what to take from it. From the ⋯ menu of each torrent you replace it, change its label, save the file or remove it from the film (not from the clients).
+
+**Download** sends the torrents not on a client yet to one of your qBittorrent clients:
+
+- by default it asks which one, with **Advanced** for category, tags and save path (empty, the client's defaults);
+- with a **default client** (Settings → Plan) it sends them there without asking; *Send to a client…* in the ⋯ menu of a torrent still lets you choose another one, and the advanced options.
+
+The film goes *In progress*, and its row shows, for each torrent, the client, its state and the progress, read with the clients every `BOOKRR_SYNC_INTERVAL` (and right after sending). When every torrent of the film is complete, it becomes **Downloaded** by itself; with a merge, until both are complete it shows "1 of 2 downloaded". If you put it back to *To do* or *In progress* by hand it stays there, until you send its torrents again. A torrent removed from the client after it was sent is flagged, and *Download* can send it again.
+
+API: `GET /api/plan`, `GET /api/plan/lookup?q=…`, `POST /api/plan` with `{"tmdb": "603", "note": "…"}`, `POST /api/plan/bulk` with `{"tmdbIds": […]}`, `PATCH /api/plan/{id}` with `{"status": "doing", "note": "…"}`, `POST /api/plan/{id}/search`, `DELETE /api/plan/{id}`. The .torrent files of a film: `POST /api/plan/{id}/torrents` (form with `file` and an optional `label`; at the first free position, two at most), `PUT /api/plan/{id}/torrents/{position}` (replaces it, same form), `PATCH /api/plan/{id}/torrents/{position}` with `{"label": "…"}`, `DELETE /api/plan/{id}/torrents/{position}`, `GET /api/plan/{id}/torrents/{position}/file`, and `POST /api/plan/{id}/torrents/send` with `{"clientId": 1, "positions": [1], "category": "", "tags": "", "savePath": ""}` (all optional: no client is the default one, no positions are all of them). The default client is `planClientId` of `PUT /api/settings` (0 asks every time).

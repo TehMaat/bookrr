@@ -322,7 +322,7 @@ export type Releases = {
  * in this quality, but only by release groups the user banned (still missing, with less priority).
  */
 /** Where a film of the release plan stands. */
-export type PlanStatus = "todo" | "doing" | "done" | "dropped"
+export type PlanStatus = "todo" | "doing" | "downloaded" | "done" | "dropped"
 
 /** A film the user plans to release, from TMDB. */
 export type PlanEntry = {
@@ -344,6 +344,49 @@ export type PlanEntry = {
   releaseId: number
   createdAt: string
   doneAt: string | null
+  /** When its .torrent files were complete on a client; null if never, or not since they were last sent. */
+  downloadedAt: string | null
+}
+
+/** A .torrent of a film of the plan on a client, as its last read found it. */
+export type PlanDownload = { clientId: number; clientName: string; state: string; progress: number; seenAt: string }
+
+/** A .torrent file loaded on a film of the plan: one, or two for a release merged from two sources. */
+export type PlanTorrent = {
+  /** 1 or 2. */
+  position: number
+  /** v1 info hash: the hash of the torrent on the clients. */
+  hash: string
+  name: string
+  size: number
+  /** What to take from it ("video", "audio ITA"…), "" if none. */
+  label: string
+  /** The client it was last sent to, 0 if never. */
+  sentClientId: number
+  sentClientName: string
+  sentAt: string | null
+  createdAt: string
+  /** Where it is on the clients. */
+  downloads: PlanDownload[]
+  /** Sent, but the client no longer has it. */
+  gone: boolean
+}
+
+/** How the .torrent files of a film are sent to a client; the empty options leave the client's defaults. */
+export type PlanSendInput = {
+  /** 0 or none for the default client of the plan. */
+  clientId?: number
+  /** The positions of the torrents to send, none for all. */
+  positions?: number[]
+  category?: string
+  /** Comma separated. */
+  tags?: string
+  savePath?: string
+}
+
+export type PlanSendResult = {
+  client: string
+  results: { position: number; name: string; ok: boolean; already: boolean; error: string }[]
 }
 
 /** An upload of the user of a film of the plan, still on the tracker. */
@@ -361,6 +404,8 @@ export type PlanItem = PlanEntry & {
   others: GapRef[]
   /** The film on the tracker, "" without tracker. */
   trackerUrl: string
+  /** The .torrent files loaded on the film, by position. */
+  torrents: PlanTorrent[]
 }
 
 export type Plan = {
@@ -601,6 +646,8 @@ export type Settings = {
   archiveMinCompleted: number
   /** …for this many days in a row (0 = at once). */
   archiveDays: number
+  /** The client the .torrent files of the plan are sent to without asking; 0 asks every time. */
+  planClientId: number
 }
 
 /** Group of the options of the configuration, as shown in the settings. */
@@ -729,10 +776,12 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const text = typeof body === "string"
+  // A form (files) sets its own content type.
+  const form = body instanceof FormData
   const res = await fetch(path, {
     method,
-    headers: body !== undefined ? { "Content-Type": text ? "text/plain" : "application/json" } : undefined,
-    body: body !== undefined ? (text ? body : JSON.stringify(body)) : undefined,
+    headers: body !== undefined && !form ? { "Content-Type": text ? "text/plain" : "application/json" } : undefined,
+    body: body !== undefined ? (text || form ? (body as string | FormData) : JSON.stringify(body)) : undefined,
   })
   if (!res.ok) {
     let msg = `HTTP ${res.status}`
@@ -804,6 +853,22 @@ export const api = {
   deletePlan: (id: number) => request<void>("DELETE", `/api/plan/${id}`),
   /** Searches the film on Prowlarr now, in the background. */
   searchPlan: (id: number) => request<{ searching: boolean }>("POST", `/api/plan/${id}/search`),
+  /** Loads a .torrent file on a film of the plan: at the first free position, or replacing the one at position. */
+  uploadPlanTorrent: (id: number, file: File, label = "", position?: number) => {
+    const form = new FormData()
+    form.append("file", file)
+    if (label.trim()) form.append("label", label.trim())
+    return position
+      ? request<PlanTorrent>("PUT", `/api/plan/${id}/torrents/${position}`, form)
+      : request<PlanTorrent>("POST", `/api/plan/${id}/torrents`, form)
+  },
+  updatePlanTorrent: (id: number, position: number, label: string) =>
+    request<PlanTorrent>("PATCH", `/api/plan/${id}/torrents/${position}`, { label }),
+  /** Removes a .torrent from the film (not from the clients). */
+  deletePlanTorrent: (id: number, position: number) => request<void>("DELETE", `/api/plan/${id}/torrents/${position}`),
+  planTorrentFileUrl: (id: number, position: number) => `/api/plan/${id}/torrents/${position}/file`,
+  /** Sends the .torrent files of a film to a client, to download them. */
+  sendPlanTorrents: (id: number, p: PlanSendInput) => request<PlanSendResult>("POST", `/api/plan/${id}/torrents/send`, p),
 
   releases: () => request<Releases>("GET", "/api/releases"),
   /** Starts reading the uploads on the tracker now, in the background. */

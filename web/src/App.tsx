@@ -108,7 +108,7 @@ export default function App() {
             {tab === "missing" && (
               <MissingPage view={missingView} onView={(v) => go(v === "series" ? "missing" : `missing/${v}`)} />
             )}
-            {tab === "plan" && <PlanPage />}
+            {tab === "plan" && <PlanPage onResolve={resolveOne} />}
             {tab === "alerts" && <AlertsPage onResolve={setResolving} />}
             {tab === "disks" && (
               <DisksPage diskId={diskId} onOpenDisk={(id) => go(id === null ? "disks" : `disks/${id}`)} onResolve={resolveOne} />

@@ -43,6 +43,27 @@ func TestInfoHash(t *testing.T) {
 	}
 }
 
+func TestReadTorrent(t *testing.T) {
+	m, err := ReadTorrent(torrentFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Hash != infoHash() || m.Name != "La.Mia.Release" || m.Size != 1234 {
+		t.Fatalf("single file: %+v", m)
+	}
+	multi := "d5:filesld6:lengthi100e4:pathl5:a.mkveed6:lengthi23e4:pathl5:b.srteee4:name3:Dir12:piece lengthi16384e6:pieces20:aaaaaaaaaaaaaaaaaaaae"
+	m, err = ReadTorrent([]byte("d4:info" + multi + "e"))
+	sum := sha1.Sum([]byte(multi))
+	if err != nil || m.Hash != hex.EncodeToString(sum[:]) || m.Name != "Dir" || m.Size != 123 {
+		t.Fatalf("multi file: %+v %v", m, err)
+	}
+	for _, bad := range []string{"", "d4:infoi1ee", "d4:infod5:filesi1eee", "d4:infod6:length3:abcee", "d4:infod4:name3:abc"} {
+		if _, err := ReadTorrent([]byte(bad)); err == nil {
+			t.Errorf("%q: expected an error", bad)
+		}
+	}
+}
+
 // fakeTracker answers /api/torrents/filter and /api/torrents/{id} with the
 // given torrents and serves the .torrent file at /download.
 func fakeTracker(t *testing.T, data func(base string) []map[string]any) (*Client, *int) {

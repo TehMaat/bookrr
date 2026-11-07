@@ -298,11 +298,11 @@ func (f *Finder) check(ctx context.Context) (string, error) {
 	for _, fm := range all {
 		known[fm.key] = true
 	}
-	// The films of the plan still to do, once out; those the user uploaded
-	// already are among their uploads.
+	// The films of the plan still to do, once out (not those downloaded
+	// already); those the user uploaded already are among their uploads.
 	today := now.Format("2006-01-02")
 	for _, e := range plan {
-		if fm := planFilm(e); e.Open() && e.Released(today) && !known[fm.key] {
+		if fm := planFilm(e); e.Sourcing() && e.Released(today) && !known[fm.key] {
 			known[fm.key] = true
 			all = append(all, fm)
 		}

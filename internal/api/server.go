@@ -129,6 +129,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/plan/{id}", s.updatePlan)
 	mux.HandleFunc("DELETE /api/plan/{id}", s.deletePlan)
 	mux.HandleFunc("POST /api/plan/{id}/search", s.searchPlanNow)
+	mux.HandleFunc("POST /api/plan/{id}/torrents", s.addPlanTorrent)
+	mux.HandleFunc("POST /api/plan/{id}/torrents/send", s.sendPlanTorrents)
+	mux.HandleFunc("PUT /api/plan/{id}/torrents/{position}", s.replacePlanTorrent)
+	mux.HandleFunc("PATCH /api/plan/{id}/torrents/{position}", s.updatePlanTorrent)
+	mux.HandleFunc("DELETE /api/plan/{id}/torrents/{position}", s.deletePlanTorrent)
+	mux.HandleFunc("GET /api/plan/{id}/torrents/{position}/file", s.planTorrentFile)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
@@ -861,6 +867,15 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st.PublicURL = u
+	if st.PlanClientID > 0 {
+		if _, err := s.store.GetClient(r.Context(), st.PlanClientID); errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, "the default client of the plan does not exist")
+			return
+		} else if err != nil {
+			s.fail(w, err)
+			return
+		}
+	}
 	st, err = s.store.SaveSettings(r.Context(), st)
 	if errors.Is(err, store.ErrInvalidSettings) {
 		writeError(w, http.StatusBadRequest, err.Error())

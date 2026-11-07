@@ -345,6 +345,31 @@ UPDATE alerts SET resolution = replace(replace(replace(replace(resolution,
 	'Spostato su archivio', 'Moved to archive'), 'Spostato su ', 'Moved to '), 'Adottato da ', 'Adopted by '),
 	'Eliminato definitivamente', 'Permanently deleted');
 `,
+	`
+-- The .torrent files loaded on a film of the plan: one, or two when the
+-- release is a merge of two sources (position 1 and 2). hash is the v1
+-- info hash, as the clients give it: their locations say how the download
+-- goes. sent_client_id is the client it was last sent to (0 never).
+-- data is last: the lists never read it.
+CREATE TABLE plan_torrents (
+	plan_id INTEGER NOT NULL REFERENCES release_plan(id) ON DELETE CASCADE,
+	position INTEGER NOT NULL,
+	hash TEXT NOT NULL,
+	name TEXT NOT NULL DEFAULT '',
+	size INTEGER NOT NULL DEFAULT 0,
+	label TEXT NOT NULL DEFAULT '',
+	sent_client_id INTEGER NOT NULL DEFAULT 0,
+	sent_at TEXT,
+	created_at TEXT NOT NULL,
+	data BLOB NOT NULL,
+	PRIMARY KEY (plan_id, position),
+	UNIQUE (plan_id, hash)
+);
+CREATE INDEX plan_torrents_hash ON plan_torrents(hash);
+-- When the film became "downloaded" (its torrents complete on a client);
+-- set, it is not made downloaded again by itself until they are sent again.
+ALTER TABLE release_plan ADD COLUMN downloaded_at TEXT;
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

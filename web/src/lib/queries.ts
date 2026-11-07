@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { api } from "@/lib/api"
+import { api, type PlanTorrent } from "@/lib/api"
 
 export const keys = {
   torrents: ["torrents"] as const,
@@ -21,6 +21,10 @@ export const keys = {
   logFiles: ["log-files"] as const,
   plan: ["plan"] as const,
 }
+
+/** Being downloaded, or sent and not listed by the client yet. */
+export const torrentPending = (t: PlanTorrent) =>
+  (t.downloads.length > 0 && !t.downloads.some((d) => d.progress >= 1)) || (!!t.sentAt && t.downloads.length === 0 && !t.gone)
 
 export const useTorrents = () => useQuery({ queryKey: keys.torrents, queryFn: api.torrents, refetchInterval: 30_000 })
 export const useAlerts = (open = true) =>
@@ -62,8 +66,12 @@ export const usePlan = () =>
   useQuery({
     queryKey: keys.plan,
     queryFn: api.plan,
-    // Poll quickly while films are being searched.
-    refetchInterval: (q) => (q.state.data?.entries.some((e) => e.searching) || q.state.data?.best?.running ? 3_000 : 60_000),
+    // Poll quickly while films are being searched or their torrents downloaded.
+    refetchInterval: (q) => {
+      const d = q.state.data
+      if (d?.entries.some((e) => e.searching) || d?.best?.running) return 3_000
+      return d?.entries.some((e) => e.torrents.some(torrentPending)) ? 10_000 : 60_000
+    },
   })
 export const useLogFiles = () => useQuery({ queryKey: keys.logFiles, queryFn: api.logFiles, refetchInterval: 60_000 })
 export const useSyncState = () => useQuery({ queryKey: keys.sync, queryFn: api.syncState, refetchInterval: 5_000 })

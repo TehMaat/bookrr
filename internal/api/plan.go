@@ -64,6 +64,9 @@ type planItem struct {
 	Others []gaps.Ref `json:"others"`
 	// The film on the tracker, "" without tracker.
 	TrackerURL string `json:"trackerUrl"`
+	// The .torrent files loaded on the film (two for a merge), with how
+	// their download goes.
+	Torrents []store.PlanTorrent `json:"torrents"`
 }
 
 // listPlan returns the films of the release plan, with the best release
@@ -91,6 +94,11 @@ func (s *Server) listPlan(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	torrents, err := s.store.PlanTorrents(ctx)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	best := prowlarr.AnnotatePlan(entries, ups, found)
 	today := time.Now().Format("2006-01-02")
 	items := make([]planItem, len(entries))
@@ -98,6 +106,9 @@ func (s *Server) listPlan(w http.ResponseWriter, r *http.Request) {
 		it := planItem{PlanEntry: e, Released: e.Released(today), Best: best[e.ID], Uploads: []planUpload{}, Others: others[e.TmdbID]}
 		if it.Others == nil {
 			it.Others = []gaps.Ref{}
+		}
+		if it.Torrents = torrents[e.ID]; it.Torrents == nil {
+			it.Torrents = []store.PlanTorrent{}
 		}
 		if svc.Best != nil {
 			it.Searching = svc.Best.Searching(e)

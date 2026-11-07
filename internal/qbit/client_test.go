@@ -3,6 +3,7 @@ package qbit
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -93,5 +94,53 @@ func TestLoginAcceptsNoContent(t *testing.T) {
 	}
 	if _, err := New(srv.URL, "u", "wrong", false).Version(context.Background()); !errors.Is(err, ErrAuth) {
 		t.Fatalf("wrong password: got %v, want ErrAuth", err)
+	}
+}
+
+func TestAddTorrentSendsFileAndOptions(t *testing.T) {
+	type got struct {
+		file, name, category, tags, savepath, autoTMM string
+		hasCategory                                   bool
+	}
+	var last got
+	answer := "Ok."
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/torrents/add" || r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		f, h, err := r.FormFile("torrents")
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		b, _ := io.ReadAll(f)
+		_, hasCategory := r.MultipartForm.Value["category"]
+		last = got{string(b), h.Filename, r.FormValue("category"), r.FormValue("tags"), r.FormValue("savepath"), r.FormValue("autoTMM"), hasCategory}
+		w.Write([]byte(answer))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "", "", false)
+	ctx := context.Background()
+
+	if err := c.AddTorrent(ctx, "a.torrent", []byte("d4:infodee"), AddOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if last.file != "d4:infodee" || last.name != "a.torrent" || last.hasCategory || last.autoTMM != "" {
+		t.Fatalf("no options: %+v", last)
+	}
+	if err := c.AddTorrent(ctx, "a.torrent", []byte("x"), AddOptions{Category: "film", Tags: "a,b", SavePath: "/data/x"}); err != nil {
+		t.Fatal(err)
+	}
+	if last.category != "film" || last.tags != "a,b" || last.savepath != "/data/x" || last.autoTMM != "false" {
+		t.Fatalf("options: %+v", last)
+	}
+	answer = "Fails."
+	if err := c.AddTorrent(ctx, "a.torrent", []byte("x"), AddOptions{}); err == nil {
+		t.Fatal("Fails. taken as success")
 	}
 }

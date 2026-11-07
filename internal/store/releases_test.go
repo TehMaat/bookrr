@@ -196,7 +196,16 @@ func TestEnglishMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := len(migrations) - 1
+	// Up to the migration to English, which then runs with the later ones.
+	before := -1
+	for i, m := range migrations {
+		if strings.Contains(m, "UPDATE disks SET kind = 'Tape'") {
+			before = i
+		}
+	}
+	if before < 0 {
+		t.Fatal("migration to English not found")
+	}
 	for i := 0; i < before; i++ {
 		if _, err := db.ExecContext(ctx, migrations[i]); err != nil {
 			t.Fatalf("migration %d: %v", i+1, err)

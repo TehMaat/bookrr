@@ -2,12 +2,14 @@
 package qbit
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -146,40 +148,117 @@ func (c *Client) Torrents(ctx context.Context) ([]Torrent, error) {
 
 // post performs an authenticated form POST, logging in when needed.
 func (c *Client) post(ctx context.Context, path string, form url.Values) error {
+	_, err := c.postBody(ctx, path, func() (io.Reader, string, error) {
+		return strings.NewReader(form.Encode()), "application/x-www-form-urlencoded", nil
+	})
+	return err
+}
+
+// postBody performs an authenticated POST of the body that build makes
+// (again for the retry after a login) and returns the start of the answer.
+func (c *Client) postBody(ctx context.Context, path string, build func() (io.Reader, string, error)) (string, error) {
 	if !c.loggedIn && c.username != "" {
 		if err := c.login(ctx); err != nil {
-			return err
+			return "", err
 		}
 	}
 	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, strings.NewReader(form.Encode()))
+		body, contentType, err := build()
 		if err != nil {
-			return err
+			return "", err
 		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, body)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", contentType)
 		req.Header.Set("Referer", c.base)
 		req.Header.Set("Origin", c.base)
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return err
+			return "", err
 		}
+		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusForbidden && attempt == 0 {
 			if c.username == "" {
-				return errors.New("qBittorrent requires authentication: set username and password")
+				return "", errors.New("qBittorrent requires authentication: set username and password")
 			}
 			if err := c.login(ctx); err != nil {
-				return err
+				return "", err
 			}
 			continue
 		}
 		if !success(resp.StatusCode) {
-			return fmt.Errorf("%s: HTTP %d", path, resp.StatusCode)
+			return "", &statusError{path: path, code: resp.StatusCode}
 		}
-		return nil
+		return strings.TrimSpace(string(answer)), nil
 	}
 }
+
+// AddOptions are where and how a torrent is added: the empty ones leave
+// the defaults of the client.
+type AddOptions struct {
+	Category string
+	// Comma separated.
+	Tags     string
+	SavePath string
+}
+
+// AddTorrent adds a .torrent file to the client, started.
+func (c *Client) AddTorrent(ctx context.Context, filename string, data []byte, o AddOptions) error {
+	fields := [][2]string{{"category", o.Category}, {"tags", o.Tags}, {"savepath", o.SavePath}}
+	if o.SavePath != "" {
+		// With automatic management the client would choose the folder.
+		fields = append(fields, [2]string{"autoTMM", "false"})
+	}
+	answer, err := c.postBody(ctx, "/api/v2/torrents/add", func() (io.Reader, string, error) {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		fw, err := mw.CreateFormFile("torrents", filename)
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := fw.Write(data); err != nil {
+			return nil, "", err
+		}
+		for _, f := range fields {
+			if f[1] == "" {
+				continue
+			}
+			if err := mw.WriteField(f[0], f[1]); err != nil {
+				return nil, "", err
+			}
+		}
+		if err := mw.Close(); err != nil {
+			return nil, "", err
+		}
+		return &buf, mw.FormDataContentType(), nil
+	})
+	var se *statusError
+	errors.As(err, &se)
+	switch {
+	case se != nil && se.code == http.StatusUnsupportedMediaType:
+		return errors.New("qBittorrent says the .torrent file is not valid")
+	case se != nil && se.code == http.StatusConflict:
+		return errors.New("qBittorrent refused the torrent: it is already on the client")
+	case err != nil:
+		return err
+	case answer == "Fails.":
+		// Older versions say so when the torrent is already there, or invalid.
+		return errors.New("qBittorrent refused the torrent: already on the client, or not valid")
+	}
+	return nil
+}
+
+// statusError is an answer of the client that is not a success.
+type statusError struct {
+	path string
+	code int
+}
+
+func (e *statusError) Error() string { return fmt.Sprintf("%s: HTTP %d", e.path, e.code) }
 
 // DeleteTorrent removes a torrent from the client, optionally deleting its
 // downloaded files too. qBittorrent succeeds even if the hash is unknown.

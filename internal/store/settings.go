@@ -18,6 +18,9 @@ type Settings struct {
 	ArchiveMinSeeders   int64 `json:"archiveMinSeeders"`
 	ArchiveMinCompleted int64 `json:"archiveMinCompleted"`
 	ArchiveDays         int64 `json:"archiveDays"`
+	// The client the .torrent files of the plan are sent to without asking;
+	// 0 asks every time.
+	PlanClientID int64 `json:"planClientId"`
 }
 
 const (
@@ -25,6 +28,7 @@ const (
 	keyArchiveMinSeeders   = "archive_min_seeders"
 	keyArchiveMinCompleted = "archive_min_completed"
 	keyArchiveDays         = "archive_days"
+	keyPlanClientID        = "plan_client_id"
 )
 
 // DefaultSettings are used for the keys never saved.
@@ -61,6 +65,8 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 			num(v, &out.ArchiveMinCompleted)
 		case keyArchiveDays:
 			num(v, &out.ArchiveDays)
+		case keyPlanClientID:
+			num(v, &out.PlanClientID)
 		}
 	}
 	return out, rows.Err()
@@ -72,6 +78,9 @@ func (s *Store) SaveSettings(ctx context.Context, in Settings) (Settings, error)
 	if in.ArchiveMinSeeders < 0 || in.ArchiveMinCompleted < 0 || in.ArchiveDays < 0 || in.ArchiveDays > MaxArchiveDays {
 		return in, ErrInvalidSettings
 	}
+	if in.PlanClientID < 0 {
+		in.PlanClientID = 0
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return in, err
@@ -82,6 +91,7 @@ func (s *Store) SaveSettings(ctx context.Context, in Settings) (Settings, error)
 		keyArchiveMinSeeders:   strconv.FormatInt(in.ArchiveMinSeeders, 10),
 		keyArchiveMinCompleted: strconv.FormatInt(in.ArchiveMinCompleted, 10),
 		keyArchiveDays:         strconv.FormatInt(in.ArchiveDays, 10),
+		keyPlanClientID:        strconv.FormatInt(in.PlanClientID, 10),
 	} {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`, k, v); err != nil {

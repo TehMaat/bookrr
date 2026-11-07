@@ -82,7 +82,8 @@ func (s *Store) UpdateClient(ctx context.Context, c Client) (Client, error) {
 }
 
 // DeleteClient removes the client and its locations. Torrents left with no
-// location are cleaned up by the next sync.
+// location are cleaned up by the next sync. If it was the default client
+// of the plan, the plan asks again.
 func (s *Store) DeleteClient(ctx context.Context, id int64) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM clients WHERE id = ?`, id)
 	if err != nil {
@@ -91,7 +92,9 @@ func (s *Store) DeleteClient(ctx context.Context, id int64) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	// The plan goes back to asking which client.
+	_, err = s.db.ExecContext(ctx, `UPDATE settings SET value = '0' WHERE key = ? AND value = ?`, keyPlanClientID, id)
+	return err
 }
 
 func (s *Store) SetClientSyncResult(ctx context.Context, id int64, count int, syncErr error) error {

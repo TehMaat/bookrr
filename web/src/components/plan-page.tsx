@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import {
   CircleArrowUp,
   CircleCheck,
@@ -16,10 +17,21 @@ import {
   TriangleAlert,
   Hammer,
   Ban,
+  HardDriveDownload,
+  Upload,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
+import {
+  LoadTorrentDialog,
+  MAX_PLAN_TORRENTS,
+  PlanTorrents,
+  SendTorrentsDialog,
+  TorrentLabelDialog,
+  type TorrentAction,
+} from "@/components/plan-torrents"
+import { TorrentSheet } from "@/components/torrent-sheet"
 import { TableCard } from "@/components/table-card"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -56,14 +68,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { api, type PlanItem, type PlanLookup, type PlanStatus } from "@/lib/api"
+import { api, type Alert, type PlanItem, type PlanLookup, type PlanStatus } from "@/lib/api"
 import { formatDate, formatRelative } from "@/lib/format"
-import { useAction, usePlan } from "@/lib/queries"
+import { keys, useAction, usePlan } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 export const planStatuses: { value: PlanStatus; label: string; icon: React.ElementType; tone: string }[] = [
   { value: "todo", label: "To do", icon: CircleDashed, tone: "text-sky-600 dark:text-sky-400" },
   { value: "doing", label: "In progress", icon: Hammer, tone: "text-amber-600 dark:text-amber-400" },
+  { value: "downloaded", label: "Downloaded", icon: HardDriveDownload, tone: "text-violet-600 dark:text-violet-400" },
   { value: "done", label: "Done", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
   { value: "dropped", label: "Dropped", icon: Ban, tone: "text-muted-foreground" },
 ]
@@ -81,7 +94,7 @@ function bestRank(it: PlanItem) {
   return (typeRank[b.type] ?? 0) * 10 + (resolutionRank[b.resolution] ?? 0)
 }
 
-const statusOrder: Record<PlanStatus, number> = { doing: 0, todo: 1, done: 2, dropped: 3 }
+const statusOrder: Record<PlanStatus, number> = { downloaded: 0, doing: 1, todo: 2, done: 3, dropped: 4 }
 
 /** Resolution and type, as "2160p Remux". */
 function grade(resolution: string, type: string) {
@@ -101,7 +114,7 @@ function sourceLabel(it: { source: string; sourceTitle: string }) {
   return `${kind}: ${it.sourceTitle || it.source}`
 }
 
-export function PlanPage() {
+export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const plan = usePlan()
   const data = plan.data
   const [filter, setFilter] = useState<Filter>("open")
@@ -109,17 +122,23 @@ export function PlanPage() {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<PlanItem | null>(null)
   const [removing, setRemoving] = useState<PlanItem | null>(null)
+  const [torrentAction, setTorrentAction] = useState<TorrentAction | null>(null)
+  // The torrent of the plan open in the sheet of the Torrents page.
+  const [openHash, setOpenHash] = useState<string | null>(null)
+  const torrents = useQuery({ queryKey: keys.torrents, queryFn: api.torrents, enabled: openHash !== null })
+  const openTorrent = openHash ? (torrents.data?.find((t) => t.hash === openHash) ?? null) : null
   const update = useAction(({ id, status }: { id: number; status: PlanStatus }) => api.updatePlan(id, { status }))
   const remove = useAction((id: number) => api.deletePlan(id), "Film removed from the plan")
   const search = useAction((id: number) => api.searchPlan(id), "Prowlarr search started")
 
   const all = useMemo(() => data?.entries ?? [], [data])
-  const open = (it: PlanItem) => it.status === "todo" || it.status === "doing"
+  const open = (it: PlanItem) => it.status === "todo" || it.status === "doing" || it.status === "downloaded"
   const counts: Record<Filter, number> = {
     open: all.filter(open).length,
     available: all.filter((it) => open(it) && it.best?.better).length,
     todo: all.filter((it) => it.status === "todo").length,
     doing: all.filter((it) => it.status === "doing").length,
+    downloaded: all.filter((it) => it.status === "downloaded").length,
     done: all.filter((it) => it.status === "done").length,
     dropped: all.filter((it) => it.status === "dropped").length,
     all: all.length,
@@ -163,6 +182,12 @@ export function PlanPage() {
         ]
       : []),
     { key: "doing", label: "In progress", icon: Hammer },
+    {
+      key: "downloaded",
+      label: "Downloaded",
+      icon: HardDriveDownload,
+      tone: "text-violet-600 dark:text-violet-400",
+    },
     { key: "done", label: "Done", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
     { key: "all", label: "All", icon: ListTodo },
   ]
@@ -187,8 +212,8 @@ export function PlanPage() {
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground max-w-3xl text-sm">
           The films you want to release: add them by their TMDB, or from Missing. For each one bookrr searches Prowlarr
-          for the best existing version (type first, then resolution), and marks it as done when you upload it to the
-          tracker.
+          for the best existing version (type first, then resolution). Load its .torrent (two for a merge) and download
+          it on a client: the film becomes downloaded when complete, and done when you upload it to the tracker.
         </p>
         <Button className="ml-auto" disabled={!data?.enabled} onClick={() => setAdding(true)}>
           <Plus /> Add film
@@ -237,6 +262,7 @@ export function PlanPage() {
                 <TableHead>Film</TableHead>
                 <TableHead>Best version</TableHead>
                 <TableHead className="hidden md:table-cell">On the tracker</TableHead>
+                <TableHead>Download</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-0" />
               </TableRow>
@@ -244,7 +270,7 @@ export function PlanPage() {
             <TableBody>
               {visible.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
+                  <TableCell colSpan={6} className="text-muted-foreground py-10 text-center">
                     {all.length === 0
                       ? "The plan is empty: add a film by its TMDB, or from Missing."
                       : "No films match the filters."}
@@ -297,12 +323,15 @@ export function PlanPage() {
                   <TableCell className="hidden md:table-cell">
                     <OnTracker it={it} />
                   </TableCell>
+                  <TableCell className="whitespace-normal">
+                    <PlanTorrents it={it} onAction={setTorrentAction} onOpenTorrent={setOpenHash} />
+                  </TableCell>
                   <TableCell>
                     <Select
                       value={it.status}
                       onValueChange={(v) => update.mutate({ id: it.id, status: v as PlanStatus })}
                     >
-                      <SelectTrigger size="sm" className="w-32">
+                      <SelectTrigger size="sm" className="w-36">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -315,6 +344,9 @@ export function PlanPage() {
                     </Select>
                     {it.status === "done" && it.doneAt && (
                       <div className="text-muted-foreground mt-1 text-xs">{formatDate(it.doneAt)}</div>
+                    )}
+                    {it.status === "downloaded" && it.downloadedAt && (
+                      <div className="text-muted-foreground mt-1 text-xs">{formatDate(it.downloadedAt)}</div>
                     )}
                   </TableCell>
                   <TableCell>
@@ -333,6 +365,11 @@ export function PlanPage() {
                         <DropdownMenuItem onClick={() => setEditing(it)}>
                           <Pencil /> Note
                         </DropdownMenuItem>
+                        {it.torrents.length < MAX_PLAN_TORRENTS && (
+                          <DropdownMenuItem onClick={() => setTorrentAction({ kind: "load", item: it })}>
+                            <Upload /> {it.torrents.length === 0 ? "Load .torrent" : "Second .torrent (merge)"}
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem asChild>
                           <a href={tmdbUrl(it.tmdbId)} target="_blank" rel="noreferrer">
                             <ExternalLink /> The film on TMDB
@@ -374,6 +411,19 @@ export function PlanPage() {
 
       <AddPlanDialog open={adding} onOpenChange={setAdding} />
       <NoteDialog item={editing} onClose={() => setEditing(null)} />
+      <LoadTorrentDialog
+        action={torrentAction?.kind === "load" ? torrentAction : null}
+        onClose={() => setTorrentAction(null)}
+      />
+      <SendTorrentsDialog
+        action={torrentAction?.kind === "send" ? torrentAction : null}
+        onClose={() => setTorrentAction(null)}
+      />
+      <TorrentLabelDialog
+        action={torrentAction?.kind === "label" ? torrentAction : null}
+        onClose={() => setTorrentAction(null)}
+      />
+      <TorrentSheet torrent={openTorrent} onClose={() => setOpenHash(null)} onResolve={onResolve} />
       <AlertDialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

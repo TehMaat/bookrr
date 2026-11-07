@@ -161,7 +161,16 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 	if err := s.store.RefreshArchivable(ctx); err != nil {
 		return "", err
 	}
+	// The films of the plan whose torrents are now complete.
+	downloaded, err := s.store.PromoteDownloadedPlan(ctx)
+	if err != nil {
+		return "", fmt.Errorf("release plan: %w", err)
+	}
 	result := fmt.Sprintf("%d clients synced, %d with errors, %d torrents, %d new alerts", ok, failed, total, alerts)
-	slog.Info("sync complete", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts)
+	if downloaded > 0 {
+		result += fmt.Sprintf(", %d plan films downloaded", downloaded)
+	}
+	slog.Info("sync complete", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts,
+		"planDownloaded", downloaded)
 	return result, nil
 }
