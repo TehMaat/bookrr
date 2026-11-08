@@ -58,4 +58,22 @@ Con **Load .torrent** carichi su un film il file .torrent della sua sorgente: bo
 
 Il film passa *In progress* e la sua riga mostra, per ogni torrent, il client, lo stato e l'avanzamento, letti con i client ogni `BOOKRR_SYNC_INTERVAL` (e subito dopo l'invio). Quando tutti i torrent del film sono completi diventa **Downloaded** da solo; con un merge, finché non sono completi entrambi mostra "1 of 2 downloaded". Se lo rimetti a mano a *To do* o *In progress* resta lì, finché non rimandi i suoi torrent. Un torrent tolto dal client dopo l'invio viene segnalato, e *Download* può rimandarlo.
 
-API: `GET /api/plan`, `GET /api/plan/lookup?q=…`, `POST /api/plan` con `{"tmdb": "603", "note": "…"}`, `POST /api/plan/bulk` con `{"tmdbIds": […]}`, `PATCH /api/plan/{id}` con `{"status": "doing", "note": "…"}`, `POST /api/plan/{id}/search`, `DELETE /api/plan/{id}`. I file .torrent di un film: `POST /api/plan/{id}/torrents` (form con `file` e `label` facoltativa; alla prima posizione libera, due al massimo), `PUT /api/plan/{id}/torrents/{position}` (lo sostituisce, stesso form), `PATCH /api/plan/{id}/torrents/{position}` con `{"label": "…"}`, `DELETE /api/plan/{id}/torrents/{position}`, `GET /api/plan/{id}/torrents/{position}/file`, e `POST /api/plan/{id}/torrents/send` con `{"clientId": 1, "positions": [1], "category": "", "tags": "", "savePath": ""}` (tutto facoltativo: senza client è quello predefinito, senza posizioni sono tutti). Il client predefinito è `planClientId` di `PUT /api/settings` (0 chiede ogni volta).
+### Passare il .torrent a Wayfinderr
+
+Quando [Wayfinderr](https://github.com/TehMaat/wayfinderr) (dalla 0.25.0) fa il rip e carica quello che un client scarica, dai a quel client il suo indirizzo e la sua chiave API (Clients → modifica → *Wayfinderr*; la chiave è nel menu dell'account di Wayfinderr, *API key*; **Test connection** prova anche lei). Ogni client ha il suo Wayfinderr, o nessuno.
+
+```mermaid
+flowchart LR
+  A[.torrent completo su un client con Wayfinderr] --> B[Mandato al suo Wayfinderr]
+  B --> C[Wayfinderr lo copia nell'upload appena il rip è fatto]
+  B --> D{Film Done, trovato sul tracker?}
+  D -- sì --> E{Wayfinderr ce l'ha?}
+  E -- sì --> F[bookrr cancella il suo file]
+  E -- no o non risponde --> G[Tenuto, ricontrollato alla lettura dopo]
+```
+
+- Dopo ogni lettura dei client (`BOOKRR_SYNC_INTERVAL`), ogni .torrent di un film aperto **completo** su un client con un Wayfinderr gli viene mandato come **.torrent sorgente** del film, con l'id TMDB e l'etichetta; Wayfinderr lo tiene e lo copia nell'upload appena il rip di quel download è fatto. Con un merge ognuno dei due va da solo, quando è completo. Un errore (Wayfinderr spento, chiave sbagliata) si vede sul torrent e si riprova alla lettura dopo. *Send to Wayfinderr* nel menu ⋯ di un torrent lo manda a mano, anche di nuovo.
+- Quando il film diventa **Done perché la tua release è stata trovata sul tracker** (non quando lo metti tu a mano), bookrr chiede a Wayfinderr se ha il .torrent e, se sì, **cancella il suo file**: il torrent resta sul film con nome, hash ed etichetta, segnato *On Wayfinderr only*. I torrent mai mandati a Wayfinderr non vengono mai cancellati.
+- Un file cancellato viene ripreso da Wayfinderr quando lo salvi o lo rimandi a un client; ricaricare lo stesso file lo rimette in bookrr.
+
+API: `GET /api/plan`, `GET /api/plan/lookup?q=…`, `POST /api/plan` con `{"tmdb": "603", "note": "…"}`, `POST /api/plan/bulk` con `{"tmdbIds": […]}`, `PATCH /api/plan/{id}` con `{"status": "doing", "note": "…"}`, `POST /api/plan/{id}/search`, `DELETE /api/plan/{id}`. I file .torrent di un film: `POST /api/plan/{id}/torrents` (form con `file` e `label` facoltativa; alla prima posizione libera, due al massimo), `PUT /api/plan/{id}/torrents/{position}` (lo sostituisce, stesso form), `PATCH /api/plan/{id}/torrents/{position}` con `{"label": "…"}`, `DELETE /api/plan/{id}/torrents/{position}`, `GET /api/plan/{id}/torrents/{position}/file` (da Wayfinderr dopo la cancellazione), `POST /api/plan/{id}/torrents/{position}/wayfinderr` con `{"clientId": 0}` (lo manda al Wayfinderr di quel client; 0 quello a cui è stato mandato o su cui è), e `POST /api/plan/{id}/torrents/send` con `{"clientId": 1, "positions": [1], "category": "", "tags": "", "savePath": ""}` (tutto facoltativo: senza client è quello predefinito, senza posizioni sono tutti). Il client predefinito è `planClientId` di `PUT /api/settings` (0 chiede ogni volta).

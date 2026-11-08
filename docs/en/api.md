@@ -14,7 +14,7 @@ Everything the interface does is available as a JSON REST API under `/api`, behi
 | Disks | `GET`/`POST /api/disks`, `PUT`/`DELETE /api/disks/{id}`, `POST /api/disks/smart`, `POST /api/disks/test-s3`, `POST /api/disks/{id}/scan`, `GET /api/disks/{id}/bucket-entries` |
 | Archives and adoptions | `PUT`/`DELETE /api/archives/{id}`, `DELETE /api/adoptions/{id}` |
 | Adopters | `GET`/`POST /api/adopters`, `PUT`/`DELETE /api/adopters/{id}` |
-| Clients | `GET`/`POST /api/clients`, `PUT`/`DELETE /api/clients/{id}`, `POST /api/clients/test` |
+| Clients | `GET`/`POST /api/clients`, `PUT`/`DELETE /api/clients/{id}` (with `wayfinderrUrl` and `wayfinderrApiKey`), `POST /api/clients/test` (tests its Wayfinderr too) |
 | Missing | see [Missing seasons and films](missing.md#when-it-runs) |
 | Plan | see [Release plan](prowlarr-and-plan.md#release-plan) |
 | Logs | see [Logs](logs.md) |

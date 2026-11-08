@@ -25,8 +25,16 @@ import { formatRelative, plural } from "@/lib/format"
 import { useAction, useClients, useInfo } from "@/lib/queries"
 
 function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: Client | null; onOpenChange: (o: boolean) => void }) {
-  const [form, setForm] = useState<ClientInput>({ name: "", url: "", username: "", skipTlsVerify: false, enabled: true })
+  const [form, setForm] = useState<ClientInput>({
+    name: "",
+    url: "",
+    username: "",
+    skipTlsVerify: false,
+    enabled: true,
+    wayfinderrUrl: "",
+  })
   const [password, setPassword] = useState("")
+  const [wayfinderrKey, setWayfinderrKey] = useState("")
   const [testing, setTesting] = useState(false)
 
   useEffect(() => {
@@ -37,8 +45,10 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
       username: client?.username ?? "",
       skipTlsVerify: client?.skipTlsVerify ?? false,
       enabled: client?.enabled ?? true,
+      wayfinderrUrl: client?.wayfinderrUrl ?? "",
     })
     setPassword("")
+    setWayfinderrKey("")
   }, [open, client])
 
   const payload = (): ClientInput => ({
@@ -46,6 +56,8 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
     id: client?.id,
     // Empty password while editing keeps the stored one.
     password: client && password === "" ? undefined : password,
+    // Likewise the key of Wayfinderr.
+    wayfinderrApiKey: client && wayfinderrKey === "" ? undefined : wayfinderrKey,
   })
 
   const save = useAction(
@@ -59,6 +71,8 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
       const r = await api.testClient(payload())
       if (r.ok) toast.success(`Connected to qBittorrent ${r.version}`, { description: `${plural(r.torrents ?? 0, "torrent")} found` })
       else toast.error("Connection failed", { description: r.error })
+      if (r.wayfinderr?.ok) toast.success("Connected to Wayfinderr", { description: `API key of ${r.wayfinderr.user}` })
+      else if (r.wayfinderr) toast.error("Wayfinderr: connection failed", { description: r.wayfinderr.error })
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -66,7 +80,7 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
     }
   }
 
-  const set = (k: "name" | "url" | "username") => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: "name" | "url" | "username" | "wayfinderrUrl") => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
 
   return (
@@ -120,6 +134,38 @@ function ClientDialog({ open, client, onOpenChange }: { open: boolean; client: C
                 onCheckedChange={(v) => setForm((f) => ({ ...f, skipTlsVerify: v }))}
               />
               <Label htmlFor="c-tls">Skip TLS certificate check</Label>
+            </div>
+          </div>
+          <div className="grid gap-3 rounded-md border p-3">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">Wayfinderr (optional)</p>
+              <p className="text-muted-foreground text-xs">
+                When Wayfinderr rips and uploads what this client downloads: the .torrent files of the plan complete
+                here are sent to it, and bookrr drops its own copy once the film is released.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="c-wf-url">Address</Label>
+                <Input
+                  id="c-wf-url"
+                  value={form.wayfinderrUrl}
+                  onChange={set("wayfinderrUrl")}
+                  placeholder="http://192.168.1.10:3000"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="c-wf-key">API key</Label>
+                <Input
+                  id="c-wf-key"
+                  type="password"
+                  value={wayfinderrKey}
+                  onChange={(e) => setWayfinderrKey(e.target.value)}
+                  placeholder={client?.hasWayfinderrKey ? "•••••• (unchanged)" : "Account menu → API key"}
+                  autoComplete="new-password"
+                  disabled={!form.wayfinderrUrl}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -238,6 +284,11 @@ export function ClientsPage() {
                 <span className="font-medium">{c.torrentCount}</span> {c.torrentCount === 1 ? "torrent" : "torrents"}
               </div>
               <div className="text-muted-foreground text-xs">Last sync: {formatRelative(c.lastSyncAt)}</div>
+              {c.wayfinderrUrl && (
+                <div className="text-muted-foreground truncate text-xs">
+                  Wayfinderr: <span className="font-mono">{c.wayfinderrUrl}</span>
+                </div>
+              )}
               {c.lastError && <div className="text-destructive text-xs break-all">{c.lastError}</div>}
             </CardContent>
           </Card>

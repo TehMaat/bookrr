@@ -14,7 +14,7 @@ Tutto ciò che fa l'interfaccia è disponibile come API REST in JSON sotto `/api
 | Dischi | `GET`/`POST /api/disks`, `PUT`/`DELETE /api/disks/{id}`, `POST /api/disks/smart`, `POST /api/disks/test-s3`, `POST /api/disks/{id}/scan`, `GET /api/disks/{id}/bucket-entries` |
 | Archivi e adozioni | `PUT`/`DELETE /api/archives/{id}`, `DELETE /api/adoptions/{id}` |
 | Adottatori | `GET`/`POST /api/adopters`, `PUT`/`DELETE /api/adopters/{id}` |
-| Client | `GET`/`POST /api/clients`, `PUT`/`DELETE /api/clients/{id}`, `POST /api/clients/test` |
+| Client | `GET`/`POST /api/clients`, `PUT`/`DELETE /api/clients/{id}` (con `wayfinderrUrl` e `wayfinderrApiKey`), `POST /api/clients/test` (prova anche il suo Wayfinderr) |
 | Mancanti | vedi [Stagioni e film mancanti](mancanti.md#quando-gira) |
 | Piano | vedi [Piano release](prowlarr-e-piano.md#piano-release) |
 | Log | vedi [Log](log.md) |

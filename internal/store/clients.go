@@ -19,16 +19,27 @@ type Client struct {
 	LastError     string  `json:"lastError"`
 	TorrentCount  int     `json:"torrentCount"`
 	CreatedAt     string  `json:"createdAt"`
+	// The Wayfinderr this client's downloads go to ("" none): the .torrent
+	// files of the plan completed here are sent to it.
+	WayfinderrURL    string `json:"wayfinderrUrl"`
+	WayfinderrAPIKey string `json:"-"`
+	HasWayfinderrKey bool   `json:"hasWayfinderrKey"`
 }
 
-const clientCols = `id, name, url, username, password, skip_tls_verify, enabled, last_sync_at, last_error, torrent_count, created_at`
+// HasWayfinderr reports whether the client sends its downloads to a Wayfinderr.
+func (c Client) HasWayfinderr() bool { return c.WayfinderrURL != "" && c.WayfinderrAPIKey != "" }
+
+const clientCols = `id, name, url, username, password, skip_tls_verify, enabled, last_sync_at, last_error, torrent_count, created_at,
+	wayfinderr_url, wayfinderr_api_key`
 
 func scanClient(row interface{ Scan(...any) error }) (Client, error) {
 	var c Client
 	var last sql.NullString
-	err := row.Scan(&c.ID, &c.Name, &c.URL, &c.Username, &c.Password, &c.SkipTLSVerify, &c.Enabled, &last, &c.LastError, &c.TorrentCount, &c.CreatedAt)
+	err := row.Scan(&c.ID, &c.Name, &c.URL, &c.Username, &c.Password, &c.SkipTLSVerify, &c.Enabled, &last, &c.LastError, &c.TorrentCount, &c.CreatedAt,
+		&c.WayfinderrURL, &c.WayfinderrAPIKey)
 	c.LastSyncAt = nullStr(last)
 	c.HasPassword = c.Password != ""
+	c.HasWayfinderrKey = c.WayfinderrAPIKey != ""
 	return c, err
 }
 
@@ -59,8 +70,9 @@ func (s *Store) GetClient(ctx context.Context, id int64) (Client, error) {
 
 func (s *Store) CreateClient(ctx context.Context, c Client) (Client, error) {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO clients (name, url, username, password, skip_tls_verify, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.URL, c.Username, c.Password, boolInt(c.SkipTLSVerify), boolInt(c.Enabled), now())
+		`INSERT INTO clients (name, url, username, password, skip_tls_verify, enabled, created_at, wayfinderr_url, wayfinderr_api_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.URL, c.Username, c.Password, boolInt(c.SkipTLSVerify), boolInt(c.Enabled), now(), c.WayfinderrURL, c.WayfinderrAPIKey)
 	if err != nil {
 		return c, err
 	}
@@ -70,8 +82,9 @@ func (s *Store) CreateClient(ctx context.Context, c Client) (Client, error) {
 
 func (s *Store) UpdateClient(ctx context.Context, c Client) (Client, error) {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE clients SET name = ?, url = ?, username = ?, password = ?, skip_tls_verify = ?, enabled = ? WHERE id = ?`,
-		c.Name, c.URL, c.Username, c.Password, boolInt(c.SkipTLSVerify), boolInt(c.Enabled), c.ID)
+		`UPDATE clients SET name = ?, url = ?, username = ?, password = ?, skip_tls_verify = ?, enabled = ?,
+	wayfinderr_url = ?, wayfinderr_api_key = ? WHERE id = ?`,
+		c.Name, c.URL, c.Username, c.Password, boolInt(c.SkipTLSVerify), boolInt(c.Enabled), c.WayfinderrURL, c.WayfinderrAPIKey, c.ID)
 	if err != nil {
 		return c, err
 	}

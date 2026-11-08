@@ -33,6 +33,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/syncer"
 	"github.com/tehmaat/bookrr/internal/tmdb"
 	"github.com/tehmaat/bookrr/internal/unit3d"
+	"github.com/tehmaat/bookrr/internal/wayfinderr"
 )
 
 // Services are what runs with the current configuration. They change when
@@ -135,6 +136,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/plan/{id}/torrents/{position}", s.updatePlanTorrent)
 	mux.HandleFunc("DELETE /api/plan/{id}/torrents/{position}", s.deletePlanTorrent)
 	mux.HandleFunc("GET /api/plan/{id}/torrents/{position}/file", s.planTorrentFile)
+	mux.HandleFunc("POST /api/plan/{id}/torrents/{position}/wayfinderr", s.sendPlanTorrentToWayfinderr)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)
@@ -1294,6 +1296,10 @@ type clientInput struct {
 	Password      *string `json:"password"` // nil = keep current
 	SkipTLSVerify bool    `json:"skipTlsVerify"`
 	Enabled       *bool   `json:"enabled"`
+	// The Wayfinderr this client's downloads go to ("" none) and its API
+	// key (nil = keep current).
+	WayfinderrURL    string  `json:"wayfinderrUrl"`
+	WayfinderrAPIKey *string `json:"wayfinderrApiKey"`
 }
 
 func (in *clientInput) validate(w http.ResponseWriter) bool {
@@ -1308,7 +1314,30 @@ func (in *clientInput) validate(w http.ResponseWriter) bool {
 		writeError(w, http.StatusBadRequest, "invalid URL (e.g. http://192.168.1.10:8080)")
 		return false
 	}
+	in.WayfinderrURL = strings.TrimRight(strings.TrimSpace(in.WayfinderrURL), "/")
+	if in.WayfinderrAPIKey != nil {
+		k := strings.TrimSpace(*in.WayfinderrAPIKey)
+		in.WayfinderrAPIKey = &k
+	}
+	if in.WayfinderrURL != "" {
+		u, err := url.Parse(in.WayfinderrURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			writeError(w, http.StatusBadRequest, "invalid Wayfinderr address (e.g. http://192.168.1.10:3000)")
+			return false
+		}
+	}
 	return true
+}
+
+// applyWayfinderr sets the Wayfinderr of c from in: no address, no key.
+func (in *clientInput) applyWayfinderr(c *store.Client) {
+	c.WayfinderrURL = in.WayfinderrURL
+	if in.WayfinderrAPIKey != nil {
+		c.WayfinderrAPIKey = *in.WayfinderrAPIKey
+	}
+	if c.WayfinderrURL == "" {
+		c.WayfinderrAPIKey = ""
+	}
 }
 
 func (s *Server) listClients(w http.ResponseWriter, r *http.Request) {
@@ -1331,6 +1360,11 @@ func (s *Server) createClient(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Enabled != nil {
 		c.Enabled = *in.Enabled
+	}
+	in.applyWayfinderr(&c)
+	if c.WayfinderrURL != "" && c.WayfinderrAPIKey == "" {
+		writeError(w, http.StatusBadRequest, "the API key of Wayfinderr is required (its account menu, API key)")
+		return
 	}
 	c, err := s.store.CreateClient(r.Context(), c)
 	if err != nil {
@@ -1361,6 +1395,11 @@ func (s *Server) updateClient(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Enabled != nil {
 		c.Enabled = *in.Enabled
+	}
+	in.applyWayfinderr(&c)
+	if c.WayfinderrURL != "" && c.WayfinderrAPIKey == "" {
+		writeError(w, http.StatusBadRequest, "the API key of Wayfinderr is required (its account menu, API key)")
+		return
 	}
 	c, err = s.store.UpdateClient(r.Context(), c)
 	if err != nil {
@@ -1398,13 +1437,39 @@ func (s *Server) testClient(w http.ResponseWriter, r *http.Request) {
 	if !in.validate(w) {
 		return
 	}
-	password := ""
+	password, wayfinderrKey := "", ""
 	if in.Password != nil {
 		password = *in.Password
-	} else if in.ID != nil {
-		// Editing an existing client without retyping the password.
+	}
+	if in.WayfinderrAPIKey != nil {
+		wayfinderrKey = *in.WayfinderrAPIKey
+	}
+	if in.ID != nil {
+		// Editing an existing client without retyping the password or the key.
 		if c, err := s.store.GetClient(r.Context(), *in.ID); err == nil {
-			password = c.Password
+			if in.Password == nil {
+				password = c.Password
+			}
+			if in.WayfinderrAPIKey == nil {
+				wayfinderrKey = c.WayfinderrAPIKey
+			}
+		}
+	}
+	// The Wayfinderr of the client, when it has one: tested beside it.
+	var wf map[string]any
+	if in.WayfinderrURL != "" {
+		wf = map[string]any{"ok": false}
+		if wayfinderrKey == "" {
+			wf["error"] = "the API key is missing"
+		} else {
+			wctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+			user, err := wayfinderr.New(in.WayfinderrURL, wayfinderrKey).Ping(wctx)
+			cancel()
+			if err != nil {
+				wf["error"] = err.Error()
+			} else {
+				wf["ok"], wf["user"] = true, user
+			}
 		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -1412,15 +1477,15 @@ func (s *Server) testClient(w http.ResponseWriter, r *http.Request) {
 	q := qbit.New(in.URL, in.Username, password, in.SkipTLSVerify)
 	v, err := q.Version(ctx)
 	if err != nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error(), "wayfinderr": wf})
 		return
 	}
 	ts, err := q.Torrents(ctx)
 	if err != nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error(), "wayfinderr": wf})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "version": v, "torrents": len(ts)})
+	writeJSON(w, 200, map[string]any{"ok": true, "version": v, "torrents": len(ts), "wayfinderr": wf})
 }
 
 // --- sync ---

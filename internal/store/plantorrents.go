@@ -17,6 +17,8 @@ const MaxPlanTorrentLabel = 100
 var (
 	ErrPlanTorrentsFull = errors.New("the film has two .torrent files already: replace or remove one")
 	ErrPlanTorrentDup   = errors.New("this .torrent is already loaded on the film")
+	// The file was dropped once the film was released: it is on Wayfinderr.
+	ErrPlanTorrentDropped = errors.New("the .torrent file is on Wayfinderr only")
 )
 
 // PlanTorrent is a .torrent file loaded on a film of the plan (see the
@@ -39,6 +41,14 @@ type PlanTorrent struct {
 	// Sent, but the client read after the sending does not have it: it was
 	// removed (or never added).
 	Gone bool `json:"gone"`
+	// Sent to the Wayfinderr of this client as the source .torrent of the
+	// film (0 and nil if not yet); WayfinderrError is why the last try failed.
+	WayfinderrClientID   int64   `json:"wayfinderrClientId"`
+	WayfinderrClientName string  `json:"wayfinderrClientName"`
+	WayfinderrAt         *string `json:"wayfinderrAt"`
+	WayfinderrError      string  `json:"wayfinderrError"`
+	// The film was released: bookrr dropped the file, it is on Wayfinderr.
+	Dropped bool `json:"dropped"`
 }
 
 // Complete reports whether the torrent is downloaded whole on a client.
@@ -92,8 +102,10 @@ func (s *Store) planTorrents(ctx context.Context, planID int64) (map[int64][]Pla
 SELECT pt.plan_id, pt.position, pt.hash, pt.name, pt.size, pt.label, pt.sent_client_id, COALESCE(c.name, ''),
 	pt.sent_at, pt.created_at,
 	COALESCE(pt.sent_at IS NOT NULL AND c.enabled = 1 AND c.last_sync_at > pt.sent_at
-		AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.hash = pt.hash AND l.client_id = pt.sent_client_id), 0)
+		AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.hash = pt.hash AND l.client_id = pt.sent_client_id), 0),
+	pt.wayfinderr_client_id, COALESCE(wc.name, ''), pt.wayfinderr_at, pt.wayfinderr_error, pt.dropped_at IS NOT NULL
 FROM plan_torrents pt LEFT JOIN clients c ON c.id = pt.sent_client_id
+	LEFT JOIN clients wc ON wc.id = pt.wayfinderr_client_id
 WHERE ? = 0 OR pt.plan_id = ?
 ORDER BY pt.plan_id, pt.position`, planID, planID)
 	if err != nil {
@@ -103,13 +115,14 @@ ORDER BY pt.plan_id, pt.position`, planID, planID)
 	hashes := map[string]bool{}
 	for rows.Next() {
 		var t PlanTorrent
-		var sent sql.NullString
+		var sent, wayfinderr sql.NullString
 		if err := rows.Scan(&t.PlanID, &t.Position, &t.Hash, &t.Name, &t.Size, &t.Label, &t.SentClientID, &t.SentClientName,
-			&sent, &t.CreatedAt, &t.Gone); err != nil {
+			&sent, &t.CreatedAt, &t.Gone, &t.WayfinderrClientID, &t.WayfinderrClientName, &wayfinderr, &t.WayfinderrError,
+			&t.Dropped); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		t.SentAt = nullStr(sent)
+		t.SentAt, t.WayfinderrAt = nullStr(sent), nullStr(wayfinderr)
 		t.Downloads = []PlanDownload{}
 		out[t.PlanID] = append(out[t.PlanID], t)
 		hashes[t.Hash] = true
@@ -166,12 +179,18 @@ func (s *Store) PlanTorrent(ctx context.Context, planID int64, position int) (Pl
 	return PlanTorrent{}, ErrNotFound
 }
 
-// PlanTorrentFile returns the .torrent file of a film of the plan.
+// PlanTorrentFile returns the .torrent file of a film of the plan;
+// ErrPlanTorrentDropped once it is on Wayfinderr only.
 func (s *Store) PlanTorrentFile(ctx context.Context, planID int64, position int) ([]byte, error) {
 	var data []byte
-	err := s.db.QueryRowContext(ctx, `SELECT data FROM plan_torrents WHERE plan_id = ? AND position = ?`, planID, position).Scan(&data)
+	var dropped bool
+	err := s.db.QueryRowContext(ctx, `SELECT data, dropped_at IS NOT NULL FROM plan_torrents WHERE plan_id = ? AND position = ?`,
+		planID, position).Scan(&data, &dropped)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
+	}
+	if err == nil && (dropped || len(data) == 0) {
+		return nil, ErrPlanTorrentDropped
 	}
 	return data, err
 }
@@ -236,9 +255,10 @@ func (s *Store) SetPlanTorrent(ctx context.Context, planID int64, position int, 
 		}
 	}
 	if used[position] == in.Hash {
-		// The same file again: only the label changes.
-		if _, err := tx.ExecContext(ctx, `UPDATE plan_torrents SET label = ? WHERE plan_id = ? AND position = ?`,
-			in.Label, planID, position); err != nil {
+		// The same file again: only the label changes (and the file is back
+		// if it was dropped).
+		if _, err := tx.ExecContext(ctx, `UPDATE plan_torrents SET label = ?, data = ?, dropped_at = NULL
+WHERE plan_id = ? AND position = ?`, in.Label, in.Data, planID, position); err != nil {
 			return PlanTorrent{}, err
 		}
 	} else {
@@ -328,4 +348,164 @@ WHERE status IN (?, ?) AND downloaded_at IS NULL
 	}
 	n, err := res.RowsAffected()
 	return int(n), err
+}
+
+// WayfinderrSend is a .torrent of the plan to send to the Wayfinderr of a
+// client, as the source .torrent of its film.
+type WayfinderrSend struct {
+	PlanID   int64
+	Position int
+	Hash     string
+	Name     string
+	Label    string
+	TmdbID   int64
+	Data     []byte
+	Client   Client
+}
+
+// PlanTorrentsForWayfinderr returns the .torrent files of the open films of
+// the plan complete on a client with a Wayfinderr and not sent to one yet,
+// each with that client: the one it was sent to when it is complete there,
+// else the first by name.
+func (s *Store) PlanTorrentsForWayfinderr(ctx context.Context) ([]WayfinderrSend, error) {
+	// One row per client with a Wayfinderr it is complete on, the client it
+	// was sent to first.
+	rows, err := s.db.QueryContext(ctx, `
+SELECT pt.plan_id, pt.position, pt.hash, pt.name, pt.label, rp.tmdb_id, c.id
+FROM plan_torrents pt JOIN release_plan rp ON rp.id = pt.plan_id
+	JOIN locations l ON l.hash = pt.hash AND l.progress >= 1
+	JOIN clients c ON c.id = l.client_id AND c.enabled = 1 AND c.wayfinderr_url != '' AND c.wayfinderr_api_key != ''
+WHERE pt.wayfinderr_at IS NULL AND pt.dropped_at IS NULL AND rp.status IN (?, ?, ?)
+ORDER BY pt.plan_id, pt.position, c.id = pt.sent_client_id DESC, c.name COLLATE NOCASE`, PlanTodo, PlanDoing, PlanDownloaded)
+	if err != nil {
+		return nil, err
+	}
+	var out []WayfinderrSend
+	for rows.Next() {
+		var w WayfinderrSend
+		if err := rows.Scan(&w.PlanID, &w.Position, &w.Hash, &w.Name, &w.Label, &w.TmdbID, &w.Client.ID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if n := len(out); n > 0 && out[n-1].PlanID == w.PlanID && out[n-1].Position == w.Position {
+			continue
+		}
+		out = append(out, w)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		c, err := s.GetClient(ctx, out[i].Client.ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Client = c
+		if out[i].Data, err = s.PlanTorrentFile(ctx, out[i].PlanID, out[i].Position); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// SetPlanTorrentWayfinderr records how sending a .torrent of the plan to the
+// Wayfinderr of a client went: sent with a nil error, else why it failed.
+func (s *Store) SetPlanTorrentWayfinderr(ctx context.Context, planID int64, position int, clientID int64, sendErr error) error {
+	var res sql.Result
+	var err error
+	if sendErr != nil {
+		res, err = s.db.ExecContext(ctx, `UPDATE plan_torrents SET wayfinderr_error = ? WHERE plan_id = ? AND position = ?`,
+			sendErr.Error(), planID, position)
+	} else {
+		res, err = s.db.ExecContext(ctx, `UPDATE plan_torrents SET wayfinderr_client_id = ?, wayfinderr_at = ?, wayfinderr_error = ''
+WHERE plan_id = ? AND position = ?`, clientID, now(), planID, position)
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// WayfinderrDrop is a .torrent of the plan whose file can go: its film was
+// released, and it is on the Wayfinderr of Client.
+type WayfinderrDrop struct {
+	PlanID   int64
+	Position int
+	Hash     string
+	Name     string
+	Client   Client
+}
+
+// PlanTorrentsToDrop returns the .torrent files still kept of the films the
+// user released (made done by an upload found on the tracker, not by hand)
+// that were sent to a Wayfinderr, with the client of that Wayfinderr.
+func (s *Store) PlanTorrentsToDrop(ctx context.Context) ([]WayfinderrDrop, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT pt.plan_id, pt.position, pt.hash, pt.name, pt.wayfinderr_client_id
+FROM plan_torrents pt JOIN release_plan rp ON rp.id = pt.plan_id
+WHERE rp.status = ? AND rp.release_id != 0 AND pt.wayfinderr_at IS NOT NULL AND pt.dropped_at IS NULL
+ORDER BY pt.plan_id, pt.position`, PlanDone)
+	if err != nil {
+		return nil, err
+	}
+	var out []WayfinderrDrop
+	for rows.Next() {
+		var d WayfinderrDrop
+		if err := rows.Scan(&d.PlanID, &d.Position, &d.Hash, &d.Name, &d.Client.ID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	kept := out[:0]
+	for _, d := range out {
+		c, err := s.GetClient(ctx, d.Client.ID)
+		if errors.Is(err, ErrNotFound) {
+			// The client is gone, and with it the way to its Wayfinderr: kept.
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		d.Client = c
+		kept = append(kept, d)
+	}
+	return kept, nil
+}
+
+// DropPlanTorrentFile drops the file of a .torrent of the plan, which is on
+// Wayfinderr: the row stays, with its name, hash and label.
+func (s *Store) DropPlanTorrentFile(ctx context.Context, planID int64, position int) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE plan_torrents SET data = X'', dropped_at = ? WHERE plan_id = ? AND position = ?`,
+		now(), planID, position)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// WayfinderrOf returns the client whose Wayfinderr has a .torrent of the
+// plan (ErrNotFound if it was never sent, or the client is gone).
+func (s *Store) WayfinderrOf(ctx context.Context, planID int64, position int) (Client, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx, `SELECT wayfinderr_client_id FROM plan_torrents WHERE plan_id = ? AND position = ?
+	AND wayfinderr_at IS NOT NULL`, planID, position).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Client{}, ErrNotFound
+	}
+	if err != nil {
+		return Client{}, err
+	}
+	return s.GetClient(ctx, id)
 }

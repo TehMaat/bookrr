@@ -2,6 +2,7 @@ import { useState } from "react"
 import {
   ChevronRight,
   CircleCheck,
+  Clapperboard,
   Download,
   FileDown,
   FileUp,
@@ -88,6 +89,12 @@ export function PlanTorrents({
     ({ position }: { position: number }) => api.deletePlanTorrent(it.id, position),
     ".torrent removed from the film",
   )
+  const toWayfinderr = useAction(
+    ({ position }: { position: number }) => api.sendPlanTorrentToWayfinderr(it.id, position),
+    ".torrent sent to Wayfinderr",
+  )
+  // Clients that hand their downloads over to a Wayfinderr.
+  const withWayfinderr = (clients.data ?? []).some((c) => c.enabled && c.wayfinderrUrl)
 
   /** Sends to the default client without asking, else asks which one. */
   const send = async (positions?: number[]) => {
@@ -167,9 +174,14 @@ export function PlanTorrents({
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href={api.planTorrentFileUrl(it.id, t.position)} download>
-                    <FileDown /> Save the .torrent file
+                    <FileDown /> Save the .torrent file{t.dropped ? " (from Wayfinderr)" : ""}
                   </a>
                 </DropdownMenuItem>
+                {withWayfinderr && (
+                  <DropdownMenuItem onClick={() => toWayfinderr.mutate({ position: t.position })}>
+                    <Clapperboard /> {t.wayfinderrAt ? "Send to Wayfinderr again" : "Send to Wayfinderr"}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onClick={() => remove.mutate({ position: t.position })}>
                   <Trash2 /> Remove from the film
@@ -178,6 +190,7 @@ export function PlanTorrents({
             </DropdownMenu>
           </div>
           <TorrentProgress t={t} />
+          <WayfinderrState t={t} />
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-1">
@@ -199,6 +212,40 @@ export function PlanTorrents({
       </div>
     </div>
   )
+}
+
+/** The .torrent on Wayfinderr: sent as the source .torrent of the film, dropped here once released, or why sending failed. */
+function WayfinderrState({ t }: { t: PlanTorrent }) {
+  if (t.wayfinderrAt)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+            <Clapperboard className="size-3" />
+            {t.dropped ? "On Wayfinderr only" : "On Wayfinderr"}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          Sent to the Wayfinderr of {t.wayfinderrClientName || "a removed client"} {formatRelative(t.wayfinderrAt)}: it
+          goes into the upload once the rip is done.{" "}
+          {t.dropped
+            ? "The film is released, so bookrr dropped its copy: saving or sending it takes it from Wayfinderr."
+            : "bookrr drops its copy once the film is released."}
+        </TooltipContent>
+      </Tooltip>
+    )
+  if (t.wayfinderrError)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-destructive inline-flex items-center gap-1 text-xs">
+            <TriangleAlert className="size-3" /> Not sent to Wayfinderr yet
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs break-words">{t.wayfinderrError}. Tried again at the next sync.</TooltipContent>
+      </Tooltip>
+    )
+  return null
 }
 
 /** Where a .torrent of the plan is: progress on each client, sent and waiting, gone, or never sent. */
