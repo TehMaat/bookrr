@@ -18,7 +18,7 @@ const (
 	ActionComplete  = "complete"  // the collection, as it is now
 	ActionAccept    = "accept"    // a torrent of others for a part
 	ActionIgnore    = "ignore"    // a part
-	ActionThreshold = "threshold" // a minimum quality of the collection's own
+	ActionThreshold = "threshold" // a minimum quality of the collection's own, or of one part
 )
 
 // Part is how a part stands in the view by part: its best version against
@@ -31,6 +31,9 @@ type Part struct {
 	Best     *Version `json:"best"`
 	Mark     string   `json:"mark"`
 	Accepted int64    `json:"accepted"`
+	// The part's own minimum quality, used instead of the group's; nil for
+	// none.
+	Threshold *store.GapThreshold `json:"threshold"`
 }
 
 // Types from best to worst, for the minimum quality.
@@ -207,6 +210,7 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark, banned Banned)
 	hiddenRows := map[string]bool{}
 	accepted := map[markKey]int64{}
 	ignored := map[markKey]bool{}
+	ownThreshold := map[int64]store.GapThreshold{}
 	for _, m := range marks {
 		k := markKey{m.Quality, m.Unit}
 		switch m.Action {
@@ -229,7 +233,12 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark, banned Banned)
 			ignored[k] = true
 		case ActionThreshold:
 			var t store.GapThreshold
-			if json.Unmarshal([]byte(m.Value), &t) == nil {
+			if json.Unmarshal([]byte(m.Value), &t) != nil {
+				break
+			}
+			if m.Unit != 0 {
+				ownThreshold[m.Unit] = t
+			} else {
 				g.Threshold, g.CustomThreshold = t, true
 			}
 		}
@@ -338,10 +347,18 @@ func Apply(g *Group, prefs store.GapPrefs, marks []store.GapMark, banned Banned)
 	g.Parts = make([]Part, 0, len(g.Units))
 	for ui := range g.Units {
 		u := &g.Units[ui]
-		for i := range u.Versions {
-			u.Versions[i].Meets = Meets(u.Versions[i].Q, g.Threshold)
+		t := g.Threshold
+		own, hasOwn := ownThreshold[u.ID]
+		if hasOwn {
+			t = own
 		}
-		p := partOf(*u, g.Threshold)
+		for i := range u.Versions {
+			u.Versions[i].Meets = Meets(u.Versions[i].Q, t)
+		}
+		p := partOf(*u, t)
+		if hasOwn {
+			p.Threshold = &own
+		}
 		if p.State != StateMine {
 			p.Mark, p.Accepted, _ = markOf("", u.ID, nil)
 		}

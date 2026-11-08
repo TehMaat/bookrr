@@ -145,6 +145,22 @@ func TestApplyGrid(t *testing.T) {
 		t.Fatalf("hidden, own minimum: %+v %+v", g.Threshold, g.PartTotals)
 	}
 
+	// Minimum 2160p, but Alien³ (8077) is enough in 1080p: only Alien -
+	// La clonazione is missing. Its own minimum wins over the group's too.
+	g = alien()
+	own := []store.GapMark{
+		{Action: ActionThreshold, Value: `{"type":"Remux","resolution":"2160p"}`},
+		{Action: ActionThreshold, Unit: 8077, Value: `{"resolution":"1080p"}`},
+	}
+	Apply(g, store.GapPrefs{}, own, nil)
+	p := parts(g)
+	if p[3].State != StateMine || p[3].Threshold == nil || p[3].Threshold.Resolution != "1080p" || !g.Units[2].Versions[0].Meets {
+		t.Fatalf("own minimum of a part: %+v", p[3])
+	}
+	if p[4].State != PartBelow || p[4].Threshold != nil || g.PartTotals.Missing != 1 || g.Threshold.Resolution != "2160p" {
+		t.Fatalf("the other parts: %+v %+v", p[4], g.PartTotals)
+	}
+
 	// Results of an older check: no view by part.
 	g = alien()
 	g.Format = 0

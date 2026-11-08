@@ -138,6 +138,20 @@ func TestMissingMarks(t *testing.T) {
 	if got := get(); !got.Hidden || !got.Completed || !got.CustomThreshold || got.Threshold.Type != "Encode" {
 		t.Fatalf("hidden, complete, own minimum: %+v", got)
 	}
+	// A minimum of the part's own, next to the group's.
+	part := map[string]any{"group": g.Key, "action": "threshold", "unit": 12, "threshold": map[string]string{"type": "webdl"}}
+	if code := call(t, h, "POST", "/api/missing/sagas/marks", part, nil); code != http.StatusOK {
+		t.Fatalf("part minimum: %d", code)
+	}
+	if got := get(); got.Threshold.Type != "Encode" || got.Parts[1].Threshold == nil || got.Parts[1].Threshold.Type != "WEB-DL" {
+		t.Fatalf("part minimum: %+v %+v", got.Threshold, got.Parts[1])
+	}
+	if code := call(t, h, "DELETE", "/api/missing/sagas/marks", map[string]any{"group": g.Key, "action": "threshold", "unit": 12}, nil); code != http.StatusNoContent {
+		t.Fatalf("remove part minimum: %d", code)
+	}
+	if got := get(); got.Parts[1].Threshold != nil || !got.CustomThreshold {
+		t.Fatalf("part minimum removed: %+v", got)
+	}
 	if code := call(t, h, "DELETE", "/api/missing/sagas/marks", map[string]any{"group": g.Key, "action": "hide"}, nil); code != http.StatusNoContent {
 		t.Fatalf("unhide: %d", code)
 	}

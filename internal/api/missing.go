@@ -282,8 +282,11 @@ func readMark(w http.ResponseWriter, r *http.Request) (store.GapMark, *markIn, b
 	switch in.Action {
 	case gaps.ActionHide:
 		m.Unit, m.Torrent = 0, 0
-	case gaps.ActionComplete, gaps.ActionThreshold:
+	case gaps.ActionComplete:
 		m.Quality, m.Unit, m.Torrent = "", 0, 0
+	case gaps.ActionThreshold:
+		// Of the whole group (unit 0), or of one part.
+		m.Quality, m.Torrent = "", 0
 	case gaps.ActionAccept:
 		if m.Unit == 0 || m.Torrent == 0 {
 			bad = "give the part and the torrent to accept"
@@ -307,8 +310,8 @@ func readMark(w http.ResponseWriter, r *http.Request) (store.GapMark, *markIn, b
 }
 
 // setMissingMark stores a choice of the user: hide a collection or a row,
-// mark it complete, accept a torrent of others, ignore a part, give it a
-// minimum quality of its own.
+// mark it complete, accept a torrent of others, ignore a part, give the
+// collection or one of its parts a minimum quality of its own.
 func (s *Server) setMissingMark(w http.ResponseWriter, r *http.Request) {
 	m, in, ok := readMark(w, r)
 	if !ok {
