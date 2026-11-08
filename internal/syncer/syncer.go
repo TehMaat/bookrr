@@ -166,9 +166,24 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("release plan: %w", err)
 	}
+	// The .torrent files of the plan for the Wayfinderr of the clients: a
+	// Wayfinderr that does not answer never fails the sync.
+	toWayfinderr, dropped, err := Wayfinderr(ctx, s.store)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", err
+		}
+		slog.Error("plan torrents for Wayfinderr", "err", err)
+	}
 	result := fmt.Sprintf("%d clients synced, %d with errors, %d torrents, %d new alerts", ok, failed, total, alerts)
 	if downloaded > 0 {
 		result += fmt.Sprintf(", %d plan films downloaded", downloaded)
+	}
+	if toWayfinderr > 0 {
+		result += fmt.Sprintf(", %d .torrent files sent to Wayfinderr", toWayfinderr)
+	}
+	if dropped > 0 {
+		result += fmt.Sprintf(", %d released .torrent files dropped", dropped)
 	}
 	slog.Info("sync complete", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts,
 		"planDownloaded", downloaded)

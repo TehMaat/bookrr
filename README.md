@@ -23,7 +23,7 @@ The inventory of your torrents: **where they are** (on which qBittorrent client,
 - 🚀 **Release history** from the UNIT3D tracker (anonymous uploads included) with seeders and completions, linked to the torrents in bookrr; the **hash** of the torrents added without one is found on the tracker.
 - 🧩 **Missing seasons and films**: for your series, for the **sagas** of your films (TMDB) and for the **collections** you follow (MDBList), what is missing in your quality, with minimum quality, banned groups and your choices.
 - 📺 **Max resolution**: with Prowlarr, the films that exist in a better version than yours.
-- 📝 **Release plan**: the films you want to release, with their best existing version; load their .torrent (two for a merge), download it on a client and follow its progress; marked done when you upload them.
+- 📝 **Release plan**: the films you want to release, with their best existing version; load their .torrent (two for a merge), download it on a client and follow its progress; marked done when you upload them. With [Wayfinderr](https://github.com/TehMaat/wayfinderr) behind a client, the downloaded .torrent goes there as the film's source .torrent, and bookrr drops its copy once the film is released.
 - 📦 **Archivable releases**: your releases still on a client that others are already seeding.
 - 📜 **Logs** page, with one file per day kept in the data folder.
 - 🌗 Light and dark theme and six **lightsaber colors** for the logo and the buttons.

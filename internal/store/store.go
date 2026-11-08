@@ -370,6 +370,21 @@ CREATE INDEX plan_torrents_hash ON plan_torrents(hash);
 -- set, it is not made downloaded again by itself until they are sent again.
 ALTER TABLE release_plan ADD COLUMN downloaded_at TEXT;
 `,
+	`
+-- The Wayfinderr that rips and uploads what this client downloads: the
+-- .torrent files of the plan completed on it are sent there as the source
+-- .torrent of their film. Empty: none.
+ALTER TABLE clients ADD COLUMN wayfinderr_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE clients ADD COLUMN wayfinderr_api_key TEXT NOT NULL DEFAULT '';
+-- Sent to the Wayfinderr of client wayfinderr_client_id at wayfinderr_at
+-- (NULL not yet); wayfinderr_error is why the last try failed. Once the
+-- film is released, dropped_at is set and data emptied: the file is on
+-- Wayfinderr.
+ALTER TABLE plan_torrents ADD COLUMN wayfinderr_client_id INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE plan_torrents ADD COLUMN wayfinderr_at TEXT;
+ALTER TABLE plan_torrents ADD COLUMN wayfinderr_error TEXT NOT NULL DEFAULT '';
+ALTER TABLE plan_torrents ADD COLUMN dropped_at TEXT;
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

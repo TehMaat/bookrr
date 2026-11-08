@@ -207,6 +207,9 @@ export type Client = {
   lastError: string
   torrentCount: number
   createdAt: string
+  /** The Wayfinderr this client's downloads go to, "" if none. */
+  wayfinderrUrl: string
+  hasWayfinderrKey: boolean
 }
 
 /** A tracker torrent that may be the one a torrent without hash refers to. */
@@ -370,6 +373,14 @@ export type PlanTorrent = {
   downloads: PlanDownload[]
   /** Sent, but the client no longer has it. */
   gone: boolean
+  /** Sent to the Wayfinderr of this client as the source .torrent of the film (0 and null if not yet). */
+  wayfinderrClientId: number
+  wayfinderrClientName: string
+  wayfinderrAt: string | null
+  /** Why the last try to send it to Wayfinderr failed. */
+  wayfinderrError: string
+  /** The film was released: bookrr dropped the file, it is on Wayfinderr. */
+  dropped: boolean
 }
 
 /** How the .torrent files of a film are sent to a client; the empty options leave the client's defaults. */
@@ -712,6 +723,10 @@ export type ClientInput = {
   password?: string
   skipTlsVerify: boolean
   enabled: boolean
+  /** "" for none. */
+  wayfinderrUrl: string
+  /** Undefined keeps the stored one. */
+  wayfinderrApiKey?: string
 }
 
 export type ResolveInput = {
@@ -867,6 +882,9 @@ export const api = {
   updatePlanTorrent: (id: number, position: number, label: string) =>
     request<PlanTorrent>("PATCH", `/api/plan/${id}/torrents/${position}`, { label }),
   /** Removes a .torrent from the film (not from the clients). */
+  /** Sends a .torrent of the plan to the Wayfinderr of a client (0: the one it was sent to or is on). */
+  sendPlanTorrentToWayfinderr: (id: number, position: number, clientId = 0) =>
+    request<PlanTorrent>("POST", `/api/plan/${id}/torrents/${position}/wayfinderr`, { clientId }),
   deletePlanTorrent: (id: number, position: number) => request<void>("DELETE", `/api/plan/${id}/torrents/${position}`),
   planTorrentFileUrl: (id: number, position: number) => `/api/plan/${id}/torrents/${position}/file`,
   /** Sends the .torrent files of a film to a client, to download them. */
@@ -938,7 +956,14 @@ export const api = {
   updateClient: (id: number, c: ClientInput) => request<Client>("PUT", `/api/clients/${id}`, c),
   deleteClient: (id: number) => request<void>("DELETE", `/api/clients/${id}`),
   testClient: (c: ClientInput) =>
-    request<{ ok: boolean; error?: string; version?: string; torrents?: number }>("POST", "/api/clients/test", c),
+    request<{
+      ok: boolean
+      error?: string
+      version?: string
+      torrents?: number
+      /** The client's Wayfinderr, when it has one. */
+      wayfinderr: { ok: boolean; user?: string; error?: string } | null
+    }>("POST", "/api/clients/test", c),
 
   config: () => request<{ options: ConfigOption[] }>("GET", "/api/config"),
   /** Saves the options and starts again, without restarting bookrr, the services whose options changed. */

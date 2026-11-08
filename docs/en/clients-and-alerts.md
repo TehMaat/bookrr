@@ -15,6 +15,8 @@ Every `BOOKRR_SYNC_INTERVAL` (5 minutes) bookrr reads `/api/v2/torrents/info` fr
 
 An unreachable client raises **no** alerts: its torrents stay as they were until the next successful read. **Sync now**, at the bottom of the sidebar, reads the clients right away.
 
+A client can also have a **Wayfinderr** (address and API key, in its dialog): the .torrent files of the plan completed on it are sent there, see [Handing the .torrent over to Wayfinderr](prowlarr-and-plan.md#handing-the-torrent-over-to-wayfinderr).
+
 ```mermaid
 stateDiagram-v2
   direction LR

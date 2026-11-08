@@ -14,7 +14,9 @@ import (
 
 	"github.com/tehmaat/bookrr/internal/qbit"
 	"github.com/tehmaat/bookrr/internal/store"
+	"github.com/tehmaat/bookrr/internal/syncer"
 	"github.com/tehmaat/bookrr/internal/unit3d"
+	"github.com/tehmaat/bookrr/internal/wayfinderr"
 )
 
 // maxTorrentFile is the largest .torrent file taken for the plan.
@@ -182,9 +184,13 @@ func (s *Server) planTorrentFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	data, err := s.store.PlanTorrentFile(r.Context(), id, pos)
+	data, err := s.planTorrentData(r.Context(), id, t)
 	if err != nil {
-		s.fail(w, err)
+		if errors.Is(err, store.ErrNotFound) {
+			s.fail(w, err)
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-bittorrent")
@@ -193,12 +199,137 @@ func (s *Server) planTorrentFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // torrentFilename is the name of the .torrent file of t, without slashes.
-func torrentFilename(t store.PlanTorrent) string {
-	name := strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name)
-	if name == "" {
-		name = t.Hash
+func torrentFilename(t store.PlanTorrent) string { return syncer.FileName(t.Name, t.Hash) }
+
+// planTorrentData returns the .torrent file of t: from bookrr, or once
+// dropped (the film was released) from the Wayfinderr it was sent to.
+func (s *Server) planTorrentData(ctx context.Context, planID int64, t store.PlanTorrent) ([]byte, error) {
+	data, err := s.store.PlanTorrentFile(ctx, planID, t.Position)
+	if !errors.Is(err, store.ErrPlanTorrentDropped) {
+		return data, err
 	}
-	return name + ".torrent"
+	c, err := s.store.WayfinderrOf(ctx, planID, t.Position)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !c.HasWayfinderr()) {
+		return nil, errors.New("the .torrent file is on Wayfinderr, but the client it was sent through no longer has one: load the file again")
+	}
+	if err != nil {
+		return nil, err
+	}
+	wctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	data, err = wayfinderr.New(c.WayfinderrURL, c.WayfinderrAPIKey).SourceTorrentFile(wctx, t.Hash)
+	if err != nil {
+		return nil, fmt.Errorf("the .torrent file is on the Wayfinderr of %s: %w", c.Name, err)
+	}
+	return data, nil
+}
+
+// sendPlanTorrentToWayfinderr sends a .torrent of the plan to the Wayfinderr
+// of a client by hand (also again): {"clientId": 0} for the client it was
+// sent to or is on, if that has a Wayfinderr.
+func (s *Server) sendPlanTorrentToWayfinderr(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	pos, ok := pathPosition(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		ClientID int64 `json:"clientId"`
+	}
+	if r.ContentLength != 0 && !decode(w, r, &in) {
+		return
+	}
+	e, err := s.store.PlanEntry(ctx, id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	t, err := s.store.PlanTorrent(ctx, id, pos)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	c, err := s.wayfinderrClient(ctx, t, in.ClientID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	data, err := s.planTorrentData(ctx, id, t)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	wctx, cancel := context.WithTimeout(ctx, time.Minute)
+	sendErr := wayfinderr.New(c.WayfinderrURL, c.WayfinderrAPIKey).AddSourceTorrent(wctx, wayfinderr.SourceTorrent{
+		FileName: torrentFilename(t), Data: data, TmdbID: e.TmdbID, Label: t.Label,
+	})
+	cancel()
+	if err := s.store.SetPlanTorrentWayfinderr(ctx, id, pos, c.ID, sendErr); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if sendErr != nil {
+		slog.Warn("sending a plan torrent to Wayfinderr failed", "plan", id, "position", pos, "client", c.Name, "err", sendErr)
+		writeError(w, http.StatusBadGateway, sendErr.Error())
+		return
+	}
+	slog.Info("plan torrent sent to Wayfinderr by hand", "plan", id, "position", pos, "hash", t.Hash, "client", c.Name)
+	t, err = s.store.PlanTorrent(ctx, id, pos)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+// wayfinderrClient is the client whose Wayfinderr a .torrent goes to: the
+// one asked for, else the one it was sent to or is on, else the only one.
+func (s *Server) wayfinderrClient(ctx context.Context, t store.PlanTorrent, clientID int64) (store.Client, error) {
+	if clientID != 0 {
+		c, err := s.store.GetClient(ctx, clientID)
+		if errors.Is(err, store.ErrNotFound) {
+			return c, errors.New("the client no longer exists")
+		}
+		if err == nil && !c.HasWayfinderr() {
+			return c, errors.New(c.Name + " has no Wayfinderr: set it in Clients")
+		}
+		return c, err
+	}
+	cs, err := s.store.ListClients(ctx)
+	if err != nil {
+		return store.Client{}, err
+	}
+	var with []store.Client
+	for _, c := range cs {
+		if c.Enabled && c.HasWayfinderr() {
+			with = append(with, c)
+		}
+	}
+	for _, id := range []int64{t.WayfinderrClientID, t.SentClientID} {
+		for _, c := range with {
+			if c.ID == id {
+				return c, nil
+			}
+		}
+	}
+	for _, d := range t.Downloads {
+		for _, c := range with {
+			if c.ID == d.ClientID {
+				return c, nil
+			}
+		}
+	}
+	if len(with) == 1 {
+		return with[0], nil
+	}
+	if len(with) == 0 {
+		return store.Client{}, errors.New("no client has a Wayfinderr: set it in Clients")
+	}
+	return store.Client{}, errors.New("choose the client whose Wayfinderr to send it to")
 }
 
 type planSendInput struct {
@@ -303,10 +434,16 @@ func (s *Server) sendPlanTorrents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !res.Already {
-			data, err := s.store.PlanTorrentFile(ctx, id, t.Position)
-			if err != nil {
+			data, err := s.planTorrentData(ctx, id, t)
+			if errors.Is(err, store.ErrNotFound) {
 				s.fail(w, err)
 				return
+			}
+			if err != nil {
+				res.Error = err.Error()
+				errs = append(errs, err.Error())
+				results = append(results, res)
+				continue
 			}
 			actx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			err = q.AddTorrent(actx, torrentFilename(t), data, opts)

@@ -15,6 +15,8 @@ Ogni `BOOKRR_SYNC_INTERVAL` (5 minuti) bookrr legge `/api/v2/torrents/info` da o
 
 Un client irraggiungibile **non** genera segnalazioni: i suoi torrent restano com'erano fino alla prossima lettura riuscita. **Sync now**, in fondo al menu, legge subito i client.
 
+Un client può avere anche un **Wayfinderr** (indirizzo e chiave API, nella sua finestra): i .torrent del piano completati su di lui vengono mandati lì, vedi [Passare il .torrent a Wayfinderr](prowlarr-e-piano.md#passare-il-torrent-a-wayfinderr).
+
 ```mermaid
 stateDiagram-v2
   direction LR
