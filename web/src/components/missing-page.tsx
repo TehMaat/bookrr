@@ -431,6 +431,7 @@ function CellButton({
   quality,
   unit,
   hint,
+  own,
   onOpen,
 }: {
   kind: GapKind
@@ -439,6 +440,8 @@ function CellButton({
   quality?: string
   unit: GapUnit
   hint?: React.ReactNode
+  /** The part has a minimum quality of its own. */
+  own?: boolean
   onOpen: () => void
 }) {
   const plan = useContext(Planned)
@@ -459,6 +462,7 @@ function CellButton({
           <look.icon className="size-3 shrink-0" />
           <span className="truncate">{label}</span>
           {quality && <span className="shrink-0 font-normal opacity-75">· {quality}</span>}
+          {own && <Gauge className="size-3 shrink-0 opacity-75" aria-label="Minimum quality of its own" />}
           {planned && <ListTodo className="size-3 shrink-0 opacity-75" aria-label="In the release plan" />}
         </button>
       </TooltipTrigger>
@@ -589,6 +593,7 @@ function ThresholdDialog({
   resolutions,
   onSave,
   onReset,
+  resetLabel = "Use the general one",
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -599,6 +604,7 @@ function ThresholdDialog({
   resolutions: string[]
   onSave: (t: GapThreshold) => void
   onReset?: () => void
+  resetLabel?: string
 }) {
   const [t, setT] = useState(initial)
   const [prev, setPrev] = useState({ open, initial })
@@ -664,7 +670,7 @@ function ThresholdDialog({
         <DialogFooter>
           {onReset && (
             <Button variant="ghost" className="mr-auto" onClick={onReset}>
-              Use the general one
+              {resetLabel}
             </Button>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -827,9 +833,15 @@ function GroupCard({
                   label={k.cellLabel(unit, prefix)}
                   quality={shown ? shortQuality(shown.q) : undefined}
                   hint={
-                    shown &&
-                    `${shown.mine ? "Yours" : shown.banned ? `By ${shown.group}, banned` : "By others"}: ${shown.quality}${shown.group && !shown.banned ? ` · ${shown.group}` : ""}`
+                    (shown || p.threshold) && (
+                      <>
+                        {shown &&
+                          `${shown.mine ? "Yours" : shown.banned ? `By ${shown.group}, banned` : "By others"}: ${shown.quality}${shown.group && !shown.banned ? ` · ${shown.group}` : ""}`}
+                        {p.threshold && <div>Minimum quality of its own: {thresholdLabel(p.threshold)}</div>}
+                      </>
+                    )
                   }
+                  own={!!p.threshold}
                   onOpen={() => onOpen({ group: s.key, unit: p.unit, row: null })}
                 />
               )
@@ -948,12 +960,15 @@ function CellDialog({
   onClose,
   onMark,
   onBan,
+  onThreshold,
 }: {
   opened: Opened | null
   all: GapGroup[]
   onClose: () => void
   onMark: MarkFn
   onBan: (group: string, ban: boolean) => void
+  /** Edit the minimum quality of the part of its own (own: the current one, if any). */
+  onThreshold: (s: GapGroup, unit: GapUnit, own: GapThreshold | null) => void
 }) {
   const s = opened ? all.find((g) => g.key === opened.group) : undefined
   const unit = s?.units.find((u) => u.number === opened?.unit)
@@ -975,6 +990,7 @@ function CellDialog({
       onMark({ group: s.key, action, quality: scope, unit: unit.id, torrent })
     const unset = (action: "accept" | "ignore") => onMark({ group: s.key, action, quality: markScope, unit: unit.id }, true)
     const refs = cell ? cell.torrents : unit.versions
+    const one = s.kind === "series" ? "season" : "film"
     body = (
       <>
         <DialogHeader>
@@ -985,7 +1001,9 @@ function CellDialog({
             {look.hint}
             {row
               ? `${cell!.state === "other_quality" ? ": you wanted " : " · "}${row.quality.label}`
-              : ` · minimum quality: ${thresholdLabel(s.threshold)}`}
+              : part!.threshold
+                ? ` · minimum quality of this ${one}: ${thresholdLabel(part!.threshold)}`
+                : ` · minimum quality: ${thresholdLabel(s.threshold)}`}
           </DialogDescription>
         </DialogHeader>
         {cell?.state === "other_quality" && (
@@ -1024,6 +1042,11 @@ function CellDialog({
             </Button>
           ) : (
             <span />
+          )}
+          {part && (
+            <Button variant="outline" size="sm" className="sm:ml-auto" onClick={() => onThreshold(s, unit, part.threshold)}>
+              <Gauge /> Minimum quality of this {one}…
+            </Button>
           )}
           {!mine &&
             (mark === "ignored" ? (
@@ -1301,10 +1324,14 @@ function GapList({
   const [page, setPage] = useState(0)
   const [opened, setOpened] = useState<Opened | null>(null)
   const [showHidden, setShowHidden] = useState(false)
-  // The minimum quality being edited: of every group (null key) or of one.
-  const [editing, setEditing] = useState<{ key: string | null; title: string; initial: GapThreshold; custom: boolean } | null>(
-    null
-  )
+  // The minimum quality being edited: of every group (null key), of one, or of one of its parts (unit: GapUnit.id).
+  const [editing, setEditing] = useState<{
+    key: string | null
+    unit?: number
+    title: string
+    initial: GapThreshold
+    custom: boolean
+  } | null>(null)
 
   const mark = useAction(({ input, remove }: { input: GapMarkInput; remove?: boolean }) =>
     remove ? api.removeGapMark(kind, input) : api.setGapMark(kind, input)
@@ -1413,7 +1440,11 @@ function GapList({
   const saveThreshold = (t: GapThreshold) => {
     if (!editing) return
     if (editing.key === null) savePrefs.mutate({ ...prefs, ...t }, { onSuccess: () => setEditing(null) })
-    else mark.mutate({ input: { group: editing.key, action: "threshold", threshold: t } }, { onSuccess: () => setEditing(null) })
+    else
+      mark.mutate(
+        { input: { group: editing.key, action: "threshold", unit: editing.unit, threshold: t } },
+        { onSuccess: () => setEditing(null) }
+      )
   }
 
   return (
@@ -1637,7 +1668,23 @@ function GapList({
         </Card>
       )}
 
-      <CellDialog opened={opened} all={all} onClose={() => setOpened(null)} onMark={onMark} onBan={onBan} />
+      <CellDialog
+        opened={opened}
+        all={all}
+        onClose={() => setOpened(null)}
+        onMark={onMark}
+        onBan={onBan}
+        onThreshold={(g, unit, own) => {
+          setOpened(null)
+          setEditing({
+            key: g.key,
+            unit: unit.id,
+            title: `Minimum quality: ${g.title} · ${unit.name}`,
+            initial: own ?? g.threshold,
+            custom: !!own,
+          })
+        }}
+      />
       <BannedDialog
         open={editingBanned}
         onOpenChange={setEditingBanned}
@@ -1652,15 +1699,22 @@ function GapList({
         description={
           editing?.key === null
             ? `Below this quality ${kind === "series" ? "a season" : "a film"} counts as missing, even if you uploaded it. Applies to ${k.noun.toLowerCase()} without a minimum quality of their own.`
-            : `Only for this ${k.one}, instead of the general minimum quality (${thresholdLabel(prefs)}).`
+            : editing?.unit
+              ? `Only for this ${kind === "series" ? "season" : "film"}, instead of the minimum quality of the ${k.one} (${thresholdLabel(all.find((g) => g.key === editing.key)?.threshold ?? prefs)}): e.g. the shorts of a saga you don't want in Remux.`
+              : `Only for this ${k.one}, instead of the general minimum quality (${thresholdLabel(prefs)}).`
         }
         initial={editing?.initial ?? prefs}
         types={types}
         resolutions={resolutions}
         onSave={saveThreshold}
+        resetLabel={editing?.unit ? `Use the one of the ${k.one}` : undefined}
         onReset={
           editing?.key && editing.custom
-            ? () => mark.mutate({ input: { group: editing.key!, action: "threshold" }, remove: true }, { onSuccess: () => setEditing(null) })
+            ? () =>
+                mark.mutate(
+                  { input: { group: editing.key!, action: "threshold", unit: editing.unit }, remove: true },
+                  { onSuccess: () => setEditing(null) }
+                )
             : undefined
         }
       />

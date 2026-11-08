@@ -486,6 +486,8 @@ export type GapPart = {
   best: GapVersion | null
   mark: GapMarkState
   accepted: number
+  /** The part's own minimum quality, used instead of the group's; null for none. */
+  threshold: GapThreshold | null
 }
 
 /** The lowest quality a part counts as present in; "" for any. */
@@ -563,7 +565,7 @@ export type GapMarkInput = {
   action: "hide" | "complete" | "accept" | "ignore" | "threshold"
   /** Key of the quality row; "" for the whole group, or every row. */
   quality?: string
-  /** GapUnit.id */
+  /** GapUnit.id; for "threshold", the part with a minimum of its own (none for the whole group). */
   unit?: number
   torrent?: number
   threshold?: GapThreshold
