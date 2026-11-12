@@ -137,6 +137,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/plan/{id}/torrents/{position}", s.deletePlanTorrent)
 	mux.HandleFunc("GET /api/plan/{id}/torrents/{position}/file", s.planTorrentFile)
 	mux.HandleFunc("POST /api/plan/{id}/torrents/{position}/wayfinderr", s.sendPlanTorrentToWayfinderr)
+	mux.HandleFunc("POST /api/plan/{id}/merge-plan", s.planMerge)
+	mux.HandleFunc("DELETE /api/plan/{id}/merge-plan", s.removeMerge)
+	mux.HandleFunc("POST /api/plan/{id}/merge-plan/pair", s.pairMergeAgain)
 
 	mux.HandleFunc("GET /api/alerts", s.listAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.resolveAlert)

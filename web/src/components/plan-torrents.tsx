@@ -11,6 +11,7 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  RotateCcw,
   Send,
   Tag,
   Trash2,
@@ -40,7 +41,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { api, type PlanItem, type PlanSendInput, type PlanSendResult, type PlanTorrent } from "@/lib/api"
+import { api, type PlanItem, type PlanMerge, type PlanSendInput, type PlanSendResult, type PlanTorrent } from "@/lib/api"
 import { formatBytes, formatRelative, formatState, isErrorState } from "@/lib/format"
 import { useAction, useClients, useRefreshAll, useSettings } from "@/lib/queries"
 import { cn } from "@/lib/utils"
@@ -63,6 +64,14 @@ function toastSent(r: PlanSendResult) {
   const lines = r.results.map(
     (x) => `${x.name}: ${x.ok ? (x.already ? "already there" : "added") : `failed (${x.error})`}`,
   )
+  const m = r.merge
+  if (m?.planId && (m.status === "WAITING" || m.status === "PAIRED" || m.status === "ERROR"))
+    lines.push(`pair planned on the Wayfinderr of ${m.clientName}`)
+  else if (m?.error) {
+    lines.push(`pair not planned on Wayfinderr: ${m.error}`)
+    toast.warning(`Sent to ${r.client}`, { description: lines.join(" · ") })
+    return
+  }
   if (failed.length > 0) toast.warning(`Sent to ${r.client}, with errors`, { description: lines.join(" · ") })
   else toast.success(`Sent to ${r.client}`, { description: lines.join(" · ") })
 }
@@ -93,6 +102,9 @@ export function PlanTorrents({
     ({ position }: { position: number }) => api.sendPlanTorrentToWayfinderr(it.id, position),
     ".torrent sent to Wayfinderr",
   )
+  const planMerge = useAction(() => api.planMerge(it.id), "Pair planned on Wayfinderr")
+  const removeMerge = useAction(() => api.removeMerge(it.id), "Pair removed from Wayfinderr")
+  const pairAgain = useAction(() => api.pairMergeAgain(it.id), "Pair created again on Wayfinderr")
   // Clients that hand their downloads over to a Wayfinderr.
   const withWayfinderr = (clients.data ?? []).some((c) => c.enabled && c.wayfinderrUrl)
 
@@ -128,9 +140,46 @@ export function PlanTorrents({
   return (
     <div className="grid max-w-xs min-w-[200px] gap-2">
       {merge && (
-        <div className="text-muted-foreground flex items-center gap-1 text-xs">
-          <GitMerge className="size-3.5" /> Merge
-          {done > 0 && done < it.torrents.length && ` · ${done} of ${it.torrents.length} downloaded`}
+        <div className="grid gap-0.5">
+          <div className="text-muted-foreground flex items-center gap-1 text-xs">
+            <GitMerge className="size-3.5" />
+            <span className="flex-1">
+              Merge
+              {done > 0 && done < it.torrents.length && ` · ${done} of ${it.torrents.length} downloaded`}
+            </span>
+            {withWayfinderr && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" className="size-6 shrink-0" aria-label="Merge actions">
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled={planMerge.isPending} onClick={() => planMerge.mutate(undefined)}>
+                    <Clapperboard /> {mergeOpen(it.merge) ? "Plan the pair again" : "Plan the pair on Wayfinderr"}
+                  </DropdownMenuItem>
+                  {it.merge?.status === "ERROR" && (
+                    <DropdownMenuItem disabled={pairAgain.isPending} onClick={() => pairAgain.mutate(undefined)}>
+                      <RotateCcw /> Create the pair again
+                    </DropdownMenuItem>
+                  )}
+                  {it.merge && (mergeOpen(it.merge) || (!it.merge.planId && it.merge.status === "")) && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={removeMerge.isPending}
+                        onClick={() => removeMerge.mutate(undefined)}
+                      >
+                        <Trash2 /> Remove the pair from Wayfinderr
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+          <MergeState m={it.merge} />
         </div>
       )}
       {it.torrents.map((t) => (
@@ -211,6 +260,80 @@ export function PlanTorrents({
         )}
       </div>
     </div>
+  )
+}
+
+/** The pair is planned on Wayfinderr and still open there (waiting for its files, or in error). */
+const mergeOpen = (m: PlanMerge | null) => !!m?.planId && (m.status === "WAITING" || m.status === "ERROR")
+
+/** The pair of the two torrents of a merge on Wayfinderr: planned, paired, in error, removed, or why it is not planned. */
+function MergeState({ m }: { m: PlanMerge | null }) {
+  if (!m) return null
+  const via = m.clientName ? `the Wayfinderr of ${m.clientName}` : "Wayfinderr"
+  const state = (() => {
+    switch (m.status) {
+      case "WAITING":
+        return {
+          text: "Pair planned on Wayfinderr",
+          tone: "muted",
+          tip: `Planned on ${via}${m.plannedAt ? ` ${formatRelative(m.plannedAt)}` : ""}: it holds each file as it arrives, and pairs and analyzes the two once both are there.`,
+        }
+      case "PAIRED":
+        return {
+          text: "Paired on Wayfinderr",
+          tone: "ok",
+          tip: `Both files arrived: ${via} created the pair and analyzes it. The merge waits for your confirmation there.`,
+        }
+      case "ERROR":
+        return {
+          text: "Pair in error on Wayfinderr",
+          tone: "error",
+          tip: `Both files arrived, but ${via} could not create the pair${m.message ? `: ${m.message}` : ""}. Create it again from the menu once fixed.`,
+        }
+      case "GONE":
+        return {
+          text: "Pair no longer on Wayfinderr",
+          tone: "muted",
+          tip: `${via} no longer has the planned pair (removed there). Plan it again from the menu if needed.`,
+        }
+      case "REMOVED":
+        return {
+          text: "Pair removed from Wayfinderr",
+          tone: "muted",
+          tip: "Not planned again by itself: plan it again from the menu, or load other .torrent files.",
+        }
+      default:
+        return m.error
+          ? { text: "Pair not planned on Wayfinderr", tone: "error", tip: `${m.error}. Tried again at the next sync.` }
+          : null
+    }
+  })()
+  if (!state) return null
+  const tip = m.error && m.status !== "" ? `${state.tip} Last check failed: ${m.error}.` : state.tip
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 text-xs",
+            state.tone === "muted" && "text-muted-foreground",
+            state.tone === "ok" && "text-emerald-700 dark:text-emerald-300",
+            state.tone === "error" && "text-destructive",
+          )}
+        >
+          {state.tone === "error" ? (
+            <TriangleAlert className="size-3" />
+          ) : state.tone === "ok" ? (
+            <CircleCheck className="size-3" />
+          ) : (
+            <Clapperboard className="size-3" />
+          )}
+          {state.text}
+          {m.error && m.status !== "" && <TriangleAlert className="text-destructive size-3" />}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs break-words">{tip}</TooltipContent>
+    </Tooltip>
   )
 }
 

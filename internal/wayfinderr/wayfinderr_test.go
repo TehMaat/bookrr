@@ -2,6 +2,7 @@ package wayfinderr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -97,5 +98,88 @@ func TestSourceTorrents(t *testing.T) {
 	}
 	if _, err := c.SourceTorrentFile(ctx, "def"); err == nil {
 		t.Fatal("missing file")
+	}
+}
+
+func TestMergePlans(t *testing.T) {
+	ctx := context.Background()
+	var posted map[string]any
+	planned := false
+	c := server(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/merge/plans":
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("content type %q", r.Header.Get("Content-Type"))
+			}
+			json.NewDecoder(r.Body).Decode(&posted)
+			if planned {
+				w.Write([]byte(`{"id":"p1","status":"WAITING","pairId":null,"message":null}`))
+				return
+			}
+			planned = true
+			w.WriteHeader(http.StatusCreated)
+			w.Write([]byte(`{"id":"p1","status":"WAITING","pairId":null,"message":null}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/merge/plans/p1":
+			w.Write([]byte(`{"id":"p1","status":"PAIRED","pairId":"pair9","message":null}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/merge/plans/p1/pair":
+			w.Write([]byte(`{"id":"p1","status":"ERROR","pairId":null,"message":"file gone"}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/merge/plans/p1":
+			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/api/merge/plans/busy":
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"error":"Merging is off"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"Planned pair not found"}`))
+		}
+	})
+	plan := MergePlan{TmdbID: 603, Files: [2]MergeSide{{InfoHash: "aaa", Name: "Matrix.UHD", Label: "video"}, {InfoHash: "bbb"}}}
+	p, created, err := c.PlanMerge(ctx, plan)
+	if err != nil || !created || p.ID != "p1" || p.Status != MergeWaiting {
+		t.Fatalf("planned: %+v %v %v", p, created, err)
+	}
+	files, _ := posted["files"].([]any)
+	first, _ := files[0].(map[string]any)
+	second, _ := files[1].(map[string]any)
+	if posted["origin"] != "bookrr" || posted["tmdbId"] != float64(603) || len(files) != 2 ||
+		first["infoHash"] != "aaa" || first["name"] != "Matrix.UHD" || first["label"] != "video" ||
+		second["infoHash"] != "bbb" || second["name"] != nil || second["label"] != nil {
+		t.Fatalf("posted %v", posted)
+	}
+	if _, created, err := c.PlanMerge(ctx, plan); err != nil || created {
+		t.Fatalf("planned again: %v %v", created, err)
+	}
+	if p, err := c.MergePlanOf(ctx, "p1"); err != nil || p.Status != MergePaired || *p.PairID != "pair9" {
+		t.Fatalf("read: %+v %v", p, err)
+	}
+	if _, err := c.MergePlanOf(ctx, "gone"); !errors.Is(err, ErrPlanNotFound) {
+		t.Fatalf("gone: %v", err)
+	}
+	if _, err := c.MergePlanOf(ctx, "busy"); err == nil || err.Error() != "Wayfinderr: Merging is off (HTTP 409)" {
+		t.Fatalf("refused: %v", err)
+	}
+	if p, err := c.PairMerge(ctx, "p1"); err != nil || p.Status != MergeError || *p.Message != "file gone" {
+		t.Fatalf("pair again: %+v %v", p, err)
+	}
+	if err := c.DeleteMergePlan(ctx, "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteMergePlan(ctx, "gone"); err != nil {
+		t.Fatalf("delete gone: %v", err)
+	}
+	if err := c.DeleteMergePlan(ctx, "busy"); err == nil {
+		t.Fatal("delete refused")
+	}
+
+	// A Wayfinderr before 0.29.0.
+	old := server(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) })
+	if _, _, err := old.PlanMerge(ctx, plan); !errors.Is(err, ErrMergeUnsupported) {
+		t.Fatalf("old: %v", err)
+	}
+}
+
+func TestSameWayfinderr(t *testing.T) {
+	if !SameWayfinderr("http://WF:3000/", " http://wf:3000") || SameWayfinderr("", "") || SameWayfinderr("http://a", "http://b") {
+		t.Fatal("SameWayfinderr")
 	}
 }

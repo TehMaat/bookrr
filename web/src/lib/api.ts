@@ -398,6 +398,30 @@ export type PlanSendInput = {
 export type PlanSendResult = {
   client: string
   results: { position: number; name: string; ok: boolean; already: boolean; error: string }[]
+  /** The pair of the two torrents of a merge on Wayfinderr, planned as they were sent; null if none. */
+  merge: PlanMerge | null
+}
+
+/**
+ * The pair of the two .torrent files of a merge, planned on the Wayfinderr of a client: Wayfinderr holds the two
+ * files as they arrive and pairs them once both are there.
+ */
+export type PlanMerge = {
+  clientId: number
+  clientName: string
+  /** The plan on Wayfinderr, "" if not planned yet (error says why). */
+  planId: string
+  /** As Wayfinderr says (WAITING, PAIRED, ERROR); GONE once it no longer has it, REMOVED by the user, "" not planned. */
+  status: "" | "WAITING" | "PAIRED" | "ERROR" | "GONE" | "REMOVED"
+  /** The pair Wayfinderr created, once PAIRED. */
+  pairId: string
+  /** What Wayfinderr says of an ERROR. */
+  message: string
+  /** Why the last try of bookrr failed. */
+  error: string
+  plannedAt: string | null
+  checkedAt: string | null
+  updatedAt: string
 }
 
 /** An upload of the user of a film of the plan, still on the tracker. */
@@ -417,6 +441,8 @@ export type PlanItem = PlanEntry & {
   trackerUrl: string
   /** The .torrent files loaded on the film, by position. */
   torrents: PlanTorrent[]
+  /** The pair of the two torrents of a merge on Wayfinderr, null if none. */
+  merge: PlanMerge | null
 }
 
 export type Plan = {
@@ -889,6 +915,12 @@ export const api = {
   planTorrentFileUrl: (id: number, position: number) => `/api/plan/${id}/torrents/${position}/file`,
   /** Sends the .torrent files of a film to a client, to download them. */
   sendPlanTorrents: (id: number, p: PlanSendInput) => request<PlanSendResult>("POST", `/api/plan/${id}/torrents/send`, p),
+  /** Plans the pair of the two torrents of a film on Wayfinderr, also again (0: the client they are on). */
+  planMerge: (id: number, clientId = 0) => request<PlanMerge>("POST", `/api/plan/${id}/merge-plan`, { clientId }),
+  /** Removes the pair from Wayfinderr: it is not planned again by itself. */
+  removeMerge: (id: number) => request<PlanMerge>("DELETE", `/api/plan/${id}/merge-plan`),
+  /** Asks Wayfinderr to create again the pair of a plan in error. */
+  pairMergeAgain: (id: number) => request<PlanMerge>("POST", `/api/plan/${id}/merge-plan/pair`),
 
   releases: () => request<Releases>("GET", "/api/releases"),
   /** Starts reading the uploads on the tracker now, in the background. */
