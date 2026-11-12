@@ -385,6 +385,29 @@ ALTER TABLE plan_torrents ADD COLUMN wayfinderr_at TEXT;
 ALTER TABLE plan_torrents ADD COLUMN wayfinderr_error TEXT NOT NULL DEFAULT '';
 ALTER TABLE plan_torrents ADD COLUMN dropped_at TEXT;
 `,
+	`
+-- The pair a merge film (two .torrent files) is planned as on the
+-- Wayfinderr of client client_id: Wayfinderr holds the two files as they
+-- arrive and pairs them. hashes are the two planned ("a,b", sorted): when
+-- the torrents of the film change, the row is old and planned again.
+-- remote_id is the plan on Wayfinderr ('' not planned yet: error says why);
+-- status is its status there (WAITING, PAIRED, ERROR), GONE once Wayfinderr
+-- no longer has it, REMOVED when the user removed it (not planned again by
+-- itself). message is what Wayfinderr says of an ERROR.
+CREATE TABLE plan_merges (
+	plan_id INTEGER PRIMARY KEY REFERENCES release_plan(id) ON DELETE CASCADE,
+	hashes TEXT NOT NULL,
+	client_id INTEGER NOT NULL DEFAULT 0,
+	remote_id TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT '',
+	pair_id TEXT NOT NULL DEFAULT '',
+	message TEXT NOT NULL DEFAULT '',
+	error TEXT NOT NULL DEFAULT '',
+	planned_at TEXT,
+	checked_at TEXT,
+	updated_at TEXT NOT NULL
+);
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

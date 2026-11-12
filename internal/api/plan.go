@@ -15,6 +15,7 @@ import (
 	"github.com/tehmaat/bookrr/internal/gaps"
 	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/store"
+	"github.com/tehmaat/bookrr/internal/syncer"
 	"github.com/tehmaat/bookrr/internal/tmdb"
 	"github.com/tehmaat/bookrr/internal/unit3d"
 )
@@ -67,6 +68,8 @@ type planItem struct {
 	// The .torrent files loaded on the film (two for a merge), with how
 	// their download goes.
 	Torrents []store.PlanTorrent `json:"torrents"`
+	// The pair of the two torrents of a merge on Wayfinderr, nil if none.
+	Merge *store.PlanMerge `json:"merge"`
 }
 
 // listPlan returns the films of the release plan, with the best release
@@ -99,6 +102,11 @@ func (s *Server) listPlan(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	merges, err := s.store.PlanMerges(ctx)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	best := prowlarr.AnnotatePlan(entries, ups, found)
 	today := time.Now().Format("2006-01-02")
 	items := make([]planItem, len(entries))
@@ -109,6 +117,10 @@ func (s *Server) listPlan(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.Torrents = torrents[e.ID]; it.Torrents == nil {
 			it.Torrents = []store.PlanTorrent{}
+		}
+		// A pair planned for torrents the film no longer has is about to go.
+		if m, ok := merges[e.ID]; ok && m.Hashes == store.MergeHashes(it.Torrents) {
+			it.Merge = &m
 		}
 		if svc.Best != nil {
 			it.Searching = svc.Best.Searching(e)
@@ -419,6 +431,8 @@ func (s *Server) deletePlan(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Its pair on Wayfinderr goes too, if Wayfinderr answers.
+	syncer.ForgetMergeOf(r.Context(), s.store, id)
 	if err := s.store.DeletePlanEntry(r.Context(), id); err != nil {
 		s.fail(w, err)
 		return

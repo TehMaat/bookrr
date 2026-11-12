@@ -175,6 +175,14 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 		}
 		slog.Error("plan torrents for Wayfinderr", "err", err)
 	}
+	// The pairs of the merge films on Wayfinderr: planned, read again.
+	pairs, err := MergePlans(ctx, s.store)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", err
+		}
+		slog.Error("merge pairs on Wayfinderr", "err", err)
+	}
 	result := fmt.Sprintf("%d clients synced, %d with errors, %d torrents, %d new alerts", ok, failed, total, alerts)
 	if downloaded > 0 {
 		result += fmt.Sprintf(", %d plan films downloaded", downloaded)
@@ -184,6 +192,9 @@ func (s *Syncer) syncAll(ctx context.Context) (string, error) {
 	}
 	if dropped > 0 {
 		result += fmt.Sprintf(", %d released .torrent files dropped", dropped)
+	}
+	if pairs > 0 {
+		result += fmt.Sprintf(", %d merge pairs planned on Wayfinderr", pairs)
 	}
 	slog.Info("sync complete", "ok", ok, "failed", failed, "torrents", total, "removed", len(removed), "alerts", alerts,
 		"planDownloaded", downloaded)

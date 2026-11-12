@@ -154,13 +154,14 @@ func main() {
 
 	qbit := newQbit()
 	fakes := map[string]*httptest.Server{
-		"seedbox":  httptest.NewServer(qbit.handler("seedbox")),
-		"nas":      httptest.NewServer(qbit.handler("nas")),
-		"tracker":  httptest.NewServer(http.HandlerFunc(serveTracker)),
-		"tmdb":     httptest.NewServer(http.HandlerFunc(serveTMDB)),
-		"mdblist":  httptest.NewServer(http.HandlerFunc(serveMDBList)),
-		"prowlarr": httptest.NewServer(http.HandlerFunc(serveProwlarr)),
-		"s3":       httptest.NewServer(http.HandlerFunc(serveS3)),
+		"seedbox":    httptest.NewServer(qbit.handler("seedbox")),
+		"nas":        httptest.NewServer(qbit.handler("nas")),
+		"tracker":    httptest.NewServer(http.HandlerFunc(serveTracker)),
+		"tmdb":       httptest.NewServer(http.HandlerFunc(serveTMDB)),
+		"mdblist":    httptest.NewServer(http.HandlerFunc(serveMDBList)),
+		"prowlarr":   httptest.NewServer(http.HandlerFunc(serveProwlarr)),
+		"s3":         httptest.NewServer(http.HandlerFunc(serveS3)),
+		"wayfinderr": httptest.NewServer(http.HandlerFunc(serveWayfinderr)),
 	}
 	tmdb.DefaultBaseURL = fakes["tmdb"].URL
 	mdblist.DefaultBaseURL = fakes["mdblist"].URL
@@ -244,7 +245,8 @@ func seed(ctx context.Context, base string, fakes map[string]*httptest.Server, q
 	}
 	id := func(m map[string]any) int64 { f, _ := m["id"].(float64); return int64(f) }
 
-	seedbox := id(call("POST", "/api/clients", map[string]any{"name": "seedbox", "url": fakes["seedbox"].URL, "username": "admin", "password": "demo", "enabled": true}))
+	seedbox := id(call("POST", "/api/clients", map[string]any{"name": "seedbox", "url": fakes["seedbox"].URL, "username": "admin", "password": "demo", "enabled": true,
+		"wayfinderrUrl": fakes["wayfinderr"].URL, "wayfinderrApiKey": "demo"}))
 	call("POST", "/api/clients", map[string]any{"name": "nas", "url": fakes["nas"].URL, "username": "admin", "password": "demo", "enabled": true})
 
 	orchid := id(call("POST", "/api/adopters", map[string]any{"name": "orchid", "contact": "tracker profile: orchid", "notes": "Keeps the series packs seeded."}))
@@ -332,7 +334,8 @@ ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_
 		}
 		time.Sleep(time.Second)
 	}
-	// Lantern Bay is a merge: the remux of others and the Italian audio of the DVD, downloading on the seedbox.
+	// Lantern Bay is a merge: the remux of others and the Italian audio of the DVD, downloading on the seedbox,
+	// whose Wayfinderr holds the two files for the pair as they arrive.
 	if id, ok := lantern["id"].(float64); ok {
 		plan := "/api/plan/" + strconv.FormatInt(int64(id), 10)
 		upload(ctx, base+plan+"/torrents", "Lantern.Bay.2019.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-ARCADE", 25*gb, "video")
@@ -611,4 +614,25 @@ func serveS3(w http.ResponseWriter, r *http.Request) {
 	b.WriteString(`</ListBucketResult>`)
 	w.Header().Set("Content-Type", "application/xml")
 	w.Write([]byte(b.String()))
+}
+
+// serveWayfinderr is a Wayfinderr that takes the source .torrent files and
+// plans the pairs to merge, which wait for their files.
+func serveWayfinderr(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.URL.Path == "/api/auth/status":
+		w.Write([]byte(`{"configured":true,"username":"demo"}`))
+	case r.URL.Path == "/api/source-torrents" && r.Method == http.MethodGet:
+		w.Write([]byte(`[]`))
+	case r.URL.Path == "/api/source-torrents":
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{}`))
+	case r.URL.Path == "/api/merge/plans" && r.Method == http.MethodPost:
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"id":"plan-lantern","status":"WAITING","pairId":null,"message":null}`))
+	case strings.HasPrefix(r.URL.Path, "/api/merge/plans/") && r.Method == http.MethodGet:
+		w.Write([]byte(`{"id":"plan-lantern","status":"WAITING","pairId":null,"message":null}`))
+	default:
+		http.NotFound(w, r)
+	}
 }

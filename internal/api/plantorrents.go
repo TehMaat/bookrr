@@ -121,6 +121,7 @@ func (s *Server) replacePlanTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("torrent replaced on the plan", "plan", id, "position", pos, "hash", t.Hash, "name", t.Name)
+	s.syncMergeLater(id)
 	writeJSON(w, http.StatusOK, t)
 }
 
@@ -166,6 +167,7 @@ func (s *Server) deletePlanTorrent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.syncMergeLater(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -469,6 +471,18 @@ func (s *Server) sendPlanTorrents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "sending to "+c.Name+" failed: "+strings.Join(errs, "; "))
 		return
 	}
+	// The two torrents of a merge: their pair is planned on Wayfinderr now,
+	// before the files arrive. A failure does not fail the sending: it shows
+	// on the film and is tried again at the next sync.
+	var merge *store.PlanMerge
+	if len(torrents) == store.MaxPlanTorrents {
+		mctx, cancel := context.WithTimeout(ctx, time.Minute)
+		merge, err = syncer.SyncMergeOf(mctx, s.store, id)
+		cancel()
+		if err != nil {
+			slog.Error("merge pair on Wayfinderr", "plan", id, "err", err)
+		}
+	}
 	// Read the clients soon, to show how the download goes: give the
 	// client a moment to list the torrent.
 	sy := svc.Syncer
@@ -480,5 +494,80 @@ func (s *Server) sendPlanTorrents(w http.ResponseWriter, r *http.Request) {
 			slog.Error("sync failed", "err", err)
 		}
 	}()
-	writeJSON(w, http.StatusOK, map[string]any{"client": c.Name, "results": results})
+	writeJSON(w, http.StatusOK, map[string]any{"client": c.Name, "results": results, "merge": merge})
+}
+
+// syncMergeLater brings up to date the pair of a film on Wayfinderr once its
+// torrents changed: the plan for the old ones is removed at once.
+func (s *Server) syncMergeLater(planID int64) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if _, err := syncer.SyncMergeOf(ctx, s.store, planID); err != nil && !errors.Is(err, store.ErrNotFound) {
+			slog.Error("merge pair on Wayfinderr", "plan", planID, "err", err)
+		}
+	}()
+}
+
+// failMerge answers an error about the pair of a film on Wayfinderr.
+func (s *Server) failMerge(w http.ResponseWriter, err error) {
+	var bad *syncer.MergeRequestError
+	switch {
+	case errors.As(err, &bad):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, store.ErrNotFound):
+		s.fail(w, err)
+	default:
+		writeError(w, http.StatusBadGateway, err.Error())
+	}
+}
+
+// planMerge plans the pair of the two torrents of a film on Wayfinderr by
+// hand, also again: {"clientId": 0} for the client they are on.
+func (s *Server) planMerge(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		ClientID int64 `json:"clientId"`
+	}
+	if r.ContentLength != 0 && !decode(w, r, &in) {
+		return
+	}
+	m, err := syncer.PlanMergeNow(r.Context(), s.store, id, in.ClientID)
+	if err != nil {
+		s.failMerge(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+// removeMerge removes the pair of a film from Wayfinderr; it is not planned
+// again by itself.
+func (s *Server) removeMerge(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	m, err := syncer.RemoveMerge(r.Context(), s.store, id)
+	if err != nil {
+		s.failMerge(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+// pairMergeAgain asks Wayfinderr to create again the pair of a plan in error.
+func (s *Server) pairMergeAgain(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	m, err := syncer.PairMergeAgain(r.Context(), s.store, id)
+	if err != nil {
+		s.failMerge(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
 }

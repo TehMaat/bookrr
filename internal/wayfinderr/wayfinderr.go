@@ -1,7 +1,8 @@
 // Package wayfinderr talks to a Wayfinderr (github.com/TehMaat/wayfinderr),
 // the app that rips and uploads what a client downloads: bookrr sends it the
 // .torrent files of the plan once they are downloaded, as the source
-// .torrent of their film, and drops its own copy once the film is released.
+// .torrent of their film, plans the pair of the two downloads of a merge,
+// and drops its own copy once the film is released.
 package wayfinderr
 
 import (
@@ -208,4 +209,135 @@ func (c *Client) SourceTorrentFile(ctx context.Context, hash string) ([]byte, er
 		return nil, errors.New("Wayfinderr sent an empty or too large .torrent")
 	}
 	return data, nil
+}
+
+// MergeSide is a download of a pair to merge: its torrent's v1 info hash
+// and its name (the torrent's folder, or its file for a single-file torrent).
+type MergeSide struct {
+	InfoHash string `json:"infoHash,omitempty"`
+	Name     string `json:"name,omitempty"`
+	// What it is for ("video", "audio ITA"), "" if nothing.
+	Label string `json:"label,omitempty"`
+}
+
+// MergePlan is the pair of two downloads to merge, planned before their
+// files arrive: Wayfinderr holds each file as it arrives, and pairs and
+// analyzes them once both are there (the merge still waits for a confirmation).
+type MergePlan struct {
+	Files  [2]MergeSide
+	TmdbID int64
+}
+
+// Statuses of a planned pair on Wayfinderr.
+const (
+	// A file is still to come.
+	MergeWaiting = "WAITING"
+	// Both arrived: the pair is PairID.
+	MergePaired = "PAIRED"
+	// Both arrived, but the pair could not be created: Message says why.
+	MergeError = "ERROR"
+)
+
+// PlannedPair is a planned pair as Wayfinderr has it.
+type PlannedPair struct {
+	ID      string  `json:"id"`
+	Status  string  `json:"status"`
+	PairID  *string `json:"pairId"`
+	Message *string `json:"message"`
+}
+
+// ErrMergeUnsupported is a Wayfinderr without planned pairs.
+var ErrMergeUnsupported = errors.New("this Wayfinderr is too old: it plans the pairs to merge from version 0.29.0")
+
+// ErrPlanNotFound is a planned pair Wayfinderr no longer has.
+var ErrPlanNotFound = errors.New("Wayfinderr no longer has this planned pair")
+
+func readPlan(resp *http.Response) (PlannedPair, error) {
+	defer resp.Body.Close()
+	var p PlannedPair
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&p); err != nil || p.ID == "" {
+		return PlannedPair{}, errors.New("Wayfinderr answered with no planned pair")
+	}
+	return p, nil
+}
+
+// PlanMerge plans the pair of two downloads; created is false when
+// Wayfinderr had the same pair planned already (planning again is harmless).
+func (c *Client) PlanMerge(ctx context.Context, p MergePlan) (plan PlannedPair, created bool, err error) {
+	body := map[string]any{"files": p.Files, "origin": Origin}
+	if p.TmdbID > 0 {
+		body["tmdbId"] = p.TmdbID
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return PlannedPair{}, false, err
+	}
+	resp, err := c.do(ctx, http.MethodPost, "/api/merge/plans", nil, data, "application/json")
+	if err != nil {
+		return PlannedPair{}, false, err
+	}
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated:
+		plan, err := readPlan(resp)
+		return plan, resp.StatusCode == http.StatusCreated, err
+	case http.StatusNotFound:
+		resp.Body.Close()
+		return PlannedPair{}, false, ErrMergeUnsupported
+	}
+	return PlannedPair{}, false, failure(resp)
+}
+
+// MergePlanOf returns a planned pair: ErrPlanNotFound once Wayfinderr no
+// longer has it.
+func (c *Client) MergePlanOf(ctx context.Context, id string) (PlannedPair, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/merge/plans/"+url.PathEscape(id), nil, nil, "")
+	if err != nil {
+		return PlannedPair{}, err
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return readPlan(resp)
+	case http.StatusNotFound:
+		resp.Body.Close()
+		return PlannedPair{}, ErrPlanNotFound
+	}
+	return PlannedPair{}, failure(resp)
+}
+
+// PairMerge creates again the pair of a planned pair that ended in ERROR,
+// once both files are there.
+func (c *Client) PairMerge(ctx context.Context, id string) (PlannedPair, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/merge/plans/"+url.PathEscape(id)+"/pair", nil, nil, "")
+	if err != nil {
+		return PlannedPair{}, err
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return readPlan(resp)
+	case http.StatusNotFound:
+		resp.Body.Close()
+		return PlannedPair{}, ErrPlanNotFound
+	}
+	return PlannedPair{}, failure(resp)
+}
+
+// DeleteMergePlan forgets a planned pair: the files Wayfinderr held for it
+// stay held, to pair, upload or delete there. One it no longer has is fine.
+func (c *Client) DeleteMergePlan(ctx context.Context, id string) error {
+	resp, err := c.do(ctx, http.MethodDelete, "/api/merge/plans/"+url.PathEscape(id), nil, nil, "")
+	if err != nil {
+		return err
+	}
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusNoContent, http.StatusNotFound:
+		resp.Body.Close()
+		return nil
+	}
+	return failure(resp)
+}
+
+// SameWayfinderr reports whether two addresses are the same Wayfinderr.
+func SameWayfinderr(a, b string) bool {
+	norm := func(s string) string { return strings.ToLower(strings.TrimRight(strings.TrimSpace(s), "/")) }
+	return a != "" && norm(a) == norm(b)
 }
