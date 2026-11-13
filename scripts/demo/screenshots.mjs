@@ -60,7 +60,7 @@ await shoot("torrents-dark", "torrents", { dark: true })
 await shoot("torrent-details", "torrents", {
   act: (p) => p.getByText("Starfall.Courier.2019", { exact: false }).first().click(),
 })
-await shoot("releases", "releases")
+await shoot("releases", "torrents/uploads")
 await shoot("missing-series", "missing")
 await shoot("missing-series-by-quality", "missing", { act: (p) => p.getByRole("button", { name: "By quality" }).click() })
 await shoot("missing-sagas", "missing/sagas")

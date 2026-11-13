@@ -26,9 +26,9 @@ The saved `.torrent` file is also at `GET /api/torrents/{hash}/torrent-file`. Th
 
 ## Release history
 
-![The releases page](../screenshots/releases.png)
+![Your uploads on the Torrents page](../screenshots/releases.png)
 
-The **Releases** page shows **every torrent you uploaded** (not only those with the tracker's Personal Release flag, anonymous ones included), newest first: name, type (WEB-DL, Remux, Encode…), resolution, upload date, seeders, leechers and completed downloads, link to the tracker page and the **status** of the linked torrent in bookrr: *On a client*, *To locate*, *Archived*, *Adopted*, *Unknown location*, or **Unknown** when bookrr knows no torrent with that hash. Clicking a linked release opens the torrent details. The **Dead** page shows your uploads still on the tracker that nobody seeds: seed them again from a client or an archive.
+The **Torrents** page also shows **every torrent you uploaded** (not only those with the tracker's Personal Release flag, anonymous ones included): each upload is on the row of the bookrr torrent with the same hash, and the uploads bookrr knows no torrent for have a row of their own, with the status **Not in bookrr**. The tracker adds the **Type** (WEB-DL, Remux, Encode… and resolution) and **Uploaded** columns, seeders, leechers and completed downloads, and the link to the tracker page. The counters **Uploads** (all your uploads, newest first), **Not in bookrr**, **Removed** (no longer on the tracker) and **Dead** (still on the tracker, but nobody seeds them: seed them again from a client or an archive) filter the list. With **Columns** you choose which columns to show; the browser remembers the choice. The old addresses `#releases` and `#dead` open the Torrents page with the Uploads or Dead counter chosen.
 
 ```mermaid
 sequenceDiagram
@@ -53,9 +53,9 @@ sequenceDiagram
 3. each release is linked to the bookrr torrent with **the same hash**, which also gets the `.torrent` file, the link to the tracker page and, if missing, the size. Torrents added **without a hash** are compared by name with your releases (same rules as the hash lookup) and, when exactly one matches, take its hash;
 4. on every read seeders, leechers and completions are updated; releases no longer among your uploads stay in the history, marked as **removed**.
 
-The read runs at start, then every `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 hours) and with **Refresh now**. **Unknown** releases are not added by themselves: with **Add to bookrr** (or **Add all**) they become torrents with hash, name, size, `.torrent` file and the Personal Release flag, and from their details you set where they are.
+The read runs at start, then every `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 hours) and with **Refresh now**. Uploads **Not in bookrr** are not added by themselves: with **Add to bookrr** (or **Add all to bookrr**, above the list) they become torrents with hash, name, size, `.torrent` file and the Personal Release flag, and from their details you set where they are.
 
-At the top of the page you see the **Personal Releases in bookrr that are not among your uploads**: deleted or replaced on the tracker, uploaded to another tracker, or added without a hash (torrents on a client announcing to another domain are not listed). If they aren't your releases, **remove the flag** from one (icon next to the name) or from all of them (**Unflag all**): bookrr also removes the `Personal Release` tag from the torrents on the qBittorrent clients (just the tag: torrents and files stay where they are) and no longer reports them when they disappear. If a client doesn't answer, its torrents stay Personal Release and you can try again.
+Above the list of torrents a box counts the **Personal Releases in bookrr that are not among your uploads** (click its title to see them): deleted or replaced on the tracker, uploaded to another tracker, or added without a hash (torrents on a client announcing to another domain are not listed). If they aren't your releases, **remove the flag** from one (icon next to the name) or from all of them (**Unflag all**): bookrr also removes the `Personal Release` tag from the torrents on the qBittorrent clients (just the tag: torrents and files stay where they are) and no longer reports them when they disappear. If a client doesn't answer, its torrents stay Personal Release and you can try again.
 
 ## Archivable releases
 
@@ -86,6 +86,6 @@ The thresholds are in **Settings → Archivable**:
 | Completed (min.) | `1` | completed downloads on the tracker |
 | Days in a row (min.) | `0` | how long both thresholds must hold; `0` = right away |
 
-On the **Torrents** page the **Archivable** column shows *Yes · for N days* (empty otherwise) with, in the tooltip, total seeders, yours, others, completed, the rule and the date of the tracker data; the **Archivable** counter filters the list. The same is in the torrent details (also when the thresholds hold but days are still missing, or why it isn't archivable) and on the **Releases** page, with its filter. There are no notifications.
+On the **Torrents** page the **Archivable** column shows *Yes · for N days* (empty otherwise) with, in the tooltip, total seeders, yours, others, completed, the rule and the date of the tracker data; the **Archivable** counter filters the list. The same is in the torrent details (also when the thresholds hold but days are still missing, or why it isn't archivable). There are no notifications.
 
 **Never archive**: the releases you want to keep on the clients can be left out. In the **Archivable** view (Torrents or Releases) every row gets a checkbox: tick the ones you will never archive (or all of them from the header) and press **Never archive**; for a single one there is also the switch in the torrent details. They no longer show among the archivable ones and say *Never archive*; to find them use the *N never to archive · show* link or the column filter, where you can select them and press **Flag again when archivable**. bookrr keeps counting the days the thresholds hold, so undoing it makes the release archivable right away if it already was.

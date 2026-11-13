@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, CloudUpload, HandHeart, HardDrive, ListTodo, ListTree, Puzzle, ScrollText, Server, Skull } from "lucide-react"
+import { BellRing, HandHeart, HardDrive, ListTodo, ListTree, Puzzle, ScrollText, Server } from "lucide-react"
 
 import { AdoptersPage } from "@/components/adopters-page"
 import { AlertsBanner } from "@/components/alerts-banner"
@@ -11,33 +11,42 @@ import { LogsPage } from "@/components/logs-page"
 import { MissingPage, type MissingView } from "@/components/missing-page"
 import { NavbarSlot } from "@/components/navbar-stats"
 import { PlanPage } from "@/components/plan-page"
-import { ReleasesPage } from "@/components/releases-page"
 import { ResolveDialog } from "@/components/resolve-dialog"
 import { Sidebar, type NavItem } from "@/components/sidebar"
-import { TorrentsPage } from "@/components/torrents-page"
+import { torrentFilters, TorrentsPage, type TorrentFilter } from "@/components/torrents-page"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import type { Alert } from "@/lib/api"
 import { useAlerts } from "@/lib/queries"
 
-const tabs = ["torrents", "releases", "dead", "missing", "plan", "alerts", "disks", "adopters", "clients", "logs"] as const
+const tabs = ["torrents", "missing", "plan", "alerts", "disks", "adopters", "clients", "logs"] as const
 type Tab = (typeof tabs)[number]
 
-type Route = { tab: Tab; diskId: number | null; missingView: MissingView }
+type Route = { tab: Tab; diskId: number | null; missingView: MissingView; torrentFilter: TorrentFilter }
+
+/** The pages Releases and Dead of the earlier versions, now counters of the torrents. */
+const oldTabs: Record<string, TorrentFilter> = { releases: "uploads", dead: "dead" }
 
 /**
+ * "#torrents" or "#torrents/dead" (the torrents with that counter chosen);
  * "#disks" or "#disks/3" (the torrents archived on disk 3, the target of its QR code);
  * "#missing" (the series), "#missing/sagas" or "#missing/lists".
  */
 function routeFromHash(): Route {
-  const [h, id] = window.location.hash.replace("#", "").split("/")
+  let [h, id] = window.location.hash.replace("#", "").split("/")
+  if (h in oldTabs) {
+    id = oldTabs[h]
+    h = "torrents"
+    window.history.replaceState(null, "", `#torrents/${id}`)
+  }
   const tab = (tabs as readonly string[]).includes(h) ? (h as Tab) : "torrents"
   const diskId = tab === "disks" && /^\d+$/.test(id ?? "") ? Number(id) : null
   const missingView = tab === "missing" && (id === "sagas" || id === "lists") ? id : "series"
-  return { tab, diskId, missingView }
+  const torrentFilter = tab === "torrents" && (torrentFilters as readonly string[]).includes(id) ? (id as TorrentFilter) : "all"
+  return { tab, diskId, missingView, torrentFilter }
 }
 
 export default function App() {
-  const [{ tab, diskId, missingView }, setRoute] = useState<Route>(routeFromHash)
+  const [{ tab, diskId, missingView, torrentFilter }, setRoute] = useState<Route>(routeFromHash)
   const [resolving, setResolving] = useState<Alert[]>([])
   const [menuOpen, setMenuOpen] = useState(false)
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
@@ -58,8 +67,6 @@ export default function App() {
 
   const nav: (NavItem & { id: Tab })[] = [
     { id: "torrents", label: "Torrents", icon: ListTree },
-    { id: "releases", label: "Releases", icon: CloudUpload },
-    { id: "dead", label: "Dead", icon: Skull },
     { id: "missing", label: "Missing", icon: Puzzle },
     { id: "plan", label: "Plan", icon: ListTodo },
     { id: "alerts", label: "Alerts", icon: BellRing, count: openCount },
@@ -102,9 +109,15 @@ export default function App() {
         <NavbarSlot.Provider value={slot}>
           <main className="w-full space-y-4 px-4 py-4 sm:px-6">
             <AlertsBanner alerts={alerts.data ?? []} onResolve={resolveOne} onShowAll={() => go("alerts")} />
-            {tab === "torrents" && <TorrentsPage onResolve={resolveOne} />}
-            {tab === "releases" && <ReleasesPage onResolve={resolveOne} />}
-            {tab === "dead" && <ReleasesPage dead onResolve={resolveOne} />}
+            {tab === "torrents" && (
+              <TorrentsPage
+                key={torrentFilter}
+                initialFilter={torrentFilter}
+                onResolve={resolveOne}
+                // Keeps the counter in the address without opening the page again.
+                onFilter={(f) => window.history.replaceState(null, "", f === "all" ? "#torrents" : `#torrents/${f}`)}
+              />
+            )}
             {tab === "missing" && (
               <MissingPage view={missingView} onView={(v) => go(v === "series" ? "missing" : `missing/${v}`)} />
             )}

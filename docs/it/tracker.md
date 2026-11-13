@@ -26,9 +26,9 @@ Il file `.torrent` salvato si scarica anche da `GET /api/torrents/{hash}/torrent
 
 ## Storico release
 
-![La pagina delle release](../screenshots/releases.png)
+![I tuoi upload nella pagina Torrents](../screenshots/releases.png)
 
-La pagina **Releases** mostra **tutti i torrent che hai caricato** (non solo quelli con il flag Personal Release del tracker, anche gli anonimi), dal più recente: nome, tipo (WEB-DL, Remux, Encode…), risoluzione, data di caricamento, seeder, leecher e completati, link alla pagina sul tracker e lo **stato** del torrent di bookrr collegato: *On a client*, *To locate*, *Archived*, *Adopted*, *Unknown location*, oppure **Unknown** se bookrr non conosce nessun torrent con quell'hash. Cliccando una release collegata si apre la scheda del torrent. La pagina **Dead** mostra i tuoi upload ancora sul tracker che nessuno ha in seed: rimettili in seed da un client o da un archivio.
+La pagina **Torrents** mostra anche **tutti i torrent che hai caricato** (non solo quelli con il flag Personal Release del tracker, anche gli anonimi): ogni upload sta sulla riga del torrent di bookrr con lo stesso hash, e gli upload di cui bookrr non conosce il torrent hanno una riga tutta loro, con lo stato **Not in bookrr**. Il tracker aggiunge le colonne **Type** (WEB-DL, Remux, Encode… e risoluzione) e **Uploaded**, seeder, leecher e completati, e il link alla pagina sul tracker. I contatori **Uploads** (tutti i tuoi upload, dal più recente), **Not in bookrr**, **Removed** (non più sul tracker) e **Dead** (ancora sul tracker, ma nessuno li ha in seed: rimettili in seed da un client o da un archivio) filtrano l'elenco. Con **Columns** scegli quali colonne vedere; il browser ricorda la scelta. I vecchi indirizzi `#releases` e `#dead` aprono la pagina Torrents con il contatore Uploads o Dead.
 
 ```mermaid
 sequenceDiagram
@@ -53,9 +53,9 @@ sequenceDiagram
 3. ogni release è collegata al torrent di bookrr con **lo stesso hash**, che riceve anche il file `.torrent`, il link alla pagina sul tracker e, se mancava, la dimensione. I torrent aggiunti **senza hash** vengono confrontati per nome con le tue release (stesse regole della ricerca degli hash) e, se ne corrisponde una sola, prendono il suo hash;
 4. a ogni lettura seeder, leecher e completati vengono aggiornati; le release che non compaiono più tra i tuoi upload restano nello storico, segnate come **rimosse**.
 
-La lettura parte all'avvio, poi ogni `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 ore) e con **Refresh now**. Le release **Unknown** non vengono aggiunte da sole: con **Add to bookrr** (o **Add all**) diventano torrent con hash, nome, dimensione, file `.torrent` e flag Personal Release, e dalla loro scheda indichi dove si trovano.
+La lettura parte all'avvio, poi ogni `BOOKRR_UNIT3D_RELEASES_INTERVAL` (6 ore) e con **Refresh now**. Gli upload **Not in bookrr** non vengono aggiunti da soli: con **Add to bookrr** (o **Add all to bookrr**, sopra l'elenco) diventano torrent con hash, nome, dimensione, file `.torrent` e flag Personal Release, e dalla loro scheda indichi dove si trovano.
 
-In cima alla pagina compaiono le **Personal Release di bookrr che non risultano tra i tuoi upload**: cancellate o sostituite sul tracker, caricate su un altro tracker o aggiunte senza hash (i torrent su un client che annunciano a un altro dominio non vengono elencati). Se non sono tue release, **togli il flag** a una (icona accanto al nome) o a tutte (**Unflag all**): bookrr toglie il tag `Personal Release` anche dai torrent sui client qBittorrent (solo il tag: torrent e file restano dove sono) e non le segnala più quando spariscono. Se un client non risponde, i suoi torrent restano Personal Release e puoi riprovare.
+Sopra l'elenco dei torrent un riquadro conta le **Personal Release di bookrr che non risultano tra i tuoi upload** (clicca il titolo per vederle): cancellate o sostituite sul tracker, caricate su un altro tracker o aggiunte senza hash (i torrent su un client che annunciano a un altro dominio non vengono elencati). Se non sono tue release, **togli il flag** a una (icona accanto al nome) o a tutte (**Unflag all**): bookrr toglie il tag `Personal Release` anche dai torrent sui client qBittorrent (solo il tag: torrent e file restano dove sono) e non le segnala più quando spariscono. Se un client non risponde, i suoi torrent restano Personal Release e puoi riprovare.
 
 ## Release archiviabili
 
@@ -86,6 +86,6 @@ Le soglie sono in **Settings → Archivable**:
 | Completed (min.) | `1` | download completati sul tracker |
 | Days in a row (min.) | `0` | da quanto devono valere le due soglie; `0` = subito |
 
-Nella pagina **Torrents** la colonna **Archivable** mostra *Yes · for N days* (vuota altrimenti) con, nel tooltip, seeder totali, tuoi, altri, completati, la regola e la data dei dati del tracker; il contatore **Archivable** filtra l'elenco. La stessa informazione è nella scheda del torrent (anche quando le soglie sono rispettate ma mancano ancora dei giorni, o perché non è archiviabile) e nella pagina **Releases**, con il suo filtro. Non ci sono notifiche.
+Nella pagina **Torrents** la colonna **Archivable** mostra *Yes · for N days* (vuota altrimenti) con, nel tooltip, seeder totali, tuoi, altri, completati, la regola e la data dei dati del tracker; il contatore **Archivable** filtra l'elenco. La stessa informazione è nella scheda del torrent (anche quando le soglie sono rispettate ma mancano ancora dei giorni, o perché non è archiviabile). Non ci sono notifiche.
 
 **Never archive**: le release che vuoi tenere sui client si possono escludere. Nella vista **Archivable** (Torrents o Releases) ogni riga ha una casella: spunta quelle che non archivierai mai (o tutte dall'intestazione) e premi **Never archive**; per una sola c'è anche l'interruttore nella scheda del torrent. Non compaiono più tra le archiviabili e mostrano *Never archive*; per ritrovarle usa il link *N never to archive · show* o il filtro della colonna, da cui puoi selezionarle e premere **Flag again when archivable**. bookrr continua a contare i giorni in cui le soglie sono rispettate, quindi se annulli la scelta torna subito archiviabile se lo era già.
