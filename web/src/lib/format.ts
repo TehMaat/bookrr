@@ -28,6 +28,15 @@ export function formatDate(s: string | null | undefined): string {
   return isNaN(d.getTime()) ? s : dateFmt.format(d)
 }
 
+const dayFmt = new Intl.DateTimeFormat("en-GB", { dateStyle: "short" })
+
+/** Only the day, as "13/11/2026". */
+export function formatDay(s: string | null | undefined): string {
+  if (!s) return "—"
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? s : dayFmt.format(d)
+}
+
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 export function formatRelative(s: string | null | undefined): string {

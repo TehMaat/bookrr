@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleArrowUp,
+  CheckCheck,
   CircleHelp,
   CloudOff,
   CloudUpload,
@@ -78,7 +79,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api, type Alert, type Location, type ReleaseStatus, type Torrent, type TrackerRelease } from "@/lib/api"
-import { formatBytes, formatDate, formatRelative, formatState, formatUnix, isDownloading, plural } from "@/lib/format"
+import { formatBytes, formatDate, formatDay, formatRelative, formatState, formatUnix, isDownloading, plural } from "@/lib/format"
 import { useAction, useAdopters, useClients, useDisks, useInfo, useReleases, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -395,7 +396,7 @@ export function TorrentsPage({
   const picking = filter === "archivable" || cf.archivable.includes("never")
   const picker = usePicker(picking ? rows.flatMap((x) => (x.t ? [{ hash: x.t.hash, archivable: archivableOf(x) }] : [])) : [])
   const kept = scoped.filter((x) => archivableOf(x)?.neverArchive).length
-  const cols = 3 + optional.filter((o) => show(o.id)).length + (showDownload ? 1 : 0) + (picking ? 1 : 0)
+  const cols = 2 + optional.filter((o) => show(o.id)).length + (showDownload ? 1 : 0) + (picking ? 1 : 0)
   const selectedTorrent = selected ? (allTorrents.find((t) => t.hash === selected) ?? null) : null
 
   const reset = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -624,7 +625,7 @@ export function TorrentsPage({
                 </TableHead>
               )}
               {show("best") && best && (
-                <TableHead className="hidden md:table-cell">
+                <TableHead className="hidden xl:table-cell">
                   <div className="flex items-center gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -656,7 +657,7 @@ export function TorrentsPage({
                 </TableHead>
               )}
               {show("uploaded") && (
-                <TableHead className="hidden lg:table-cell">
+                <TableHead className="hidden 2xl:table-cell">
                   <div className="flex items-center gap-1">
                     <button className="flex items-center gap-1" onClick={() => toggleSort("date")}>
                       Uploaded <SortIcon k="date" />
@@ -669,13 +670,14 @@ export function TorrentsPage({
               )}
               {show("peers") && (
                 <TableHead className="hidden sm:table-cell">
-                  <span className="flex items-center gap-2">
-                    <button className="flex items-center gap-1" onClick={() => toggleSort("seeders")}>
+                  <span className="flex items-center gap-1.5">
+                    <button className="flex items-center gap-0.5" title="Seeders: sort" onClick={() => toggleSort("seeders")}>
+                      <ArrowUp className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                       Seeds <SortIcon k="seeders" />
                     </button>
-                    <span className="text-muted-foreground">/</span>
-                    <button className="flex items-center gap-1" onClick={() => toggleSort("completed")}>
-                      Completed <SortIcon k="completed" />
+                    <button className="flex items-center gap-0.5" title="Completed: sort" onClick={() => toggleSort("completed")}>
+                      <CheckCheck className="text-muted-foreground size-3.5" />
+                      <SortIcon k="completed" />
                     </button>
                     <ColumnFilter
                       label="Seeds / Completed"
@@ -744,7 +746,6 @@ export function TorrentsPage({
                   </ColumnFilter>
                 </div>
               </TableHead>
-              <TableHead className="w-0" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -804,6 +805,19 @@ export function TorrentsPage({
                         {(t?.personalRelease ?? r?.personalRelease) && <PersonalBadge />}
                         {t?.duplicate && <DuplicateBadge count={t.locations.length} />}
                         {r?.removedAt && <RemovedBadge since={r.removedAt} />}
+                        {link && (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="Open on the tracker"
+                            title="Open on the tracker"
+                            className="text-muted-foreground hover:text-foreground shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="size-3.5" />
+                          </a>
+                        )}
                       </div>
                       {t ? (
                         (t.category || t.tags.length > 0 || t.notes) && (
@@ -835,13 +849,13 @@ export function TorrentsPage({
                       </TableCell>
                     )}
                     {show("best") && best && (
-                      <TableCell className="hidden md:table-cell">
+                      <TableCell className="hidden xl:table-cell">
                         <BestBadge b={r?.best} />
                       </TableCell>
                     )}
                     {show("uploaded") && (
-                      <TableCell className="text-muted-foreground hidden text-xs whitespace-nowrap lg:table-cell">
-                        {r ? formatDate(r.createdAt) : <Dash />}
+                      <TableCell className="text-muted-foreground hidden text-xs whitespace-nowrap 2xl:table-cell">
+                        {r ? <span title={formatDate(r.createdAt)}>{formatDay(r.createdAt)}</span> : <Dash />}
                       </TableCell>
                     )}
                     {show("peers") && <TableCell className="hidden sm:table-cell">{peers ? <PeerCounts p={peers} /> : <Dash />}</TableCell>}
@@ -880,15 +894,6 @@ export function TorrentsPage({
                             </Button>
                           )}
                         </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {link && (
-                        <Button variant="ghost" size="icon-sm" asChild onClick={(e) => e.stopPropagation()}>
-                          <a href={link} target="_blank" rel="noreferrer" aria-label="Open on the tracker">
-                            <ExternalLink />
-                          </a>
-                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
