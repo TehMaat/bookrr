@@ -62,7 +62,7 @@ Servono solo i client qBittorrent: ogni altro servizio è facoltativo e attiva l
 
 | | |
 |---|---|
-| ![Release](docs/screenshots/releases.png) **Releases**: i tuoi upload sul tracker, con la versione migliore che esiste (Max) | ![Stagioni mancanti](docs/screenshots/missing-series.png) **Missing**: la versione migliore di ogni stagione rispetto alla tua qualità minima |
+| ![Upload](docs/screenshots/releases.png) **Uploads**: i tuoi upload sul tracker tra i torrent, con la versione migliore che esiste (Max) | ![Stagioni mancanti](docs/screenshots/missing-series.png) **Missing**: la versione migliore di ogni stagione rispetto alla tua qualità minima |
 | ![Piano release](docs/screenshots/plan.png) **Plan**: i film da rilasciare e cosa ha trovato Prowlarr | ![Disco](docs/screenshots/disk-archives.png) **Pagina del disco**: i torrent su un disco, aperta dal suo QR code |
 | ![Dove è finito](docs/screenshots/resolve.png) **Alerts**: dove è finita la release rimossa? | ![Tema scuro](docs/screenshots/torrents-dark.png) **Tema scuro** |
 

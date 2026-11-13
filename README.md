@@ -60,7 +60,7 @@ Only the qBittorrent clients are needed: every other service is optional and ena
 
 | | |
 |---|---|
-| ![Releases](docs/screenshots/releases.png) **Releases**: your uploads on the tracker, with the best existing version (Max) | ![Missing seasons](docs/screenshots/missing-series.png) **Missing**: the best version of each season against your minimum quality |
+| ![Uploads](docs/screenshots/releases.png) **Uploads**: your uploads on the tracker among the torrents, with the best existing version (Max) | ![Missing seasons](docs/screenshots/missing-series.png) **Missing**: the best version of each season against your minimum quality |
 | ![Release plan](docs/screenshots/plan.png) **Plan**: the films to release and what Prowlarr found | ![Disk](docs/screenshots/disk-archives.png) **Disk page**: the torrents on a disk, opened by its QR code |
 | ![Where did it go](docs/screenshots/resolve.png) **Alerts**: where did the removed release go? | ![Dark theme](docs/screenshots/torrents-dark.png) **Dark theme** |
 
