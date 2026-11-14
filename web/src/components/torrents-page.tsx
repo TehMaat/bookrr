@@ -52,11 +52,13 @@ import { BestBadge, bestKind, ReleaseStatusBadge, RemovedBadge } from "@/compone
 import { canRemoveDuplicate, RemoveFromClientDialog } from "@/components/remove-from-client-dialog"
 import {
   ArchivableBadge,
+  archivableDays,
   archivableTone,
   DuplicateBadge,
   NeverArchiveBadge,
   PeerCounts,
   PersonalBadge,
+  WaitingArchivableBadge,
   WhereBadges,
 } from "@/components/torrent-badges"
 import { TorrentFormDialog } from "@/components/torrent-form-dialog"
@@ -101,7 +103,7 @@ export const torrentFilters = [
 ] as const
 export type TorrentFilter = (typeof torrentFilters)[number]
 type Filter = TorrentFilter
-type SortKey = "name" | "size" | "date" | "seeders" | "completed" | "status"
+type SortKey = "name" | "size" | "date" | "seeders" | "completed" | "archivable" | "status"
 /** The columns that can be hidden. */
 type Col = "size" | "location" | "type" | "best" | "uploaded" | "peers" | "archivable"
 
@@ -122,6 +124,7 @@ const noFilters = {
   seeders: noRange,
   completed: noRange,
   archivable: [] as string[],
+  archivableDays: noRange,
   status: [] as string[],
 }
 
@@ -133,7 +136,7 @@ const colFilters: Record<Col, (keyof typeof noFilters)[]> = {
   best: ["best"],
   uploaded: ["date"],
   peers: ["seeders", "completed"],
-  archivable: ["archivable"],
+  archivable: ["archivable", "archivableDays"],
 }
 
 /**
@@ -270,7 +273,11 @@ export function TorrentsPage({
   const [query, setQuery] = useState("")
   const [onlyPersonal, setOnlyPersonal] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>(
-    initialFilter === "uploads" || initialFilter === "dead" ? { key: "date", desc: true } : { key: "name", desc: false }
+    initialFilter === "uploads" || initialFilter === "dead"
+      ? { key: "date", desc: true }
+      : initialFilter === "archivable"
+        ? { key: "archivable", desc: true }
+        : { key: "name", desc: false }
   )
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
@@ -283,6 +290,8 @@ export function TorrentsPage({
 
   const setFilter = (f: Filter) => {
     setFilterState(f)
+    // The archivable ones held the longest come first.
+    if (f === "archivable") setSort({ key: "archivable", desc: true })
     onFilter?.(f)
   }
 
@@ -341,6 +350,8 @@ export function TorrentsPage({
       if (!rangeMatch(peers?.timesCompleted ?? -1, cf.completed, parseCount)) return false
       const a = archivableOf(x)
       if (!optionsMatch(cf.archivable, a?.archivable ? "yes" : "no", ...(a?.neverArchive ? ["never"] : []))) return false
+      // Only the days shown in the column: a bound leaves out those that don't meet the thresholds or are never to archive.
+      if (!rangeMatch(archivableDays(a), cf.archivableDays, parseCount)) return false
       const flags = [statusOf(x), ...(t?.openAlert ? ["alert"] : []), ...(r?.removedAt ? ["removed"] : [])]
       if (!optionsMatch(cf.status, ...flags)) return false
       if (!q) return true
@@ -365,7 +376,12 @@ export function TorrentsPage({
       else if (sort.key === "date") c = (a.r?.createdAt ?? "").localeCompare(b.r?.createdAt ?? "") || (a.r?.id ?? 0) - (b.r?.id ?? 0)
       else if (sort.key === "seeders") c = (peersOf(a)?.seeders ?? -1) - (peersOf(b)?.seeders ?? -1)
       else if (sort.key === "completed") c = (peersOf(a)?.timesCompleted ?? -1) - (peersOf(b)?.timesCompleted ?? -1)
-      else if (sort.key === "status") c = statusOrder[statusOf(a)] - statusOrder[statusOf(b)]
+      else if (sort.key === "archivable") {
+        const aa = archivableOf(a)
+        const ab = archivableOf(b)
+        // Same days: the one that meets the thresholds since earlier counts as more.
+        c = archivableDays(aa) - archivableDays(ab) || (ab?.since ?? "").localeCompare(aa?.since ?? "")
+      } else if (sort.key === "status") c = statusOrder[statusOf(a)] - statusOrder[statusOf(b)]
       if (c === 0) c = nameOf(a).localeCompare(nameOf(b), "en", { sensitivity: "base" })
       return c * dir
     })
@@ -698,8 +714,14 @@ export function TorrentsPage({
               {show("archivable") && (
                 <TableHead className="hidden md:table-cell">
                   <div className="flex items-center gap-1">
-                    Archivable
-                    <ColumnFilter label="Archivable" active={isActive(cf.archivable)} onClear={() => columns.clear("archivable")}>
+                    <button className="flex items-center gap-1" title="Days the thresholds hold: sort" onClick={() => toggleSort("archivable")}>
+                      Archivable <SortIcon k="archivable" />
+                    </button>
+                    <ColumnFilter
+                      label="Archivable"
+                      active={isActive(cf.archivable) || isActive(cf.archivableDays)}
+                      onClear={() => columns.clear("archivable", "archivableDays")}
+                    >
                       <OptionsFilter
                         options={[
                           { value: "yes", label: <><Archive className={archivableTone} /> Archivable</> },
@@ -708,6 +730,12 @@ export function TorrentsPage({
                         ]}
                         value={cf.archivable}
                         onChange={(v) => columns.set("archivable", v)}
+                      />
+                      <RangeFilter
+                        title="Days the thresholds hold"
+                        value={cf.archivableDays}
+                        onChange={(v) => columns.set("archivableDays", v)}
+                        parse={parseCount}
                       />
                     </ColumnFilter>
                   </div>
@@ -862,6 +890,7 @@ export function TorrentsPage({
                     {show("archivable") && (
                       <TableCell className="hidden md:table-cell">
                         <ArchivableBadge a={archivable} />
+                        <WaitingArchivableBadge a={archivable} />
                         <NeverArchiveBadge a={archivable} />
                       </TableCell>
                     )}
