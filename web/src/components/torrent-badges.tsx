@@ -8,6 +8,7 @@ import {
   Copy,
   HandHeart,
   HardDrive,
+  Hourglass,
   Server,
   Star,
   TriangleAlert,
@@ -190,6 +191,34 @@ export function ArchivableBadge({ a, label = "Yes" }: { a: Archivability | null;
       </TooltipContent>
     </Tooltip>
   )
+}
+
+/** Shown for uploads that meet the thresholds but not yet for the days of the rule: "3/7 days". */
+export function WaitingArchivableBadge({ a }: { a: Archivability | null }) {
+  if (!a?.met || a.archivable || a.neverArchive) return null
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className="text-muted-foreground tabular-nums">
+          <Hourglass /> {a.days}/{a.rule.days} days
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="mb-1 font-medium">
+          Others are seeding it: archivable{a.readyAt ? ` from ${formatDate(a.readyAt)}` : ""} if the thresholds still hold.
+        </p>
+        <ArchivableNumbers a={a} />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
+ * The days the thresholds hold, to sort and filter the Archivable column: archivable and waiting uploads by their days,
+ * then those that don't meet the thresholds (-1), those never to archive (-2) and those not assessed (-3).
+ */
+export function archivableDays(a: Archivability | null): number {
+  return !a ? -3 : a.neverArchive ? -2 : a.met ? a.days : -1
 }
 
 /** An upload the user keeps on the clients, never archivable. */
