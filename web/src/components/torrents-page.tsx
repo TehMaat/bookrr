@@ -8,13 +8,10 @@ import {
   ChevronRight,
   CircleArrowUp,
   CheckCheck,
-  CircleHelp,
-  CloudOff,
   CloudUpload,
   Copy,
   Download,
   ExternalLink,
-  FileWarning,
   HandHeart,
   HardDrive,
   Layers,
@@ -85,24 +82,9 @@ import { formatBytes, formatDate, formatDay, formatRelative, formatState, format
 import { useAction, useAdopters, useClients, useDisks, useInfo, useReleases, useTorrents } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
-/** The counters on top, each a filter; the ones from "uploads" on need the tracker. */
-export const torrentFilters = [
-  "all",
-  "client",
-  "duplicate",
-  "missing",
-  "archived",
-  "adopted",
-  "unknown",
-  "uploads",
-  "untracked",
-  "removed",
-  "dead",
-  "archivable",
-  "better",
-] as const
-export type TorrentFilter = (typeof torrentFilters)[number]
-type Filter = TorrentFilter
+/** The counters on top, each a filter: besides "all", the torrents with something to do. "dead" needs the tracker. */
+const torrentFilters = ["all", "duplicate", "missing", "dead", "archivable", "better"] as const
+type Filter = (typeof torrentFilters)[number]
 type SortKey = "name" | "size" | "date" | "seeders" | "completed" | "archivable" | "status"
 /** The columns that can be hidden. */
 type Col = "size" | "location" | "type" | "best" | "uploaded" | "peers" | "archivable"
@@ -126,7 +108,25 @@ const noFilters = {
   archivable: [] as string[],
   archivableDays: noRange,
   status: [] as string[],
+  upload: [] as string[],
 }
+
+/**
+ * The counters of the earlier versions, now column filters: their addresses (#torrents/adopted…) open the same list.
+ * "c:*", "d:*" and "a:*" of the Location filter are any client, disk or adopter.
+ */
+const oldFilters: Record<string, Partial<typeof noFilters>> = {
+  client: { where: ["c:*"] },
+  archived: { where: ["d:*"] },
+  adopted: { where: ["a:*"] },
+  unknown: { status: ["unknown"] },
+  uploads: { upload: ["yes"] },
+  untracked: { status: ["untracked"] },
+  removed: { upload: ["removed"] },
+}
+
+/** What can follow "#torrents/" in the address: a counter or a filter of the earlier counters. */
+export const torrentViews: readonly string[] = [...torrentFilters, ...Object.keys(oldFilters)]
 
 /** The filters of each column that can be hidden: hiding it clears them. */
 const colFilters: Record<Col, (keyof typeof noFilters)[]> = {
@@ -152,15 +152,22 @@ const archivableOf = (x: Row) => (x.t ? x.t.archivable : (x.r?.archivable ?? nul
 const nameOf = (x: Row) => x.t?.name ?? x.r?.name ?? ""
 const sizeOf = (x: Row) => x.t?.size || x.r?.size || 0
 
-/** The values a row has for the "Location" filter. */
+/** The values a row has for the "Location" filter: each place, and "c:*", "d:*", "a:*" when on any of that kind. */
 function places(t: Torrent | null) {
   if (!t) return ["none"]
+  const any = (prefix: string, ids: (number | null)[]) => (ids.length > 0 ? [`${prefix}:*`, ...ids.map((id) => `${prefix}:${id}`)] : [])
   const out = [
-    ...t.locations.map((l) => `c:${l.clientId}`),
-    ...t.archives.map((a) => `d:${a.diskId}`),
-    ...t.adoptions.map((a) => `a:${a.adopterId}`),
+    ...any("c", t.locations.map((l) => l.clientId)),
+    ...any("d", t.archives.map((a) => a.diskId)),
+    ...any("a", t.adoptions.map((a) => a.adopterId)),
   ]
   return out.length > 0 ? out : ["none"]
+}
+
+/** The values a row has for the "Upload" filter of the Status column. */
+function uploadFlags(r: TrackerRelease | null) {
+  if (!r) return ["no"]
+  return r.removedAt ? ["yes", "removed"] : ["yes"]
 }
 
 function matches(x: Row, f: Filter) {
@@ -170,24 +177,14 @@ function matches(x: Row, f: Filter) {
       return true
     case "duplicate":
       return !!t?.duplicate
-    case "adopted":
-      return !!t && t.adoptions.length > 0
-    case "archived":
-      return !!t && t.archives.length > 0
-    case "uploads":
-      return !!r
-    case "untracked":
-      return !t
-    case "removed":
-      return !!r?.removedAt
+    case "missing":
+      return t?.status === "missing"
     case "dead":
       return !!r && !r.removedAt && r.seeders === 0
     case "archivable":
       return !!archivableOf(x)?.archivable
     case "better":
       return !!r?.best?.better
-    default:
-      return t?.status === f
   }
 }
 
@@ -251,18 +248,19 @@ const Dash = () => <span className="text-muted-foreground text-xs">—</span>
 
 /**
  * The torrents of bookrr together with the uploads on the UNIT3D tracker: each upload is on the row of the torrent with
- * the same hash, and the uploads bookrr has no torrent for have a row of their own. initialFilter is the counter chosen
- * at first; onFilter tells the counter chosen later (to keep it in the address).
+ * the same hash, and the uploads bookrr has no torrent for have a row of their own. view is what follows "#torrents/" in
+ * the address (one of torrentViews); onFilter tells the counter chosen later (to keep it in the address).
  */
 export function TorrentsPage({
   onResolve,
-  initialFilter = "all",
+  view = "all",
   onFilter,
 }: {
   onResolve: (a: Alert) => void
-  initialFilter?: Filter
+  view?: string
   onFilter?: (f: Filter) => void
 }) {
+  const initialFilter: Filter = (torrentFilters as readonly string[]).includes(view) ? (view as Filter) : "all"
   const torrents = useTorrents()
   const releases = useReleases()
   const clients = useClients()
@@ -273,9 +271,9 @@ export function TorrentsPage({
   const [query, setQuery] = useState("")
   const [onlyPersonal, setOnlyPersonal] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>(
-    initialFilter === "uploads" || initialFilter === "dead"
+    view === "uploads" || view === "dead"
       ? { key: "date", desc: true }
-      : initialFilter === "archivable"
+      : view === "archivable"
         ? { key: "archivable", desc: true }
         : { key: "name", desc: false }
   )
@@ -283,7 +281,7 @@ export function TorrentsPage({
   const [selected, setSelected] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
-  const columns = useColumnFilters(noFilters, () => setPage(0))
+  const columns = useColumnFilters(noFilters, () => setPage(0), { ...noFilters, ...oldFilters[view] })
   const cf = columns.filters
   const hidden = useHiddenColumns<Col>("bookrr.torrents.hidden-columns")
   const add = useAction((ids: number[]) => api.addReleases(ids))
@@ -352,8 +350,9 @@ export function TorrentsPage({
       if (!optionsMatch(cf.archivable, a?.archivable ? "yes" : "no", ...(a?.neverArchive ? ["never"] : []))) return false
       // Only the days shown in the column: a bound leaves out those that don't meet the thresholds or are never to archive.
       if (!rangeMatch(archivableDays(a), cf.archivableDays, parseCount)) return false
-      const flags = [statusOf(x), ...(t?.openAlert ? ["alert"] : []), ...(r?.removedAt ? ["removed"] : [])]
+      const flags = [statusOf(x), ...(t?.openAlert ? ["alert"] : [])]
       if (!optionsMatch(cf.status, ...flags)) return false
+      if (!optionsMatch(cf.upload, ...uploadFlags(r))) return false
       if (!q) return true
       return (
         texts.some((s) => !!s && s.toLowerCase().includes(q)) ||
@@ -397,7 +396,9 @@ export function TorrentsPage({
     { id: "peers", label: "Seeds / Completed" },
     { id: "archivable", label: "Archivable" },
   ]
-  const show = (c: Col) => hidden.shows(c) && optional.some((o) => o.id === c)
+  // A column with a filter set shows also when hidden, e.g. Location opened from #torrents/adopted.
+  const show = (c: Col) =>
+    (hidden.shows(c) || colFilters[c].some((k) => isActive(cf[k]))) && optional.some((o) => o.id === c)
   const toggleColumn = (c: Col, visible: boolean) => {
     hidden.toggle(c, visible)
     if (!visible && colFilters[c].some((k) => isActive(cf[k]))) columns.clear(...colFilters[c])
@@ -434,25 +435,16 @@ export function TorrentsPage({
       },
     })
 
-  const stats: { key: Filter; label: string; icon: React.ElementType; tone?: string; tip?: string }[] = [
+  // Besides Total, a counter shows only with something to do (or when chosen): at 0 it would be noise.
+  const counters: { key: Filter; label: string; icon: React.ElementType; tone?: string }[] = [
     { key: "all", label: "Total", icon: Layers },
-    { key: "client", label: "On a client", icon: Server, tone: "text-sky-600 dark:text-sky-400" },
     { key: "duplicate", label: "Duplicates", icon: Copy, tone: "text-destructive" },
     { key: "missing", label: "To locate", icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
-    { key: "archived", label: "Archived", icon: HardDrive, tone: "text-violet-600 dark:text-violet-400" },
-    { key: "adopted", label: "Adopted", icon: HandHeart, tone: "text-emerald-600 dark:text-emerald-400" },
-    { key: "unknown", label: "Unknown location", icon: CircleHelp },
-    ...(hasTracker
-      ? [
-          { key: "uploads" as const, label: "Uploads", icon: CloudUpload },
-          { key: "untracked" as const, label: "Not in bookrr", icon: FileWarning, tone: "text-amber-600 dark:text-amber-400" },
-          { key: "removed" as const, label: "Removed", icon: CloudOff, tone: "text-destructive" },
-          { key: "dead" as const, label: "Dead", icon: Skull, tone: "text-destructive" },
-        ]
-      : []),
+    ...(hasTracker ? [{ key: "dead" as const, label: "Dead", icon: Skull, tone: "text-destructive" }] : []),
     { key: "archivable", label: "Archivable", icon: Archive, tone: archivableTone },
     ...(best ? [{ key: "better" as const, label: "Upgradable", icon: CircleArrowUp, tone: "text-amber-600 dark:text-amber-400" }] : []),
   ]
+  const stats = counters.filter((s) => s.key === "all" || s.key === filter || counts[s.key] > 0)
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
@@ -574,17 +566,17 @@ export function TorrentsPage({
                     <ColumnFilter label="Location" active={isActive(cf.where)} onClear={() => columns.clear("where")}>
                       {(
                         [
-                          ["Client", (clients.data ?? []).map((c) => ({ value: `c:${c.id}`, label: <><Server /> {c.name}</> }))],
-                          ["Disks", (disks.data ?? []).map((d) => ({ value: `d:${d.id}`, label: <><HardDrive /> {d.label}</> }))],
-                          ["Adopters", (adopters.data ?? []).map((a) => ({ value: `a:${a.id}`, label: <><HandHeart /> {a.name}</> }))],
+                          ["Client", "c", "Any client", (clients.data ?? []).map((c) => ({ value: `c:${c.id}`, label: <><Server /> {c.name}</> }))],
+                          ["Disks", "d", "Any disk", (disks.data ?? []).map((d) => ({ value: `d:${d.id}`, label: <><HardDrive /> {d.label}</> }))],
+                          ["Adopters", "a", "Any adopter", (adopters.data ?? []).map((a) => ({ value: `a:${a.id}`, label: <><HandHeart /> {a.name}</> }))],
                         ] as const
                       )
-                        .filter(([, options]) => options.length > 0)
-                        .map(([title, options]) => (
+                        .filter(([, , , options]) => options.length > 0)
+                        .map(([title, prefix, any, options]) => (
                           <OptionsFilter
                             key={title}
                             title={title}
-                            options={options}
+                            options={[{ value: `${prefix}:*`, label: <span className="font-medium">{any}</span> }, ...options]}
                             value={cf.where}
                             onChange={(v) => columns.set("where", v)}
                           />
@@ -746,19 +738,19 @@ export function TorrentsPage({
                   <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
                     Status <SortIcon k="status" />
                   </button>
-                  <ColumnFilter label="Status" align="end" active={isActive(cf.status)} onClear={() => columns.clear("status")}>
+                  <ColumnFilter
+                    label="Status"
+                    align="end"
+                    active={isActive(cf.status) || isActive(cf.upload)}
+                    onClear={() => columns.clear("status", "upload")}
+                  >
                     <OptionsFilter
                       options={[
                         ...(["client", "missing", "archived", "adopted", "unknown"] as const).map((st) => ({
                           value: st,
                           label: <ReleaseStatusBadge status={st} />,
                         })),
-                        ...(hasTracker
-                          ? [
-                              { value: "untracked", label: <ReleaseStatusBadge status="untracked" /> },
-                              { value: "removed", label: <RemovedBadge /> },
-                            ]
-                          : []),
+                        ...(hasTracker ? [{ value: "untracked", label: <ReleaseStatusBadge status="untracked" /> }] : []),
                         {
                           value: "alert",
                           label: (
@@ -771,6 +763,18 @@ export function TorrentsPage({
                       value={cf.status}
                       onChange={(v) => columns.set("status", v)}
                     />
+                    {(hasTracker || isActive(cf.upload)) && (
+                      <OptionsFilter
+                        title="Tracker"
+                        options={[
+                          { value: "yes", label: <><CloudUpload /> Uploaded</> },
+                          { value: "no", label: "Not uploaded" },
+                          { value: "removed", label: <RemovedBadge /> },
+                        ]}
+                        value={cf.upload}
+                        onChange={(v) => columns.set("upload", v)}
+                      />
+                    )}
                   </ColumnFilter>
                 </div>
               </TableHead>

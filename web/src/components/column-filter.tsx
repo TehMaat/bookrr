@@ -22,10 +22,10 @@ export function isActive(v: unknown): boolean {
 
 /**
  * The filters of the columns of a table, one entry per filter. `onChange` runs on every change,
- * to go back to the first page.
+ * to go back to the first page; `initial` are the filters at first (otherwise none).
  */
-export function useColumnFilters<T extends object>(empty: T, onChange?: () => void) {
-  const [filters, setFilters] = useState<T>(empty)
+export function useColumnFilters<T extends object>(empty: T, onChange?: () => void, initial: T = empty) {
+  const [filters, setFilters] = useState<T>(initial)
   const set = <K extends keyof T>(key: K, value: T[K]) => {
     setFilters((f) => ({ ...f, [key]: value }))
     onChange?.()

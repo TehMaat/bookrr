@@ -22,7 +22,7 @@ Installation and configuration are in the [README](../../README.md#installation)
 
 ## The interface
 
-The menu on the left has a page for each part of bookrr; the counters at the top of a page filter its list. ⚙️ at the bottom left opens **Settings**, 🎨 picks the color of the logo and the buttons (a lightsaber color, remembered by the browser), ☀️ the light, dark or system theme.
+The menu on the left has a page for each part of bookrr; the counters at the top of a page filter its list. On **Torrents**, besides *Total*, they are the torrents with something to do (*Duplicates*, *To locate*, *Dead*, *Archivable*, *Upgradable*) and show only when there are some; where a torrent is, or its status, you filter from the **Location** column (also *Any client*, *Any disk*, *Any adopter*) and the **Status** column. ⚙️ at the bottom left opens **Settings**, 🎨 picks the color of the logo and the buttons (a lightsaber color, remembered by the browser), ☀️ the light, dark or system theme.
 
 <p align="center">
   <img src="../logo/bookrr-viola.svg" alt="Purple" width="48">
