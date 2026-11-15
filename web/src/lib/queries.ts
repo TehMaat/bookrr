@@ -20,6 +20,7 @@ export const keys = {
   missingLists: ["missing-lists"] as const,
   logFiles: ["log-files"] as const,
   plan: ["plan"] as const,
+  planDiscs: (id: number) => ["plan", id, "discs"] as const,
 }
 
 /** Being downloaded, or sent and not listed by the client yet. */

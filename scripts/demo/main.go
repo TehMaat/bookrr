@@ -22,6 +22,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -134,10 +135,34 @@ var prowlarrResults = map[int64][]map[string]any{
 	9021: {{"title": "Paper.Lanterns.2021.2160p.AMZN.WEB-DL.DDP5.1.HDR.H.265-ARCADE", "indexer": "Indexer B", "seeders": 31, "size": 15 * gb}},
 	9031: {{"title": "Iron.Tide.2018.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-ARCADE", "indexer": "Indexer A", "seeders": 4, "size": 27 * gb}},
 	9041: {{"title": "Glass.Meridian.2022.2160p.NF.WEB-DL.DDP5.1.Atmos.DV.H.265-ARCADE", "indexer": "Indexer B", "seeders": 22, "size": 17 * gb}},
-	9002: {{"title": "Starfall.Courier.II.2021.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC.TrueHD.7.1-ARCADE", "indexer": "Indexer A", "seeders": 9, "size": 66 * gb}},
+	9002: {
+		{"title": "Starfall.Courier.II.2021.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC.TrueHD.7.1-ARCADE", "indexer": "Indexer A", "seeders": 9, "size": 66 * gb},
+		// Full discs, for the search of the full discs of the plan.
+		discResult("Starfall.Courier.II.2021.COMPLETE.UHD.BLURAY.ITA.ENG-DISCO", "Indexer A", 5, 88*gb, true),
+		discResult("Starfall Courier II 2021 1080p Blu-ray AVC DTS-HD MA 5.1", "Indexer B", 14, 44*gb, true),
+		discResult("Starfall.Courier.II.2021.BD50.ITA-SILVER", "Indexer C", 2, 41*gb, false),
+	},
 	9033: {{"title": "Iron.Tide.Riptide.2023.2160p.WEB-DL.DDP5.1.HDR.H.265-ARCADE", "indexer": "Indexer B", "seeders": 40, "size": 16 * gb}},
 	9061: {{"title": "Lantern.Bay.2019.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-ARCADE", "indexer": "Indexer A", "seeders": 6, "size": 25 * gb}},
 	9052: {{"title": "Neon.Run.Afterglow.2023.2160p.WEB-DL.DDP5.1.DV.H.265-ARCADE", "indexer": "Indexer B", "seeders": 18, "size": 19 * gb}},
+}
+
+// discResult is a full disc found by an indexer; without a .torrent, a
+// magnet link only.
+func discResult(title, indexer string, seeders, size int64, torrent bool) map[string]any {
+	r := map[string]any{"title": title, "indexer": indexer, "seeders": seeders, "size": size, "protocol": "torrent",
+		"guid": indexer + "/" + title, "categories": []map[string]any{{"id": 2050}}}
+	if torrent {
+		r["downloadUrl"] = "http://prowlarr.local/1/download?" + url.Values{"apikey": {"demo"}, "file": {title},
+			"size": {strconv.FormatInt(size, 10)}}.Encode()
+	}
+	return r
+}
+
+// torrentFile is a made-up .torrent of one file.
+func torrentFile(name string, size int64) []byte {
+	info := fmt.Sprintf("d6:lengthi%de4:name%d:%s12:piece lengthi16777216e6:pieces20:%se", size, len(name), name, strings.Repeat("x", 20))
+	return []byte("d8:announce30:https://other.example/announce4:info" + info + "e")
 }
 
 func main() {
@@ -348,11 +373,10 @@ ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_
 
 // upload loads on a film of the plan a made-up .torrent of one file.
 func upload(ctx context.Context, url, name string, size int64, label string) {
-	info := fmt.Sprintf("d6:lengthi%de4:name%d:%s12:piece lengthi16777216e6:pieces20:%se", size, len(name), name, strings.Repeat("x", 20))
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	fw, _ := mw.CreateFormFile("file", name+".torrent")
-	fw.Write([]byte("d8:announce30:https://other.example/announce4:info" + info + "e"))
+	fw.Write(torrentFile(name, size))
 	mw.WriteField("label", label)
 	mw.Close()
 	req, _ := http.NewRequestWithContext(ctx, "POST", url, &body)
@@ -572,8 +596,13 @@ func serveMDBList(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveProwlarr(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/api/v1/system/status" {
+	switch r.URL.Path {
+	case "/api/v1/system/status":
 		w.Write([]byte(`{"version":"1.30.2"}`))
+		return
+	case "/1/download":
+		size, _ := strconv.ParseInt(r.URL.Query().Get("size"), 10, 64)
+		w.Write(torrentFile(r.URL.Query().Get("file"), size))
 		return
 	}
 	q := r.URL.Query().Get("query")
