@@ -22,7 +22,9 @@ var MaxRank = unit3d.ResolutionRank("2160p")
 // Ranking is the version of the order that chose the stored releases: the
 // films searched with an older one are searched again first.
 // 1: type, then resolution (a 1080p Remux is better than a 2160p WEB-DL).
-const Ranking = 1
+// 2: the full discs are left out (they have their own search, see Discs):
+// their names were read as Encodes.
+const Ranking = 2
 
 // grade is what makes a release of a film better than another: its type
 // first (Remux > Encode > WEB-DL > WEBRip > HDTV), then its resolution.
@@ -74,6 +76,8 @@ type Finder struct {
 	state   State
 	// Films of the release plan being searched out of the rounds, by key.
 	searching map[string]bool
+	// The last search of the full discs of the films of the plan, by key.
+	discs map[string]DiscSearch
 }
 
 type State struct {
@@ -90,7 +94,7 @@ type State struct {
 }
 
 func NewFinder(s *store.Store, c *Client, recheck time.Duration) *Finder {
-	f := &Finder{store: s, client: c, recheck: recheck, now: time.Now, StartDelay: 15 * time.Minute, searching: map[string]bool{}}
+	f := &Finder{store: s, client: c, recheck: recheck, now: time.Now, StartDelay: 15 * time.Minute, searching: map[string]bool{}, discs: map[string]DiscSearch{}}
 	f.state.Recheck = days(recheck)
 	return f
 }
@@ -233,13 +237,14 @@ func (f *film) matches(r Release) bool {
 
 // best is the best release of the film with a known resolution (by type,
 // then resolution; the most seeded among the equal ones), and how many
-// releases of the film were found.
+// releases of the film were found. The best goes up to a Remux: the full
+// discs are not counted.
 func (f *film) best(found []Release) store.BestResolution {
 	b := store.BestResolution{Film: f.key, Ranking: Ranking}
 	var top grade
 	var seeders int64
 	for _, r := range found {
-		if !f.matches(r) || upscaleRe.MatchString(r.Title) {
+		if !f.matches(r) || upscaleRe.MatchString(r.Title) || r.FullDisc() {
 			continue
 		}
 		b.Results++

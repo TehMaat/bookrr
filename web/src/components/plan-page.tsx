@@ -5,6 +5,7 @@ import {
   CircleCheck,
   CircleDashed,
   CalendarClock,
+  Disc3,
   ExternalLink,
   ListTodo,
   Loader2,
@@ -23,6 +24,7 @@ import {
 import { toast } from "sonner"
 
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
+import { PlanDiscsDialog } from "@/components/plan-discs"
 import {
   LoadTorrentDialog,
   MAX_PLAN_TORRENTS,
@@ -123,13 +125,15 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const [editing, setEditing] = useState<PlanItem | null>(null)
   const [removing, setRemoving] = useState<PlanItem | null>(null)
   const [torrentAction, setTorrentAction] = useState<TorrentAction | null>(null)
+  // The film whose full discs are shown, by id: its torrents stay current.
+  const [discsOf, setDiscsOf] = useState<number | null>(null)
   // The torrent of the plan open in the sheet of the Torrents page.
   const [openHash, setOpenHash] = useState<string | null>(null)
   const torrents = useQuery({ queryKey: keys.torrents, queryFn: api.torrents, enabled: openHash !== null })
   const openTorrent = openHash ? (torrents.data?.find((t) => t.hash === openHash) ?? null) : null
   const update = useAction(({ id, status }: { id: number; status: PlanStatus }) => api.updatePlan(id, { status }))
   const remove = useAction((id: number) => api.deletePlan(id), "Film removed from the plan")
-  const search = useAction((id: number) => api.searchPlan(id), "Prowlarr search started")
+  const search = useAction((id: number) => api.searchPlan(id), "Best version search started")
 
   const all = useMemo(() => data?.entries ?? [], [data])
   const open = (it: PlanItem) => it.status === "todo" || it.status === "doing" || it.status === "downloaded"
@@ -212,7 +216,8 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground max-w-3xl text-sm">
           The films you want to release: add them by their TMDB, or from Missing. For each one bookrr searches Prowlarr
-          for the best existing version (type first, then resolution). Load its .torrent (two for a merge) and download
+          for the best existing version up to a Remux (type first, then resolution); its full discs you search from the
+          menu of the film. Load its .torrent (two for a merge) and download
           it on a client: the film becomes downloaded when complete, and done when you upload it to the tracker.
         </p>
         <Button className="ml-auto" disabled={!data?.enabled} onClick={() => setAdding(true)}>
@@ -358,9 +363,14 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {data?.searchEnabled && (
-                          <DropdownMenuItem disabled={it.searching} onClick={() => search.mutate(it.id)}>
-                            <Search /> Search Prowlarr now
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem disabled={it.searching} onClick={() => search.mutate(it.id)}>
+                              <Search /> Search best version now
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDiscsOf(it.id)}>
+                              <Disc3 /> Search Full Discs
+                            </DropdownMenuItem>
+                          </>
                         )}
                         <DropdownMenuItem onClick={() => setEditing(it)}>
                           <Pencil /> Note
@@ -411,6 +421,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
 
       <AddPlanDialog open={adding} onOpenChange={setAdding} />
       <NoteDialog item={editing} onClose={() => setEditing(null)} />
+      <PlanDiscsDialog item={all.find((it) => it.id === discsOf) ?? null} onClose={() => setDiscsOf(null)} />
       <LoadTorrentDialog
         action={torrentAction?.kind === "load" ? torrentAction : null}
         onClose={() => setTorrentAction(null)}

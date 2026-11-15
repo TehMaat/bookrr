@@ -18,8 +18,9 @@ func TestSearchMovie(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r
 		w.Write([]byte(`[
-			{"title": "The.Matrix.1999.2160p.UHD.BluRay.x265-GRP", "indexer": "A", "infoUrl": "https://a/1", "size": 123, "seeders": 4, "imdbId": 133093, "tmdbId": 603},
-			{"title": "The.Matrix.1999.1080p.WEB-DL", "indexer": "B", "guid": "https://b/2", "seeders": null, "imdbId": "tt0133093"}
+			{"title": "The.Matrix.1999.2160p.UHD.BluRay.x265-GRP", "indexer": "A", "infoUrl": "https://a/1", "size": 123, "seeders": 4, "imdbId": 133093, "tmdbId": 603,
+				"protocol": "torrent", "downloadUrl": "http://p/1/download", "categories": [{"id": 2000}, {"id": 2050}, {"id": 100001}]},
+			{"title": "The.Matrix.1999.1080p.WEB-DL", "indexer": "B", "guid": "https://b/2", "seeders": null, "imdbId": "tt0133093", "protocol": "usenet"}
 		]`))
 	}))
 	defer srv.Close()
@@ -37,8 +38,9 @@ func TestSearchMovie(t *testing.T) {
 		t.Fatalf("query %v", q)
 	}
 	want := []Release{
-		{Title: "The.Matrix.1999.2160p.UHD.BluRay.x265-GRP", Indexer: "A", InfoURL: "https://a/1", Size: 123, Seeders: 4, ImdbID: 133093, TmdbID: 603},
-		{Title: "The.Matrix.1999.1080p.WEB-DL", Indexer: "B", InfoURL: "https://b/2", ImdbID: 133093},
+		{Title: "The.Matrix.1999.2160p.UHD.BluRay.x265-GRP", Indexer: "A", InfoURL: "https://a/1", Size: 123, Seeders: 4, ImdbID: 133093, TmdbID: 603,
+			DownloadURL: "http://p/1/download", Torrent: true, BluRay: true},
+		{Title: "The.Matrix.1999.1080p.WEB-DL", Indexer: "B", InfoURL: "https://b/2", ImdbID: 133093, GUID: "https://b/2"},
 	}
 	if len(rs) != 2 || rs[0] != want[0] || rs[1] != want[1] {
 		t.Fatalf("got %+v", rs)
@@ -85,6 +87,15 @@ func TestBest(t *testing.T) {
 	})
 	if b.Resolution != "1080p" || b.Type != "Remux" || b.Indexer != "R" {
 		t.Fatalf("remux: %+v", b)
+	}
+	// The best goes up to a Remux: the full discs are not counted.
+	b = f.best([]Release{
+		{Title: "The.Matrix.1999.COMPLETE.UHD.BLURAY-GRP", Seeders: 50, TmdbID: 603},
+		{Title: "The.Matrix.1999.1080p.BluRay.AVC.DTS-HD.MA.5.1-FGT", Seeders: 50, TmdbID: 603, BluRay: true},
+		{Title: "The.Matrix.1999.2160p.WEB-DL", Indexer: "W", TmdbID: 603},
+	})
+	if b.Resolution != "2160p" || b.Type != "WEB-DL" || b.Indexer != "W" || b.Results != 1 {
+		t.Fatalf("full discs: %+v", b)
 	}
 	if b := f.best(nil); b.Resolution != "" || b.Results != 0 {
 		t.Fatalf("nothing found: %+v", b)
@@ -331,5 +342,42 @@ func TestCheckPlan(t *testing.T) {
 	}
 	if b := best[dropped.ID]; b != nil {
 		t.Fatalf("dropped searched: %+v", b)
+	}
+}
+
+func TestDownload(t *testing.T) {
+	var got *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		switch r.URL.Path {
+		case "/prowlarr/1/download":
+			w.Write([]byte("d4:infod4:name1:xee"))
+		case "/prowlarr/2/download":
+			http.Redirect(w, r, "magnet:?xt=urn:btih:abc", http.StatusMovedPermanently)
+		case "/prowlarr/3/download":
+			w.Write(make([]byte, 100))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL+"/prowlarr", "key")
+	ctx := context.Background()
+	// On the host of Prowlarr as configured, whatever host the address has.
+	data, err := c.Download(ctx, "http://prowlarr.lan:9696/prowlarr/1/download?apikey=key&link=abc", 50)
+	if err != nil || string(data) != "d4:infod4:name1:xee" || got.Header.Get("X-Api-Key") != "key" || got.URL.Query().Get("link") != "abc" {
+		t.Fatalf("%q %v %v", data, err, got.URL)
+	}
+	if _, err := c.Download(ctx, "http://p/prowlarr/2/download?apikey=key", 50); err == nil || !strings.Contains(err.Error(), "magnet") {
+		t.Fatalf("magnet: %v", err)
+	}
+	if _, err := c.Download(ctx, "", 50); err == nil || !strings.Contains(err.Error(), "magnet") {
+		t.Fatalf("no address: %v", err)
+	}
+	if _, err := c.Download(ctx, "http://p/prowlarr/3/download", 50); err == nil || !strings.Contains(err.Error(), "over") {
+		t.Fatalf("too big: %v", err)
+	}
+	if _, err := c.Download(ctx, "http://p/prowlarr/9/download?apikey=secret", 50); err == nil || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("not found: %v", err)
 	}
 }

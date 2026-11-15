@@ -456,6 +456,33 @@ export type Plan = {
   entries: PlanItem[]
 }
 
+/** A full disc of a film of the plan found with Prowlarr. */
+export type PlanDisc = {
+  id: string
+  title: string
+  indexer: string
+  /** The page of the release on its indexer. */
+  url: string
+  size: number
+  seeders: number
+  resolution: string
+  /** "2160p Full Disc DV HDR ITA ENG" */
+  quality: string
+  /** Its .torrent can be loaded on the plan: false for a magnet link only. */
+  loadable: boolean
+}
+
+/** The last search of the full discs of a film of the plan (kept until bookrr restarts). */
+export type PlanDiscs = {
+  searching: boolean
+  /** "" when not searched yet. */
+  checkedAt: string
+  /** Why the last search failed; the discs are those of the one before. */
+  error: string
+  /** Best first: resolution, then seeders. */
+  discs: PlanDisc[]
+}
+
 export type PlanLookup = { movie: PlanEntry; inPlan: number }
 export type PlanBulkResult = { added: PlanEntry[]; skipped: number; errors: string[] }
 export type PlanSource = { source: string; sourceTitle: string }
@@ -894,8 +921,15 @@ export const api = {
     request<PlanBulkResult>("POST", "/api/plan/bulk", { tmdbIds, ...from }),
   updatePlan: (id: number, p: { status?: PlanStatus; note?: string }) => request<PlanEntry>("PATCH", `/api/plan/${id}`, p),
   deletePlan: (id: number) => request<void>("DELETE", `/api/plan/${id}`),
-  /** Searches the film on Prowlarr now, in the background. */
+  /** Searches the best version of the film on Prowlarr now, in the background. */
   searchPlan: (id: number) => request<{ searching: boolean }>("POST", `/api/plan/${id}/search`),
+  /** The last search of the full discs of the film. */
+  planDiscs: (id: number) => request<PlanDiscs>("GET", `/api/plan/${id}/discs`),
+  /** Searches the full discs of the film on Prowlarr, in the background. */
+  searchPlanDiscs: (id: number) => request<PlanDiscs>("POST", `/api/plan/${id}/discs`),
+  /** Loads the .torrent of a full disc found, through Prowlarr, at the first free position. */
+  loadPlanDisc: (id: number, disc: string) =>
+    request<PlanTorrent>("POST", `/api/plan/${id}/discs/${enc(disc)}/load`),
   /** Loads a .torrent file on a film of the plan: at the first free position, or replacing the one at position. */
   uploadPlanTorrent: (id: number, file: File, label = "", position?: number) => {
     const form = new FormData()

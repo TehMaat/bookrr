@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tehmaat/bookrr/internal/unit3d"
 )
 
 type Client struct {
@@ -49,17 +51,39 @@ type Release struct {
 	// Ids of the film, when the indexer gives them (0 otherwise).
 	ImdbID int64
 	TmdbID int64
+	// GUID identifies the release on its indexer.
+	GUID string
+	// DownloadURL is the .torrent through Prowlarr: it holds the key of
+	// Prowlarr, never shown to the user. "" when there is none (a magnet
+	// link only).
+	DownloadURL string
+	// Torrent is false for an NZB.
+	Torrent bool
+	// BluRay is true when the indexer files it under Movies/BluRay, where
+	// the full discs go.
+	BluRay bool
 }
 
+// FullDisc reports whether the release is a full disc.
+func (r Release) FullDisc() bool { return unit3d.FullDisc(r.Title, r.Size, r.BluRay) }
+
+// The category of the full discs for Newznab and Torznab.
+const bluRayCategory = 2050
+
 type release struct {
-	Title   string  `json:"title"`
-	Indexer string  `json:"indexer"`
-	InfoURL string  `json:"infoUrl"`
-	GUID    string  `json:"guid"`
-	Size    flexInt `json:"size"`
-	Seeders flexInt `json:"seeders"`
-	ImdbID  flexInt `json:"imdbId"`
-	TmdbID  flexInt `json:"tmdbId"`
+	Title       string  `json:"title"`
+	Indexer     string  `json:"indexer"`
+	InfoURL     string  `json:"infoUrl"`
+	GUID        string  `json:"guid"`
+	DownloadURL string  `json:"downloadUrl"`
+	Protocol    string  `json:"protocol"`
+	Size        flexInt `json:"size"`
+	Seeders     flexInt `json:"seeders"`
+	ImdbID      flexInt `json:"imdbId"`
+	TmdbID      flexInt `json:"tmdbId"`
+	Categories  []struct {
+		ID flexInt `json:"id"`
+	} `json:"categories"`
 }
 
 // flexInt accepts a number, a numeric string ("tt0133093" too), or null.
@@ -83,6 +107,11 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 // SearchMovie asks every indexer for the releases of a film by its ids
 // (0 for an unknown one), in the categories of films.
 func (c *Client) SearchMovie(ctx context.Context, imdbID, tmdbID int64) ([]Release, error) {
+	return c.searchMovie(ctx, imdbID, tmdbID, 100)
+}
+
+// searchMovie is SearchMovie with at most limit releases.
+func (c *Client) searchMovie(ctx context.Context, imdbID, tmdbID int64, limit int) ([]Release, error) {
 	var q string
 	if imdbID != 0 {
 		q += fmt.Sprintf("{ImdbId:tt%07d}", imdbID)
@@ -94,7 +123,7 @@ func (c *Client) SearchMovie(ctx context.Context, imdbID, tmdbID int64) ([]Relea
 		return nil, errors.New("film with neither IMDb nor TMDB id")
 	}
 	var res []release
-	if err := c.get(ctx, "/api/v1/search", url.Values{"query": {q}, "type": {"movie"}, "categories": {"2000"}, "limit": {"100"}}, &res); err != nil {
+	if err := c.get(ctx, "/api/v1/search", url.Values{"query": {q}, "type": {"movie"}, "categories": {"2000"}, "limit": {strconv.Itoa(limit)}}, &res); err != nil {
 		return nil, err
 	}
 	out := make([]Release, 0, len(res))
@@ -103,10 +132,81 @@ func (c *Client) SearchMovie(ctx context.Context, imdbID, tmdbID int64) ([]Relea
 		if link == "" && strings.HasPrefix(r.GUID, "http") {
 			link = r.GUID
 		}
-		out = append(out, Release{Title: r.Title, Indexer: r.Indexer, InfoURL: link, Size: int64(r.Size),
-			Seeders: int64(r.Seeders), ImdbID: int64(r.ImdbID), TmdbID: int64(r.TmdbID)})
+		rel := Release{Title: r.Title, Indexer: r.Indexer, InfoURL: link, Size: int64(r.Size),
+			Seeders: int64(r.Seeders), ImdbID: int64(r.ImdbID), TmdbID: int64(r.TmdbID),
+			GUID: r.GUID, DownloadURL: r.DownloadURL, Torrent: !strings.EqualFold(r.Protocol, "usenet")}
+		for _, c := range r.Categories {
+			rel.BluRay = rel.BluRay || c.ID == bluRayCategory
+		}
+		out = append(out, rel)
 	}
 	return out, nil
+}
+
+// errMagnet is a release Prowlarr has only as a magnet link.
+var errMagnet = errors.New("Prowlarr has only a magnet link of this release, not a .torrent file")
+
+// Download fetches the .torrent of a release through Prowlarr, at most max
+// bytes. The address is always on the host of Prowlarr as configured,
+// whatever host Prowlarr wrote in it.
+func (c *Client) Download(ctx context.Context, downloadURL string, max int64) ([]byte, error) {
+	if downloadURL == "" {
+		return nil, errMagnet
+	}
+	u, err := url.Parse(downloadURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid download address from Prowlarr: %w", err)
+	}
+	base, err := url.Parse(c.base)
+	if err != nil {
+		return nil, err
+	}
+	// Not spaced out as the searches: it goes to one indexer only.
+	u.Scheme, u.Host, u.User = base.Scheme, base.Host, nil
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Api-Key", c.key)
+	req.Header.Set("User-Agent", "bookrr")
+	hc := *c.http
+	hc.CheckRedirect = func(r *http.Request, via []*http.Request) error {
+		if r.URL.Scheme != "http" && r.URL.Scheme != "https" {
+			return errMagnet
+		}
+		if len(via) >= 5 {
+			return errors.New("too many redirects")
+		}
+		return nil
+	}
+	resp, err := hc.Do(req)
+	if errors.Is(err, errMagnet) {
+		return nil, errMagnet
+	}
+	if err != nil {
+		// The address holds the key: not in the message.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return nil, fmt.Errorf("Prowlarr: %w", err)
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return nil, errors.New("Prowlarr rejected the key: check BOOKRR_PROWLARR_API_KEY")
+	case resp.StatusCode != http.StatusOK:
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+		return nil, fmt.Errorf("Prowlarr answered HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
+	if err != nil {
+		return nil, fmt.Errorf("Prowlarr: %w", err)
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("the .torrent file is over %d MB", max>>20)
+	}
+	return data, nil
 }
 
 // Version verifies address and key: GET /api/v1/system/status.
