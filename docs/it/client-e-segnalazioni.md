@@ -31,6 +31,8 @@ stateDiagram-v2
 
 Ogni elenco ha un filtro su ogni colonna (l'imbuto accanto al titolo): testo, intervalli di dimensione e date, client, dischi, adottatori e stati. L'interruttore **Only Personal Release** nasconde il resto.
 
+In **Torrents** un clic sul titolo di una colonna ordina per quella (di nuovo: al contrario). **Shift+clic** (o Ctrl/Cmd+clic) su altri titoli ordina per più colonne, quante ne vuoi: decide la prima, a parità la seconda, poi la terza…; un numerino accanto alla freccia dice l'ordine, e un altro Shift+clic inverte una colonna, il terzo la toglie. Il pulsante **Sort** mostra gli stessi criteri, per invertirli, spostarli o toglierli e per aggiungerne altri: è il modo da telefono, dove lo Shift non c'è. L'ordinamento non viene ricordato: ogni visita riparte da quello dell'elenco (per nome; i più recenti per gli upload; per *Archivable* i giorni, poi i seeds).
+
 ## Spostamenti e adozioni
 
 Registrare che un torrent è stato **spostato su un disco** o **adottato** da qualcuno risponde alla domanda "dove è finito?":

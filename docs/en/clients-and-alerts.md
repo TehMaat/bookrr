@@ -31,6 +31,8 @@ stateDiagram-v2
 
 Every list has a filter on each column (the funnel next to the title): text, size and date ranges, clients, disks, adopters and statuses. The **Only Personal Release** switch hides the rest.
 
+On **Torrents** a click on a column title sorts by it (again: the other way round). **Shift+click** (or Ctrl/Cmd+click) on more titles sorts by several columns, as many as you want: the first decides, among equal ones the second, then the third…; a small number next to the arrow gives the order, and Shift+click again reverses a column, a third time takes it out. The **Sort** button shows the same criteria, to reverse, move or remove them and to add more: it is the way on a phone, where there is no Shift. The sort is not remembered: every visit starts from that of the list (by name; the newest first for the uploads; for *Archivable* the days, then the seeds).
+
 ## Moves and adoptions
 
 Recording that a torrent was **moved to a disk** or **adopted** by someone answers the question "where did it go?":

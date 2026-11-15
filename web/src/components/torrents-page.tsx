@@ -2,7 +2,6 @@ import { useMemo, useState } from "react"
 import {
   Archive,
   ArchiveX,
-  ArrowDown,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
@@ -62,6 +61,7 @@ import { TorrentFormDialog } from "@/components/torrent-form-dialog"
 import { TorrentSheet } from "@/components/torrent-sheet"
 import { TrackerPanel } from "@/components/tracker-panel"
 import { TableCard } from "@/components/table-card"
+import { compareBy, SortButton, SortPanel, useMultiSort, type SortBy } from "@/components/table-sort"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -86,6 +86,21 @@ import { cn } from "@/lib/utils"
 const torrentFilters = ["all", "duplicate", "missing", "dead", "archivable", "better"] as const
 type Filter = (typeof torrentFilters)[number]
 type SortKey = "name" | "size" | "date" | "seeders" | "completed" | "archivable" | "status"
+/** The names of the sort keys, in the Sort panel. */
+const sortLabels: Record<SortKey, string> = {
+  name: "Name",
+  size: "Size",
+  date: "Uploaded",
+  seeders: "Seeds",
+  completed: "Completed",
+  archivable: "Archivable",
+  status: "Status",
+}
+/** The archivable ones held the longest first and, held as long, those with more seeds. */
+const archivableSort: SortBy<SortKey> = [
+  { key: "archivable", desc: true },
+  { key: "seeders", desc: true },
+]
 /** The columns that can be hidden. */
 type Col = "size" | "location" | "type" | "best" | "uploaded" | "peers" | "archivable"
 
@@ -137,6 +152,14 @@ const colFilters: Record<Col, (keyof typeof noFilters)[]> = {
   uploaded: ["date"],
   peers: ["seeders", "completed"],
   archivable: ["archivable", "archivableDays"],
+}
+
+/** The sort keys of each column that can be hidden: hiding it takes them out of the sort. */
+const colSorts: Partial<Record<Col, SortKey[]>> = {
+  size: ["size"],
+  uploaded: ["date"],
+  peers: ["seeders", "completed"],
+  archivable: ["archivable"],
 }
 
 /**
@@ -270,26 +293,31 @@ export function TorrentsPage({
   const [filter, setFilterState] = useState<Filter>(initialFilter)
   const [query, setQuery] = useState("")
   const [onlyPersonal, setOnlyPersonal] = useState(false)
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>(
-    view === "uploads" || view === "dead"
-      ? { key: "date", desc: true }
-      : view === "archivable"
-        ? { key: "archivable", desc: true }
-        : { key: "name", desc: false }
-  )
   const [page, setPage] = useState(0)
+  const hidden = useHiddenColumns<Col>("bookrr.torrents.hidden-columns")
+  /** The sort a list opens with, without the hidden columns: not remembered, every visit starts from it. */
+  const defaultSort = (v: string): SortBy<SortKey> =>
+    (v === "uploads" || v === "dead"
+      ? ([{ key: "date", desc: true }] satisfies SortBy<SortKey>)
+      : v === "archivable"
+        ? archivableSort
+        : ([{ key: "name", desc: false }] satisfies SortBy<SortKey>)
+    ).filter((s) => !Object.entries(colSorts).some(([c, keys]) => !hidden.shows(c as Col) && keys.includes(s.key)))
+  const sort = useMultiSort<SortKey>(
+    defaultSort(view),
+    (k) => k !== "name" && k !== "status",
+    () => setPage(0)
+  )
   const [selected, setSelected] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
   const columns = useColumnFilters(noFilters, () => setPage(0), { ...noFilters, ...oldFilters[view] })
   const cf = columns.filters
-  const hidden = useHiddenColumns<Col>("bookrr.torrents.hidden-columns")
   const add = useAction((ids: number[]) => api.addReleases(ids))
 
   const setFilter = (f: Filter) => {
     setFilterState(f)
-    // The archivable ones held the longest come first.
-    if (f === "archivable") setSort({ key: "archivable", desc: true })
+    if (f === "archivable") sort.set(defaultSort(f))
     onFilter?.(f)
   }
 
@@ -368,24 +396,29 @@ export function TorrentsPage({
         !!t?.locations.some((l) => l.savePath.toLowerCase().includes(q))
       )
     })
-    const dir = sort.desc ? -1 : 1
-    out.sort((a, b) => {
-      let c = 0
-      if (sort.key === "size") c = sizeOf(a) - sizeOf(b)
-      else if (sort.key === "date") c = (a.r?.createdAt ?? "").localeCompare(b.r?.createdAt ?? "") || (a.r?.id ?? 0) - (b.r?.id ?? 0)
-      else if (sort.key === "seeders") c = (peersOf(a)?.seeders ?? -1) - (peersOf(b)?.seeders ?? -1)
-      else if (sort.key === "completed") c = (peersOf(a)?.timesCompleted ?? -1) - (peersOf(b)?.timesCompleted ?? -1)
-      else if (sort.key === "archivable") {
-        const aa = archivableOf(a)
-        const ab = archivableOf(b)
-        // Same days: the one that meets the thresholds since earlier counts as more.
-        c = archivableDays(aa) - archivableDays(ab) || (ab?.since ?? "").localeCompare(aa?.since ?? "")
-      } else if (sort.key === "status") c = statusOrder[statusOf(a)] - statusOrder[statusOf(b)]
-      if (c === 0) c = nameOf(a).localeCompare(nameOf(b), "en", { sensitivity: "base" })
-      return c * dir
-    })
+    // Each key compares only what its column shows, so that the next criterion decides between equal ones.
+    const by = (k: SortKey) => sort.sorts.some((s) => s.key === k)
+    out.sort(
+      compareBy<Row, SortKey>(
+        sort.sorts,
+        {
+          name: (a, b) => nameOf(a).localeCompare(nameOf(b), "en", { sensitivity: "base" }),
+          size: (a, b) => sizeOf(a) - sizeOf(b),
+          date: (a, b) => (a.r?.createdAt ?? "").localeCompare(b.r?.createdAt ?? ""),
+          seeders: (a, b) => (peersOf(a)?.seeders ?? -1) - (peersOf(b)?.seeders ?? -1),
+          completed: (a, b) => (peersOf(a)?.timesCompleted ?? -1) - (peersOf(b)?.timesCompleted ?? -1),
+          archivable: (a, b) => archivableDays(archivableOf(a)) - archivableDays(archivableOf(b)),
+          status: (a, b) => statusOrder[statusOf(a)] - statusOrder[statusOf(b)],
+        },
+        // After every criterion: the one that meets the thresholds since earlier counts as more, then the later upload, then the name.
+        (a, b) =>
+          (by("archivable") ? (archivableOf(b)?.since ?? "").localeCompare(archivableOf(a)?.since ?? "") : 0) ||
+          (by("date") ? (a.r?.id ?? 0) - (b.r?.id ?? 0) : 0) ||
+          nameOf(a).localeCompare(nameOf(b), "en", { sensitivity: "base" })
+      )
+    )
     return out
-  }, [scoped, filter, cf, query, sort])
+  }, [scoped, filter, cf, query, sort.sorts])
 
   const optional: { id: Col; label: string }[] = [
     { id: "size", label: "Size" },
@@ -402,6 +435,7 @@ export function TorrentsPage({
   const toggleColumn = (c: Col, visible: boolean) => {
     hidden.toggle(c, visible)
     if (!visible && colFilters[c].some((k) => isActive(cf[k]))) columns.clear(...colFilters[c])
+    if (!visible) sort.remove(...(colSorts[c] ?? []))
   }
 
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
@@ -413,6 +447,10 @@ export function TorrentsPage({
   const picking = filter === "archivable" || cf.archivable.includes("never")
   const picker = usePicker(picking ? rows.flatMap((x) => (x.t ? [{ hash: x.t.hash, archivable: archivableOf(x) }] : [])) : [])
   const kept = scoped.filter((x) => archivableOf(x)?.neverArchive).length
+  // The columns the table can be sorted by: those shown.
+  const sortable = (Object.keys(sortLabels) as SortKey[]).filter(
+    (k) => !Object.entries(colSorts).some(([c, keys]) => keys.includes(k) && !show(c as Col))
+  )
   const cols = 2 + optional.filter((o) => show(o.id)).length + (showDownload ? 1 : 0) + (picking ? 1 : 0)
   const selectedTorrent = selected ? (allTorrents.find((t) => t.hash === selected) ?? null) : null
 
@@ -420,12 +458,6 @@ export function TorrentsPage({
     fn(v)
     setPage(0)
   }
-
-  const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== "name" && key !== "status" }))
-
-  const SortIcon = ({ k }: { k: SortKey }) =>
-    sort.key === k ? sort.desc ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" /> : null
 
   const addOne = (r: TrackerRelease) =>
     add.mutate([r.id], {
@@ -493,6 +525,12 @@ export function TorrentsPage({
             Only {info.data?.releaseTag ?? "Personal Release"}
           </Label>
         </div>
+        <SortPanel
+          sort={sort}
+          labels={sortLabels}
+          available={sortable}
+          onReset={() => sort.set(defaultSort(filter !== "all" ? filter : view))}
+        />
         <ColumnPicker columns={optional} shows={show} onToggle={toggleColumn} />
         <Button variant="outline" onClick={() => setImporting(true)}>
           <Upload /> Import
@@ -530,9 +568,9 @@ export function TorrentsPage({
               )}
               <TableHead className="w-full">
                 <div className="flex items-center gap-1">
-                  <button className="flex items-center gap-1" onClick={() => toggleSort("name")}>
-                    Name <SortIcon k="name" />
-                  </button>
+                  <SortButton sort={sort} k="name">
+                    Name
+                  </SortButton>
                   <ColumnFilter label="Name" active={isActive(cf.name)} onClear={() => columns.clear("name")}>
                     <TextFilter
                       value={cf.name}
@@ -545,9 +583,9 @@ export function TorrentsPage({
               {show("size") && (
                 <TableHead className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button className="flex items-center gap-1" onClick={() => toggleSort("size")}>
-                      Size <SortIcon k="size" />
-                    </button>
+                    <SortButton sort={sort} k="size">
+                      Size
+                    </SortButton>
                     <ColumnFilter label="Size" active={isActive(cf.size)} onClear={() => columns.clear("size")}>
                       <RangeFilter
                         value={cf.size}
@@ -667,9 +705,9 @@ export function TorrentsPage({
               {show("uploaded") && (
                 <TableHead className="hidden 2xl:table-cell">
                   <div className="flex items-center gap-1">
-                    <button className="flex items-center gap-1" onClick={() => toggleSort("date")}>
-                      Uploaded <SortIcon k="date" />
-                    </button>
+                    <SortButton sort={sort} k="date">
+                      Uploaded
+                    </SortButton>
                     <ColumnFilter label="Uploaded" active={isActive(cf.date)} onClear={() => columns.clear("date")}>
                       <RangeFilter type="date" value={cf.date} onChange={(v) => columns.set("date", v)} />
                     </ColumnFilter>
@@ -679,14 +717,13 @@ export function TorrentsPage({
               {show("peers") && (
                 <TableHead className="hidden sm:table-cell">
                   <span className="flex items-center gap-1.5">
-                    <button className="flex items-center gap-0.5" title="Seeders: sort" onClick={() => toggleSort("seeders")}>
+                    <SortButton sort={sort} k="seeders" hint="Seeders" className="gap-0.5">
                       <ArrowUp className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                      Seeds <SortIcon k="seeders" />
-                    </button>
-                    <button className="flex items-center gap-0.5" title="Completed: sort" onClick={() => toggleSort("completed")}>
+                      Seeds
+                    </SortButton>
+                    <SortButton sort={sort} k="completed" hint="Completed" className="gap-0.5">
                       <CheckCheck className="text-muted-foreground size-3.5" />
-                      <SortIcon k="completed" />
-                    </button>
+                    </SortButton>
                     <ColumnFilter
                       label="Seeds / Completed"
                       active={isActive(cf.seeders) || isActive(cf.completed)}
@@ -706,9 +743,9 @@ export function TorrentsPage({
               {show("archivable") && (
                 <TableHead className="hidden md:table-cell">
                   <div className="flex items-center gap-1">
-                    <button className="flex items-center gap-1" title="Days the thresholds hold: sort" onClick={() => toggleSort("archivable")}>
-                      Archivable <SortIcon k="archivable" />
-                    </button>
+                    <SortButton sort={sort} k="archivable" hint="Days the thresholds hold">
+                      Archivable
+                    </SortButton>
                     <ColumnFilter
                       label="Archivable"
                       active={isActive(cf.archivable) || isActive(cf.archivableDays)}
@@ -735,9 +772,9 @@ export function TorrentsPage({
               )}
               <TableHead>
                 <div className="flex items-center gap-1">
-                  <button className="flex items-center gap-1" onClick={() => toggleSort("status")}>
-                    Status <SortIcon k="status" />
-                  </button>
+                  <SortButton sort={sort} k="status">
+                    Status
+                  </SortButton>
                   <ColumnFilter
                     label="Status"
                     align="end"
