@@ -18,3 +18,17 @@ bumps `VERSION` in the same PR:
 Docs-only, CI-only and test-only changes don't bump. If main already has the
 version a branch bumped to (another PR got there first), bump again after
 merging main, otherwise the merge is not released.
+
+## Issues
+
+Every time the owner proposes something (a feature, a change, a bug, an idea),
+open a GitHub issue in `TehMaat/bookrr` for it before doing anything else, even
+if the work starts right away in the same session:
+
+- title: short and descriptive; body: what was asked, why, and any open
+  questions or decisions taken in the conversation;
+- check open issues first and comment on an existing one instead of opening a
+  duplicate;
+- reply with the issue link;
+- the PR that implements it references the issue (`Closes #N`), so merging it
+  closes the issue.
