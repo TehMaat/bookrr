@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner"
 
 import { SiteIcon } from "@/components/brand-icons"
-import { ActionSeparator, IconAction } from "@/components/icon-action"
+import { ActionSeparator, IconAction, rowActions } from "@/components/icon-action"
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { PlanDiscsDialog } from "@/components/plan-discs"
 import {
@@ -66,12 +66,43 @@ import { formatDate, formatRelative } from "@/lib/format"
 import { keys, useAction, usePlan } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
-export const planStatuses: { value: PlanStatus; label: string; icon: React.ElementType; tone: string }[] = [
-  { value: "todo", label: "To do", icon: CircleDashed, tone: "text-sky-600 dark:text-sky-400" },
-  { value: "doing", label: "In progress", icon: Hammer, tone: "text-amber-600 dark:text-amber-400" },
-  { value: "downloaded", label: "Downloaded", icon: HardDriveDownload, tone: "text-violet-600 dark:text-violet-400" },
-  { value: "done", label: "Done", icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" },
-  { value: "dropped", label: "Dropped", icon: Ban, tone: "text-muted-foreground" },
+export const planStatuses: {
+  value: PlanStatus
+  label: string
+  icon: React.ElementType
+  tone: string
+  /** The colors of the status badge of a row. */
+  pill: string
+}[] = [
+  {
+    value: "todo",
+    label: "To do",
+    icon: CircleDashed,
+    tone: "text-sky-600 dark:text-sky-400",
+    pill: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  },
+  {
+    value: "doing",
+    label: "In progress",
+    icon: Hammer,
+    tone: "text-amber-600 dark:text-amber-400",
+    pill: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  },
+  {
+    value: "downloaded",
+    label: "Downloaded",
+    icon: HardDriveDownload,
+    tone: "text-violet-600 dark:text-violet-400",
+    pill: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  },
+  {
+    value: "done",
+    label: "Done",
+    icon: CircleCheck,
+    tone: "text-emerald-600 dark:text-emerald-400",
+    pill: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  },
+  { value: "dropped", label: "Dropped", icon: Ban, tone: "text-muted-foreground", pill: "bg-muted text-muted-foreground" },
 ]
 const statusOf = (s: PlanStatus) => planStatuses.find((x) => x.value === s)!
 
@@ -257,7 +288,6 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
               <TableRow>
                 <TableHead>Film</TableHead>
                 <TableHead>Best version</TableHead>
-                <TableHead className="hidden md:table-cell">On the tracker</TableHead>
                 <TableHead>Download</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-0" />
@@ -266,7 +296,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
             <TableBody>
               {visible.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground py-10 text-center">
+                  <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
                     {all.length === 0
                       ? "The plan is empty: add a film by its TMDB, or from Missing."
                       : "No films match the filters."}
@@ -274,9 +304,13 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                 </TableRow>
               )}
               {visible.map((it) => (
-                <TableRow key={it.id} className={cn(it.status === "dropped" && "opacity-60")}>
+                <TableRow
+                  key={it.id}
+                  // Everything at the top: a merge makes the row tall.
+                  className={cn("group/row [&>td]:align-top", it.status === "dropped" && "opacity-60")}
+                >
                   <TableCell className="max-w-0 min-w-[240px] whitespace-normal">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                       {it.posterPath ? (
                         <img
                           src={posterUrl(it.posterPath)}
@@ -292,7 +326,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                           href={tmdbUrl(it.tmdbId)}
                           target="_blank"
                           rel="noreferrer"
-                          className="block truncate font-medium hover:underline"
+                          className="line-clamp-2 font-medium break-words hover:underline"
                           title={it.title}
                         >
                           {it.title}
@@ -310,14 +344,12 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                             {it.note}
                           </div>
                         )}
+                        <TrackerHint it={it} />
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     <PlanBest it={it} searchEnabled={!!data?.searchEnabled} />
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <OnTracker it={it} />
                   </TableCell>
                   <TableCell className="whitespace-normal">
                     <PlanTorrents it={it} onAction={setTorrentAction} onOpenTorrent={setOpenHash} />
@@ -327,7 +359,14 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       value={it.status}
                       onValueChange={(v) => update.mutate({ id: it.id, status: v as PlanStatus })}
                     >
-                      <SelectTrigger size="sm" className="w-40">
+                      <SelectTrigger
+                        size="sm"
+                        aria-label="Status"
+                        className={cn(
+                          "h-7 rounded-full px-2.5 font-medium shadow-none data-[size=sm]:h-7 [&_svg:not([class*='text-'])]:text-current",
+                          statusOf(it.status).pill,
+                        )}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -345,9 +384,8 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       <div className="text-muted-foreground mt-1 text-xs">{formatDate(it.downloadedAt)}</div>
                     )}
                   </TableCell>
-                  <TableCell className="align-top">
-                    {/* At the top right of the row: a merge makes it tall. */}
-                    <div className="flex items-center justify-end gap-0.5">
+                  <TableCell>
+                    <div className={cn("flex items-center justify-end gap-0.5", rowActions)}>
                       {data?.searchEnabled && (
                         <>
                           <IconAction
@@ -504,51 +542,69 @@ function PlanBest({ it, searchEnabled }: { it: PlanItem; searchEnabled: boolean 
   )
 }
 
-/** The user's uploads of the film and the torrents of others on the tracker. */
-function OnTracker({ it }: { it: PlanItem }) {
-  if (it.uploads.length === 0 && it.others.length === 0)
-    return it.trackerUrl ? (
-      <a
-        href={it.trackerUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="text-muted-foreground text-xs hover:underline"
-      >
-        Search the tracker
-      </a>
-    ) : (
-      <span className="text-muted-foreground text-xs">—</span>
-    )
+/**
+ * What is already on the tracker, under the title: your uploads and those of others, only when there are some. Amber
+ * when others have the version you would release (type and resolution of the best found).
+ */
+function TrackerHint({ it }: { it: PlanItem }) {
+  if (it.uploads.length === 0 && it.others.length === 0) return null
+  const b = it.best
+  const target = b?.resolution ? grade(b.resolution, b.type) : ""
+  const same = (q: string) => !!target && (q === target || q.startsWith(`${target} `))
+  const other = it.others.find((r) => same(r.quality)) ?? it.others[0]
+  const clash = !!other && same(other.quality)
   return (
-    <div className="flex max-w-xs flex-wrap gap-1">
-      {it.uploads.map((u) => (
-        <Tooltip key={u.id}>
+    <div className="mt-0.5 grid gap-0.5 text-xs">
+      {it.uploads.length > 0 && (
+        <Tooltip>
           <TooltipTrigger asChild>
-            <a href={u.url || undefined} target="_blank" rel="noreferrer">
-              <Badge variant="brand">Yours · {u.quality || "?"}</Badge>
+            <a
+              href={it.uploads[0].url || it.trackerUrl || undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted-foreground inline-flex min-w-0 items-start gap-1 hover:underline"
+            >
+              <CircleCheck className="mt-0.5 size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span>Yours on the tracker: {it.uploads.map((u) => u.quality || "?").join(", ")}</span>
             </a>
           </TooltipTrigger>
-          <TooltipContent className="break-all">{u.name}</TooltipContent>
+          <TooltipContent className="max-w-sm break-all">
+            {it.uploads.map((u) => (
+              <div key={u.id}>{u.name}</div>
+            ))}
+          </TooltipContent>
         </Tooltip>
-      ))}
-      {it.others.slice(0, 3).map((r) => (
-        <Tooltip key={r.id}>
+      )}
+      {other && (
+        <Tooltip>
           <TooltipTrigger asChild>
-            <a href={r.url || undefined} target="_blank" rel="noreferrer">
-              <Badge variant="secondary">{r.quality || "?"}</Badge>
+            <a
+              href={it.trackerUrl || other.url || undefined}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                "inline-flex min-w-0 items-start gap-1 hover:underline",
+                clash ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground",
+              )}
+            >
+              {clash && <TriangleAlert className="mt-0.5 size-3 shrink-0" />}
+              <span>
+                {/* With a clash the version you would release is enough: the whole quality is in the tooltip. */}
+                {clash ? `Already on the tracker: ${target}` : `On the tracker: ${other.quality || "?"}`}
+                {it.others.length > 1 && ` +${it.others.length - 1}`}
+              </span>
             </a>
           </TooltipTrigger>
-          <TooltipContent className="break-all">{r.name}</TooltipContent>
+          <TooltipContent className="max-w-sm break-all">
+            {clash && <div className="mb-1">Others already uploaded the version you would release ({target}).</div>}
+            {it.others.map((r) => (
+              <div key={r.id}>
+                {r.quality || "?"} · {r.name}
+              </div>
+            ))}
+          </TooltipContent>
         </Tooltip>
-      ))}
-      {it.others.length > 3 &&
-        (it.trackerUrl ? (
-          <a href={it.trackerUrl} target="_blank" rel="noreferrer">
-            <Badge variant="outline">+{it.others.length - 3}</Badge>
-          </a>
-        ) : (
-          <Badge variant="outline">+{it.others.length - 3}</Badge>
-        ))}
+      )}
     </div>
   )
 }
