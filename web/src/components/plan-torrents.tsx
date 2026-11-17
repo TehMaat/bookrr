@@ -2,15 +2,13 @@ import { useState } from "react"
 import {
   ChevronRight,
   CircleCheck,
-  Clapperboard,
   Download,
   FileDown,
   FileUp,
   GitMerge,
   ListTree,
   Loader2,
-  MoreHorizontal,
-  Pencil,
+  RefreshCw,
   RotateCcw,
   Send,
   Tag,
@@ -20,6 +18,9 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { WayfinderrIcon } from "@/components/brand-icons"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { ActionSeparator, IconAction } from "@/components/icon-action"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,13 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -94,6 +88,9 @@ export function PlanTorrents({
   const refresh = useRefreshAll()
   const defaultClient = (clients.data ?? []).find((c) => c.id === settings.data?.planClientId && c.enabled)
   const [sending, setSending] = useState(false)
+  // The torrent and the pair waiting for the confirmation of their removal.
+  const [removing, setRemoving] = useState<PlanTorrent | null>(null)
+  const [removingPair, setRemovingPair] = useState(false)
   const remove = useAction(
     ({ position }: { position: number }) => api.deletePlanTorrent(it.id, position),
     ".torrent removed from the film",
@@ -138,7 +135,7 @@ export function PlanTorrents({
   const done = it.torrents.filter(torrentComplete).length
 
   return (
-    <div className="grid max-w-xs min-w-[200px] gap-2">
+    <div className="grid max-w-xs min-w-[240px] gap-2">
       {merge && (
         <div className="grid gap-0.5">
           <div className="text-muted-foreground flex items-center gap-1 text-xs">
@@ -148,96 +145,97 @@ export function PlanTorrents({
               {done > 0 && done < it.torrents.length && ` · ${done} of ${it.torrents.length} downloaded`}
             </span>
             {withWayfinderr && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="size-6 shrink-0" aria-label="Merge actions">
-                    <MoreHorizontal />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem disabled={planMerge.isPending} onClick={() => planMerge.mutate(undefined)}>
-                    <Clapperboard /> {mergeOpen(it.merge) ? "Plan the pair again" : "Plan the pair on Wayfinderr"}
-                  </DropdownMenuItem>
-                  {it.merge?.status === "ERROR" && (
-                    <DropdownMenuItem disabled={pairAgain.isPending} onClick={() => pairAgain.mutate(undefined)}>
-                      <RotateCcw /> Create the pair again
-                    </DropdownMenuItem>
-                  )}
-                  {it.merge && (mergeOpen(it.merge) || (!it.merge.planId && it.merge.status === "")) && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={removeMerge.isPending}
-                        onClick={() => removeMerge.mutate(undefined)}
-                      >
-                        <Trash2 /> Remove the pair from Wayfinderr
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <>
+                <IconAction
+                  small
+                  label={mergeOpen(it.merge) ? "Plan the pair again on Wayfinderr" : "Plan the pair on Wayfinderr"}
+                  disabled={planMerge.isPending}
+                  onClick={() => planMerge.mutate(undefined)}
+                >
+                  <WayfinderrIcon className="size-3.5" />
+                </IconAction>
+                {it.merge && (mergeOpen(it.merge) || (!it.merge.planId && it.merge.status === "")) && (
+                  <IconAction small danger label="Remove the pair from Wayfinderr" onClick={() => setRemovingPair(true)}>
+                    <Trash2 />
+                  </IconAction>
+                )}
+              </>
             )}
           </div>
-          <MergeState m={it.merge} />
+          <div className="flex flex-wrap items-center gap-2">
+            <MergeState m={it.merge} />
+            {withWayfinderr && it.merge?.status === "ERROR" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 gap-1 px-2 text-xs"
+                disabled={pairAgain.isPending}
+                onClick={() => pairAgain.mutate(undefined)}
+              >
+                {pairAgain.isPending ? <Loader2 className="animate-spin" /> : <RotateCcw />} Retry
+              </Button>
+            )}
+          </div>
         </div>
       )}
       {it.torrents.map((t) => (
         <div key={t.position} className="grid gap-1">
+          {/* The label, and the actions at the top right; the name below, whole. */}
           <div className="flex min-w-0 items-center gap-1">
             {t.label && (
               <Badge variant="secondary" className="max-w-24 truncate">
                 {t.label}
               </Badge>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="min-w-0 flex-1 truncate text-xs font-medium">{t.name}</span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-sm break-all">
-                {t.name} · {formatBytes(t.size)}
-                <br />
-                <span className="font-mono">{t.hash}</span>
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" className="size-6 shrink-0" aria-label="Torrent actions">
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onAction({ kind: "send", item: it, positions: [t.position] })}>
-                  <Send /> Send to a client…
-                </DropdownMenuItem>
-                {t.downloads.length > 0 && (
-                  <DropdownMenuItem onClick={() => onOpenTorrent(t.hash)}>
-                    <ListTree /> Details in Torrents
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => onAction({ kind: "label", item: it, torrent: t })}>
-                  <Tag /> Label
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onAction({ kind: "load", item: it, position: t.position })}>
-                  <Pencil /> Replace .torrent
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href={api.planTorrentFileUrl(it.id, t.position)} download>
-                    <FileDown /> Save the .torrent file{t.dropped ? " (from Wayfinderr)" : ""}
-                  </a>
-                </DropdownMenuItem>
-                {withWayfinderr && (
-                  <DropdownMenuItem onClick={() => toWayfinderr.mutate({ position: t.position })}>
-                    <Clapperboard /> {t.wayfinderrAt ? "Send to Wayfinderr again" : "Send to Wayfinderr"}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={() => remove.mutate({ position: t.position })}>
-                  <Trash2 /> Remove from the film
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="ml-auto flex shrink-0 items-center">
+              <IconAction small label="Send to a client…" onClick={() => onAction({ kind: "send", item: it, positions: [t.position] })}>
+                <Send />
+              </IconAction>
+              {t.downloads.length > 0 && (
+                <IconAction small label="Details in Torrents" onClick={() => onOpenTorrent(t.hash)}>
+                  <ListTree />
+                </IconAction>
+              )}
+              <IconAction small label="Label" onClick={() => onAction({ kind: "label", item: it, torrent: t })}>
+                <Tag />
+              </IconAction>
+              <IconAction small label="Replace .torrent" onClick={() => onAction({ kind: "load", item: it, position: t.position })}>
+                <RefreshCw />
+              </IconAction>
+              <IconAction
+                small
+                label={`Save the .torrent file${t.dropped ? " (from Wayfinderr)" : ""}`}
+                href={api.planTorrentFileUrl(it.id, t.position)}
+                download
+              >
+                <FileDown />
+              </IconAction>
+              {withWayfinderr && (
+                <IconAction
+                  small
+                  label={t.wayfinderrAt ? "Send to Wayfinderr again" : "Send to Wayfinderr"}
+                  disabled={toWayfinderr.isPending}
+                  onClick={() => toWayfinderr.mutate({ position: t.position })}
+                >
+                  <WayfinderrIcon className="size-3.5" />
+                </IconAction>
+              )}
+              <ActionSeparator />
+              <IconAction small danger label="Remove from the film" onClick={() => setRemoving(t)}>
+                <Trash2 />
+              </IconAction>
+            </div>
           </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="truncate text-xs font-medium">{t.name}</span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm break-all">
+              {t.name} · {formatBytes(t.size)}
+              <br />
+              <span className="font-mono">{t.hash}</span>
+            </TooltipContent>
+          </Tooltip>
           <TorrentProgress t={t} />
           <WayfinderrState t={t} />
         </div>
@@ -254,11 +252,29 @@ export function PlanTorrents({
           </Button>
         )}
         {it.torrents.length < MAX_PLAN_TORRENTS && (
-          <Button variant="ghost" size="sm" onClick={() => onAction({ kind: "load", item: it })}>
+          <Button variant="outline" size="sm" onClick={() => onAction({ kind: "load", item: it })}>
             <FileUp /> Second .torrent (merge)
           </Button>
         )}
       </div>
+      <ConfirmDialog
+        title={removing ? `Remove this .torrent from "${it.title}"?` : null}
+        description={
+          <>
+            <span className="break-all">{removing?.name}</span>
+            <br />
+            The loaded file is deleted from bookrr. The download on the client is not touched.
+          </>
+        }
+        onConfirm={() => removing && remove.mutate({ position: removing.position })}
+        onClose={() => setRemoving(null)}
+      />
+      <ConfirmDialog
+        title={removingPair ? `Remove the pair of "${it.title}" from Wayfinderr?` : null}
+        description="The two .torrent files stay on the film; plan the pair again with the Wayfinderr icon."
+        onConfirm={() => removeMerge.mutate(undefined)}
+        onClose={() => setRemovingPair(false)}
+      />
     </div>
   )
 }
@@ -288,19 +304,19 @@ function MergeState({ m }: { m: PlanMerge | null }) {
         return {
           text: "Pair in error on Wayfinderr",
           tone: "error",
-          tip: `Both files arrived, but ${via} could not create the pair${m.message ? `: ${m.message}` : ""}. Create it again from the menu once fixed.`,
+          tip: `Both files arrived, but ${via} could not create the pair${m.message ? `: ${m.message}` : ""}. Retry once fixed.`,
         }
       case "GONE":
         return {
           text: "Pair no longer on Wayfinderr",
           tone: "muted",
-          tip: `${via} no longer has the planned pair (removed there). Plan it again from the menu if needed.`,
+          tip: `${via} no longer has the planned pair (removed there). Plan it again with the Wayfinderr icon if needed.`,
         }
       case "REMOVED":
         return {
           text: "Pair removed from Wayfinderr",
           tone: "muted",
-          tip: "Not planned again by itself: plan it again from the menu, or load other .torrent files.",
+          tip: "Not planned again by itself: plan it again with the Wayfinderr icon, or load other .torrent files.",
         }
       default:
         return m.error
@@ -326,7 +342,7 @@ function MergeState({ m }: { m: PlanMerge | null }) {
           ) : state.tone === "ok" ? (
             <CircleCheck className="size-3" />
           ) : (
-            <Clapperboard className="size-3" />
+            <WayfinderrIcon className="size-3" />
           )}
           {state.text}
           {m.error && m.status !== "" && <TriangleAlert className="text-destructive size-3" />}
@@ -344,7 +360,7 @@ function WayfinderrState({ t }: { t: PlanTorrent }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
-            <Clapperboard className="size-3" />
+            <WayfinderrIcon className="size-3" />
             {t.dropped ? "On Wayfinderr only" : "On Wayfinderr"}
           </span>
         </TooltipTrigger>

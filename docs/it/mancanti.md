@@ -73,7 +73,7 @@ La griglia per qualità diventa difficile da leggere quando hai caricato una sag
 - **By season / By film**: una riga per serie o saga, una cella per stagione o film con la sua **versione migliore** (la tua, se ne hai una che raggiunge la qualità minima; altrimenti la migliore degli altri che la raggiunge; altrimenti la migliore in assoluto). «Migliore» vuol dire, in ordine: tipo (Full Disc > Remux > Encode > WEB-DL > WEBRip > HDTV), risoluzione, HDR (DV vale più degli altri), numero di lingue audio;
 - **By quality**: la griglia descritta sopra, una riga per ogni tua qualità.
 
-La **qualità minima** (il pulsante *Minimum*, una per le serie, una per le saghe e una per le collezioni; ognuna può averne una propria dal menu ⋯) è fatta di tipo minimo, risoluzione minima e lingua audio richiesta, ognuno facoltativo. Una parte è **Yours** se l'hai caricata almeno in quella qualità, **There, by others** se l'ha fatto qualcun altro, **Below the threshold** se sul tracker c'è solo in qualità inferiori, **Absent** se non c'è. Le release di cui non si conoscono le lingue (o solo `MULTI`) contano come se avessero quella richiesta. Esempio: con minima *Encode* un 1080p Encode di altri va bene; con minima *Remux* è sotto la soglia.
+La **qualità minima** (il pulsante *Minimum*, una per le serie, una per le saghe e una per le collezioni; ognuna può averne una propria dal badge della qualità accanto al nome: *4K*, *FHD*…, pieno quando è propria) è fatta di tipo minimo, risoluzione minima e lingua audio richiesta, ognuno facoltativo. Una parte è **Yours** se l'hai caricata almeno in quella qualità, **There, by others** se l'ha fatto qualcun altro, **Below the threshold** se sul tracker c'è solo in qualità inferiori, **Absent** se non c'è. Le release di cui non si conoscono le lingue (o solo `MULTI`) contano come se avessero quella richiesta. Esempio: con minima *Encode* un 1080p Encode di altri va bene; con minima *Remux* è sotto la soglia.
 
 Anche **una singola stagione o un singolo film** può avere una qualità minima propria, che vale al posto di quella della serie, saga o collezione (e di quella generale): nella vista per parte, apri la cella e premi **Minimum quality of this film…** (*…of this season* per le serie); *Use the one of the …* torna a quella della serie, saga o collezione. Esempio: la collezione MCU ha minima *Remux*, ma gli short ti bastano in *Encode*: dai la minima *Encode* solo agli short, che smettono di risultare *Below the threshold*. Le parti con una minima propria hanno l'icona del contachilometri nella cella; vale anche per *Add the missing ones to the plan*. La vista per qualità non usa la qualità minima e non cambia.
 
@@ -84,9 +84,9 @@ Le tue scelte restano anche dopo i controlli successivi:
 | **Count others' uploads** | interruttore sopra la lista | quello che hanno caricato altri (nella stessa qualità, o sopra la soglia) non conta come mancante |
 | **This one is fine** | dettaglio di una cella, su una release di altri | la cella diventa *Good enough* e non conta come mancante; se il torrent sparisce dal tracker torna mancante |
 | **Ignore** | dettaglio di una cella | la cella non conta come mancante (es. «non esiste in 4K») |
-| **Mark as complete** | menu ⋯ della serie o saga | le parti uscite finora non contano come mancanti; una stagione o un film usciti dopo sì |
-| **Hide** | menu ⋯ (serie o saga), icona accanto a una qualità | sparisce dai numeri e dalla lista; si ripristina da *Hidden* o dal link sotto la griglia |
-| **Add the missing ones to the plan** | menu ⋯ di una saga o collezione | i film mancanti vanno nel [piano release](prowlarr-e-piano.md#piano-release) |
+| **Mark as complete** | icona del doppio segno di spunta accanto alla serie o saga (accesa finché è segnata) | le parti uscite finora non contano come mancanti; una stagione o un film usciti dopo sì |
+| **Hide** | icona dell'occhio accanto alla serie o saga, icona accanto a una qualità | sparisce dai numeri e dalla lista; si ripristina da *Hidden* o dal link sotto la griglia |
+| **Add the missing ones to the plan** | pulsante **Add to plan (N)** di una saga o collezione, quando ne mancano | i film mancanti vanno nel [piano release](prowlarr-e-piano.md#piano-release) |
 
 *This one is fine* e *Ignore* dalla vista per parte valgono per tutte le qualità; dalla vista per qualità solo per quella riga.
 

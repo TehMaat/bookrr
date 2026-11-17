@@ -123,3 +123,22 @@ export function healthVariant(h: string): "success" | "destructive" | "warning" 
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`
 }
+
+/** A minimum resolution as a badge: "1080p" → "FHD", "2160p" → "4K"; "" when none. */
+export function resolutionShort(resolution: string) {
+  switch (resolution) {
+    case "480p":
+    case "576p":
+      return "SD"
+    case "720p":
+      return "HD"
+    case "1080p":
+      return "FHD"
+    case "2160p":
+      return "4K"
+    case "4320p":
+      return "8K"
+    default:
+      return resolution
+  }
+}

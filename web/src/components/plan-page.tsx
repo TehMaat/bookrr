@@ -6,28 +6,26 @@ import {
   CircleDashed,
   CalendarClock,
   Disc3,
-  ExternalLink,
   ListTodo,
   Loader2,
-  MoreHorizontal,
-  Pencil,
   Plus,
   Search,
   SearchX,
+  StickyNote,
   Trash2,
   TriangleAlert,
   Hammer,
   Ban,
   HardDriveDownload,
-  Upload,
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { SiteIcon } from "@/components/brand-icons"
+import { ActionSeparator, IconAction } from "@/components/icon-action"
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { PlanDiscsDialog } from "@/components/plan-discs"
 import {
   LoadTorrentDialog,
-  MAX_PLAN_TORRENTS,
   PlanTorrents,
   SendTorrentsDialog,
   TorrentLabelDialog,
@@ -56,13 +54,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -216,8 +207,8 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground max-w-3xl text-sm">
           The films you want to release: add them by their TMDB, or from Missing. For each one bookrr searches Prowlarr
-          for the best existing version up to a Remux (type first, then resolution); its full discs you search from the
-          menu of the film. Load its .torrent (two for a merge) and download
+          for the best existing version up to a Remux (type first, then resolution); its full discs you search with the disc
+          icon of the film. Load its .torrent (two for a merge) and download
           it on a client: the film becomes downloaded when complete, and done when you upload it to the tracker.
         </p>
         <Button className="ml-auto" disabled={!data?.enabled} onClick={() => setAdding(true)}>
@@ -354,50 +345,37 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       <div className="text-muted-foreground mt-1 text-xs">{formatDate(it.downloadedAt)}</div>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="More actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {data?.searchEnabled && (
-                          <>
-                            <DropdownMenuItem disabled={it.searching} onClick={() => search.mutate(it.id)}>
-                              <Search /> Search best version now
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDiscsOf(it.id)}>
-                              <Disc3 /> Search Full Discs
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        <DropdownMenuItem onClick={() => setEditing(it)}>
-                          <Pencil /> Note
-                        </DropdownMenuItem>
-                        {it.torrents.length < MAX_PLAN_TORRENTS && (
-                          <DropdownMenuItem onClick={() => setTorrentAction({ kind: "load", item: it })}>
-                            <Upload /> {it.torrents.length === 0 ? "Load .torrent" : "Second .torrent (merge)"}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem asChild>
-                          <a href={tmdbUrl(it.tmdbId)} target="_blank" rel="noreferrer">
-                            <ExternalLink /> The film on TMDB
-                          </a>
-                        </DropdownMenuItem>
-                        {it.trackerUrl && (
-                          <DropdownMenuItem asChild>
-                            <a href={it.trackerUrl} target="_blank" rel="noreferrer">
-                              <ExternalLink /> The film on the tracker
-                            </a>
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => setRemoving(it)}>
-                          <Trash2 /> Remove from the plan
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <TableCell className="align-top">
+                    {/* At the top right of the row: a merge makes it tall. */}
+                    <div className="flex items-center justify-end gap-0.5">
+                      {data?.searchEnabled && (
+                        <>
+                          <IconAction
+                            label={it.searching ? "Searching the best version…" : "Search best version now"}
+                            disabled={it.searching || search.isPending}
+                            onClick={() => search.mutate(it.id)}
+                          >
+                            {it.searching ? <Loader2 className="animate-spin" /> : <Search />}
+                          </IconAction>
+                          <IconAction label="Search Full Discs" onClick={() => setDiscsOf(it.id)}>
+                            <Disc3 />
+                          </IconAction>
+                        </>
+                      )}
+                      <IconAction label={it.note ? "Edit the note" : "Add a note"} active={!!it.note} onClick={() => setEditing(it)}>
+                        <StickyNote />
+                      </IconAction>
+                      {/* "" without a tracker, for every film. */}
+                      {it.trackerUrl && (
+                        <IconAction label="The film on the tracker" href={it.trackerUrl}>
+                          <SiteIcon url={it.trackerUrl} />
+                        </IconAction>
+                      )}
+                      <ActionSeparator />
+                      <IconAction label="Remove from the plan" danger onClick={() => setRemoving(it)}>
+                        <Trash2 />
+                      </IconAction>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

@@ -73,7 +73,7 @@ The grid by quality gets hard to read when you uploaded a saga in several "best"
 - **By season / By film**: one row per series or saga, one cell per season or film with its **best version** (yours, if you have one that reaches the minimum quality; otherwise the best of others that reaches it; otherwise the best one at all). "Best" means, in order: type (Full Disc > Remux > Encode > WEB-DL > WEBRip > HDTV), resolution, HDR (DV counts more than the others), number of audio languages;
 - **By quality**: the grid described above, one row for each of your qualities.
 
-The **minimum quality** (the *Minimum* button, one for the series, one for the sagas and one for the collections; each one can have its own from the ⋯ menu) is made of a minimum type, a minimum resolution and a required audio language, each optional. A part is **Yours** if you uploaded it at least in that quality, **There, by others** if someone else did, **Below the threshold** if the tracker has it only in lower qualities, **Absent** if it has nothing. Releases whose languages are unknown (or just `MULTI`) count as if they had the required one. For example, with minimum *Encode* a 1080p Encode by others is fine; with minimum *Remux* it is below the threshold.
+The **minimum quality** (the *Minimum* button, one for the series, one for the sagas and one for the collections; each one can have its own from the quality badge next to its name: *4K*, *FHD*…, filled when it has its own) is made of a minimum type, a minimum resolution and a required audio language, each optional. A part is **Yours** if you uploaded it at least in that quality, **There, by others** if someone else did, **Below the threshold** if the tracker has it only in lower qualities, **Absent** if it has nothing. Releases whose languages are unknown (or just `MULTI`) count as if they had the required one. For example, with minimum *Encode* a 1080p Encode by others is fine; with minimum *Remux* it is below the threshold.
 
 **A single season or film** can also have a minimum quality of its own, used instead of the one of the series, saga or collection (and of the general one): in the view by part, open the cell and press **Minimum quality of this film…** (*…of this season* for series); *Use the one of the …* goes back to the one of the series, saga or collection. For example, the MCU collection has minimum *Remux*, but the shorts are fine in *Encode*: give only the shorts the minimum *Encode* and they stop being *Below the threshold*. Parts with a minimum of their own have the gauge icon in their cell; *Add the missing ones to the plan* follows it too. The view by quality doesn't use the minimum quality and doesn't change.
 
@@ -84,9 +84,9 @@ Your choices stay after the next checks:
 | **Count others' uploads** | switch above the list | what others uploaded (in the same quality, or above the threshold) doesn't count as missing |
 | **This one is fine** | details of a cell, on a release by others | the cell becomes *Good enough* and doesn't count as missing; if the torrent leaves the tracker it is missing again |
 | **Ignore** | details of a cell | the cell doesn't count as missing (e.g. "it doesn't exist in 4K") |
-| **Mark as complete** | ⋯ menu of the series or saga | the parts out so far don't count as missing; a season or film out later does |
-| **Hide** | ⋯ menu (series or saga), icon next to a quality | gone from the numbers and from the list; brought back from *Hidden* or from the link under the grid |
-| **Add the missing ones to the plan** | ⋯ menu of a saga or collection | the missing films go to the [release plan](prowlarr-and-plan.md#release-plan) |
+| **Mark as complete** | double check icon next to the series or saga (lit while marked) | the parts out so far don't count as missing; a season or film out later does |
+| **Hide** | eye icon next to the series or saga, icon next to a quality | gone from the numbers and from the list; brought back from *Hidden* or from the link under the grid |
+| **Add the missing ones to the plan** | **Add to plan (N)** button of a saga or collection, when some are missing | the missing films go to the [release plan](prowlarr-and-plan.md#release-plan) |
 
 *This one is fine* and *Ignore* from the view by part apply to every quality; from the view by quality only to that row.
 

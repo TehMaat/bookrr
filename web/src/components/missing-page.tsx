@@ -19,7 +19,6 @@ import {
   List,
   ListPlus,
   ListTodo,
-  MoreHorizontal,
   Plus,
   RefreshCw,
   Search,
@@ -34,6 +33,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { MdbListLogo, SiteIcon, TmdbLogo } from "@/components/brand-icons"
+import { ActionSeparator, IconAction } from "@/components/icon-action"
 import { NavbarStats, StatCard } from "@/components/navbar-stats"
 import { PlanStatusBadge } from "@/components/plan-page"
 import { Alert as AlertBox, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -58,13 +59,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -91,7 +85,7 @@ import {
   type PlanEntry,
   type Quality,
 } from "@/lib/api"
-import { formatDate, formatRelative } from "@/lib/format"
+import { formatDate, formatRelative, resolutionShort } from "@/lib/format"
 import { useAction, useMissingLists, useMissingSagas, useMissingSeries, usePlan } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -292,6 +286,31 @@ const noGroups: string[] = []
 /** "Remux · 1080p · ITA", or "any". */
 function thresholdLabel(t: GapThreshold) {
   return [t.type, t.resolution, t.lang].filter(Boolean).join(" · ") || "any"
+}
+
+/**
+ * The minimum quality of a series, saga or collection as a badge ("4K", "FHD"): filled when it has its own, outlined
+ * when it follows the general one; the gauge when there is no minimum resolution. Opens the dialog to change it.
+ */
+function QualityAction({ s, one, onClick }: { s: GapGroup; one: string; onClick: () => void }) {
+  const short = resolutionShort(s.threshold.resolution)
+  const label = `Minimum quality of this ${one}: ${thresholdLabel(s.threshold)}${s.customThreshold ? "" : " (the general one)"}`
+  return (
+    <IconAction label={label} onClick={onClick} className={short ? "w-10" : undefined}>
+      {short ? (
+        <span
+          className={cn(
+            "inline-flex h-5 min-w-7 items-center justify-center rounded-[5px] border-[1.5px] px-1 text-[10px] leading-none font-extrabold tracking-wide",
+            s.customThreshold ? "border-primary bg-primary text-primary-foreground" : "border-current",
+          )}
+        >
+          {short}
+        </span>
+      ) : (
+        <Gauge className={cn(s.customThreshold && "text-primary")} />
+      )}
+    </IconAction>
+  )
 }
 
 /** "2160p Remux DV HDR": the quality without the languages, for the cells. */
@@ -749,64 +768,48 @@ function GroupCard({
             </Badge>
           )}
           {t.available > 0 && <Badge variant="success">{t.available} by others</Badge>}
-          <span className="ml-auto flex items-center gap-1">
+          <span className="ml-auto flex items-center gap-0.5">
             {s.searchUrl && (
-              <Button variant="ghost" size="sm" asChild>
-                <a href={s.searchUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink /> Tracker
-                </a>
-              </Button>
+              <IconAction label={`The ${k.one} on the tracker`} href={s.searchUrl}>
+                <SiteIcon url={s.searchUrl} />
+              </IconAction>
             )}
             {s.sourceUrl && (
-              <Button variant="ghost" size="sm" asChild>
-                <a href={s.sourceUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink /> MDBList
-                </a>
-              </Button>
+              <IconAction label="The collection on MDBList" href={s.sourceUrl}>
+                <MdbListLogo />
+              </IconAction>
             )}
             {s.tmdbId > 0 && (
-              <Button variant="ghost" size="sm" asChild>
-                <a href={k.tmdbUrl(s.tmdbId)} target="_blank" rel="noreferrer">
-                  <ExternalLink /> TMDB
-                </a>
-              </Button>
+              <IconAction label={`The ${k.one} on TMDB`} href={k.tmdbUrl(s.tmdbId)}>
+                <TmdbLogo />
+              </IconAction>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="More actions">
-                  <MoreHorizontal />
+            {s.kind !== "series" && toPlan.length > 0 && (
+              <>
+                <ActionSeparator />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mx-1"
+                  disabled={addToPlan.isPending}
+                  onClick={() => addToPlan.mutate(toPlan)}
+                >
+                  <ListPlus /> Add to plan ({toPlan.length})
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {s.completed ? (
-                  <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "complete" }, true)}>
-                    <Undo2 /> Unmark as complete
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "complete" })}>
-                    <CheckCheck /> Mark as complete
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => onThreshold(s)}>
-                  <Gauge /> Minimum quality of this {k.one}…
-                </DropdownMenuItem>
-                {s.kind !== "series" && (
-                  <DropdownMenuItem
-                    disabled={toPlan.length === 0 || addToPlan.isPending}
-                    onClick={() => addToPlan.mutate(toPlan)}
-                  >
-                    <ListPlus />{" "}
-                    {toPlan.length > 0
-                      ? `Add the missing ones to the plan (${toPlan.length})`
-                      : "Nothing missing to add to the plan"}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onMark({ group: s.key, action: "hide" })}>
-                  <EyeOff /> Hide this {k.one}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </>
+            )}
+            <ActionSeparator />
+            <IconAction
+              label={s.completed ? "Marked complete: unmark" : "Mark as complete"}
+              active={s.completed}
+              onClick={() => onMark({ group: s.key, action: "complete" }, s.completed || undefined)}
+            >
+              <CheckCheck />
+            </IconAction>
+            <QualityAction s={s} one={k.one} onClick={() => onThreshold(s)} />
+            <IconAction label={`Hide this ${k.one}`} onClick={() => onMark({ group: s.key, action: "hide" })}>
+              <EyeOff />
+            </IconAction>
           </span>
         </CardTitle>
         <CardDescription>
