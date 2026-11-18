@@ -59,6 +59,17 @@ export function IconAction({
   )
 }
 
+/**
+ * The actions of a table row (a `group/row`): faded until the pointer is on the row or one of them has the focus, so
+ * they do not compete with the content. Always full on touch screens, which have no hover.
+ */
+export const rowActions =
+  "opacity-40 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+
+/** As rowActions, but hidden until then: the actions of the parts of a row (a .torrent of a film). */
+export const partActions =
+  "opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100"
+
 /** The thin line between the actions of a row and the one that removes. */
 export function ActionSeparator() {
   return <span aria-hidden className="bg-border mx-0.5 h-4 w-px shrink-0" />

@@ -8,6 +8,7 @@ import {
   GitMerge,
   ListTree,
   Loader2,
+  MoreHorizontal,
   RefreshCw,
   RotateCcw,
   Send,
@@ -20,9 +21,16 @@ import { toast } from "sonner"
 
 import { WayfinderrIcon } from "@/components/brand-icons"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { ActionSeparator, IconAction } from "@/components/icon-action"
+import { IconAction, partActions } from "@/components/icon-action"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -135,109 +143,131 @@ export function PlanTorrents({
   const done = it.torrents.filter(torrentComplete).length
 
   return (
-    <div className="grid max-w-xs min-w-[240px] gap-2">
+    <div className="grid max-w-sm min-w-[240px] gap-3">
       {merge && (
-        <div className="grid gap-0.5">
-          <div className="text-muted-foreground flex items-center gap-1 text-xs">
+        <div className="text-muted-foreground flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="inline-flex items-center gap-1">
             <GitMerge className="size-3.5" />
-            <span className="flex-1">
-              Merge
-              {done > 0 && done < it.torrents.length && ` · ${done} of ${it.torrents.length} downloaded`}
-            </span>
-            {withWayfinderr && (
-              <>
-                <IconAction
-                  small
-                  label={mergeOpen(it.merge) ? "Plan the pair again on Wayfinderr" : "Plan the pair on Wayfinderr"}
-                  disabled={planMerge.isPending}
-                  onClick={() => planMerge.mutate(undefined)}
-                >
-                  <WayfinderrIcon className="size-3.5" />
-                </IconAction>
-                {it.merge && (mergeOpen(it.merge) || (!it.merge.planId && it.merge.status === "")) && (
-                  <IconAction small danger label="Remove the pair from Wayfinderr" onClick={() => setRemovingPair(true)}>
-                    <Trash2 />
-                  </IconAction>
-                )}
-              </>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <MergeState m={it.merge} />
-            {withWayfinderr && it.merge?.status === "ERROR" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 gap-1 px-2 text-xs"
-                disabled={pairAgain.isPending}
-                onClick={() => pairAgain.mutate(undefined)}
-              >
-                {pairAgain.isPending ? <Loader2 className="animate-spin" /> : <RotateCcw />} Retry
-              </Button>
-            )}
-          </div>
+            Merge
+            {done > 0 && done < it.torrents.length && ` · ${done} of ${it.torrents.length} downloaded`}
+          </span>
+          <MergeState m={it.merge} />
+          {withWayfinderr && it.merge?.status === "ERROR" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs"
+              disabled={pairAgain.isPending}
+              onClick={() => pairAgain.mutate(undefined)}
+            >
+              {pairAgain.isPending ? <Loader2 className="animate-spin" /> : <RotateCcw />} Retry
+            </Button>
+          )}
+          {withWayfinderr && (
+            <div className={cn("ml-auto", partActions)}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground size-6"
+                    aria-label="The pair on Wayfinderr"
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled={planMerge.isPending} onSelect={() => planMerge.mutate(undefined)}>
+                    <WayfinderrIcon />
+                    {mergeOpen(it.merge) ? "Plan the pair again on Wayfinderr" : "Plan the pair on Wayfinderr"}
+                  </DropdownMenuItem>
+                  {it.merge && (mergeOpen(it.merge) || (!it.merge.planId && it.merge.status === "")) && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => setRemovingPair(true)}>
+                        <Trash2 /> Remove the pair from Wayfinderr
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       )}
       {it.torrents.map((t) => (
         <div key={t.position} className="grid gap-1">
-          {/* The label, and the actions at the top right; the name below, whole. */}
-          <div className="flex min-w-0 items-center gap-1">
+          {/* The label, the name, and the actions, in sight only on the row; below how the download goes. */}
+          <div className="flex min-h-6 min-w-0 items-center gap-2">
             {t.label && (
-              <Badge variant="secondary" className="max-w-24 truncate">
+              <Badge variant="secondary" className="max-w-24 shrink-0 truncate">
                 {t.label}
               </Badge>
             )}
-            <div className="ml-auto flex shrink-0 items-center">
-              <IconAction small label="Send to a client…" onClick={() => onAction({ kind: "send", item: it, positions: [t.position] })}>
-                <Send />
-              </IconAction>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium">{t.name}</span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-sm break-all">
+                {t.name} · {formatBytes(t.size)}
+                <br />
+                <span className="font-mono">{t.hash}</span>
+              </TooltipContent>
+            </Tooltip>
+            <div className={cn("flex shrink-0 items-center", partActions)}>
               {t.downloads.length > 0 && (
                 <IconAction small label="Details in Torrents" onClick={() => onOpenTorrent(t.hash)}>
                   <ListTree />
                 </IconAction>
               )}
-              <IconAction small label="Label" onClick={() => onAction({ kind: "label", item: it, torrent: t })}>
-                <Tag />
-              </IconAction>
-              <IconAction small label="Replace .torrent" onClick={() => onAction({ kind: "load", item: it, position: t.position })}>
-                <RefreshCw />
-              </IconAction>
-              <IconAction
-                small
-                label={`Save the .torrent file${t.dropped ? " (from Wayfinderr)" : ""}`}
-                href={api.planTorrentFileUrl(it.id, t.position)}
-                download
-              >
-                <FileDown />
-              </IconAction>
-              {withWayfinderr && (
-                <IconAction
-                  small
-                  label={t.wayfinderrAt ? "Send to Wayfinderr again" : "Send to Wayfinderr"}
-                  disabled={toWayfinderr.isPending}
-                  onClick={() => toWayfinderr.mutate({ position: t.position })}
-                >
-                  <WayfinderrIcon className="size-3.5" />
-                </IconAction>
-              )}
-              <ActionSeparator />
-              <IconAction small danger label="Remove from the film" onClick={() => setRemoving(t)}>
-                <Trash2 />
-              </IconAction>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground size-6 [&_svg:not([class*='size-'])]:size-3.5"
+                    aria-label="More actions on the .torrent"
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => onAction({ kind: "send", item: it, positions: [t.position] })}>
+                    <Send /> {t.downloads.length > 0 ? "Send to another client…" : "Send to a client…"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onAction({ kind: "label", item: it, torrent: t })}>
+                    <Tag /> Label
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onAction({ kind: "load", item: it, position: t.position })}>
+                    <RefreshCw /> Replace .torrent
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href={api.planTorrentFileUrl(it.id, t.position)} download>
+                      <FileDown /> Save the .torrent file{t.dropped ? " (from Wayfinderr)" : ""}
+                    </a>
+                  </DropdownMenuItem>
+                  {withWayfinderr && (
+                    <DropdownMenuItem
+                      disabled={toWayfinderr.isPending}
+                      onSelect={() => toWayfinderr.mutate({ position: t.position })}
+                    >
+                      <WayfinderrIcon /> {t.wayfinderrAt ? "Send to Wayfinderr again" : "Send to Wayfinderr"}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onSelect={() => setRemoving(t)}>
+                    <Trash2 /> Remove from the film
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="truncate text-xs font-medium">{t.name}</span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-sm break-all">
-              {t.name} · {formatBytes(t.size)}
-              <br />
-              <span className="font-mono">{t.hash}</span>
-            </TooltipContent>
-          </Tooltip>
           <TorrentProgress t={t} />
-          <WayfinderrState t={t} />
+          <WayfinderrState
+            t={t}
+            retrying={toWayfinderr.isPending}
+            onRetry={withWayfinderr ? () => toWayfinderr.mutate({ position: t.position }) : undefined}
+          />
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-1">
@@ -354,7 +384,16 @@ function MergeState({ m }: { m: PlanMerge | null }) {
 }
 
 /** The .torrent on Wayfinderr: sent as the source .torrent of the film, dropped here once released, or why sending failed. */
-function WayfinderrState({ t }: { t: PlanTorrent }) {
+function WayfinderrState({
+  t,
+  onRetry,
+  retrying,
+}: {
+  t: PlanTorrent
+  /** Sends it again now, when sending failed. */
+  onRetry?: () => void
+  retrying?: boolean
+}) {
   if (t.wayfinderrAt)
     return (
       <Tooltip>
@@ -375,14 +414,21 @@ function WayfinderrState({ t }: { t: PlanTorrent }) {
     )
   if (t.wayfinderrError)
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="text-destructive inline-flex items-center gap-1 text-xs">
-            <TriangleAlert className="size-3" /> Not sent to Wayfinderr yet
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs break-words">{t.wayfinderrError}. Tried again at the next sync.</TooltipContent>
-      </Tooltip>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-destructive inline-flex items-center gap-1 text-xs">
+              <TriangleAlert className="size-3" /> Not sent to Wayfinderr yet
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs break-words">{t.wayfinderrError}. Tried again at the next sync.</TooltipContent>
+        </Tooltip>
+        {onRetry && (
+          <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-xs" disabled={retrying} onClick={onRetry}>
+            {retrying ? <Loader2 className="animate-spin" /> : <RotateCcw />} Retry
+          </Button>
+        )}
+      </div>
     )
   return null
 }
@@ -399,7 +445,16 @@ function TorrentProgress({ t }: { t: PlanTorrent }) {
           return (
             <Tooltip key={d.clientId}>
               <TooltipTrigger asChild>
-                <div className="grid gap-0.5">
+                <div className="grid gap-1">
+                  <div className="bg-muted h-1 overflow-hidden rounded-full">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-[width]",
+                        complete ? "bg-emerald-500" : failed ? "bg-destructive" : "bg-sky-500",
+                      )}
+                      style={{ width: `${Math.min(100, d.progress * 100)}%` }}
+                    />
+                  </div>
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span
                       className={cn(
@@ -418,15 +473,6 @@ function TorrentProgress({ t }: { t: PlanTorrent }) {
                     <span className="text-muted-foreground tabular-nums">
                       {d.clientName} · {pct}%
                     </span>
-                  </div>
-                  <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-[width]",
-                        complete ? "bg-emerald-500" : failed ? "bg-destructive" : "bg-sky-500",
-                      )}
-                      style={{ width: `${Math.min(100, d.progress * 100)}%` }}
-                    />
                   </div>
                 </div>
               </TooltipTrigger>
