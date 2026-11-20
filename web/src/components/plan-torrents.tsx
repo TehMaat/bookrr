@@ -262,12 +262,14 @@ export function PlanTorrents({
               </DropdownMenu>
             </div>
           </div>
-          <TorrentProgress t={t} />
-          <WayfinderrState
-            t={t}
-            retrying={toWayfinderr.isPending}
-            onRetry={withWayfinderr ? () => toWayfinderr.mutate({ position: t.position }) : undefined}
-          />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <TorrentProgress t={t} />
+            <WayfinderrState
+              t={t}
+              retrying={toWayfinderr.isPending}
+              onRetry={withWayfinderr ? () => toWayfinderr.mutate({ position: t.position }) : undefined}
+            />
+          </div>
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-1">
@@ -437,7 +439,7 @@ function WayfinderrState({
 function TorrentProgress({ t }: { t: PlanTorrent }) {
   if (t.downloads.length > 0)
     return (
-      <div className="grid gap-1">
+      <div className="grid w-full gap-1">
         {t.downloads.map((d) => {
           const complete = d.progress >= 1
           const failed = isErrorState(d.state)
