@@ -447,6 +447,9 @@ export function TorrentsPage({
   const picking = filter === "archivable" || cf.archivable.includes("never")
   const picker = usePicker(picking ? rows.flatMap((x) => (x.t ? [{ hash: x.t.hash, archivable: archivableOf(x) }] : [])) : [])
   const kept = scoped.filter((x) => archivableOf(x)?.neverArchive).length
+  // The ticked torrents, once each, and the space they take up together.
+  const picked = new Map(rows.flatMap((x) => (x.t && picker.isPicked(x.t.hash) ? [[x.t.hash, sizeOf(x)] as const] : [])))
+  const pickedSize = [...picked.values()].reduce((s, n) => s + n, 0)
   // The columns the table can be sorted by: those shown.
   const sortable = (Object.keys(sortLabels) as SortKey[]).filter(
     (k) => !Object.entries(colSorts).some(([c, keys]) => keys.includes(k) && !show(c as Col))
@@ -975,6 +978,11 @@ export function TorrentsPage({
           <span>
             {plural(rows.length, "torrent")} · {formatBytes(totalSize)}
           </span>
+          {picked.size > 0 && (
+            <span className="text-foreground font-medium">
+              {picked.size} selected · {formatBytes(pickedSize)}
+            </span>
+          )}
           <ActiveFilters count={columns.active} onClear={() => columns.clear()} />
           {pages > 1 && (
             <div className="ml-auto flex items-center gap-1">
