@@ -560,7 +560,8 @@ export function TorrentsPage({
         />
       )}
 
-      <TableCard>
+      {/* Clipped rather than hidden, so the footer can stick to the bottom of the window. */}
+      <TableCard className="overflow-clip">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -974,7 +975,7 @@ export function TorrentsPage({
               })}
           </TableBody>
         </Table>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
+        <div className="text-muted-foreground bg-card sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs sm:px-6">
           <span>
             {plural(rows.length, "torrent")} · {formatBytes(totalSize)}
           </span>
