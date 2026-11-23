@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Download, Printer, TriangleAlert } from "lucide-react"
-import { renderSVG } from "uqr"
+import { encode, renderSVG } from "uqr"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,20 @@ function unreachable(base: string) {
   }
 }
 
+/** Same QR as the SVG, drawn on a canvas at a whole number of pixels per module (~1024 px). */
+function renderPNG(url: string): Promise<Blob | null> {
+  const { data, size } = encode(url, { ecc: "M", border: 2 })
+  const scale = Math.ceil(1024 / size)
+  const canvas = document.createElement("canvas")
+  canvas.width = canvas.height = size * scale
+  const ctx = canvas.getContext("2d")!
+  ctx.fillStyle = "#fff"
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.fillStyle = "#000"
+  data.forEach((row, y) => row.forEach((dark, x) => dark && ctx.fillRect(x * scale, y * scale, scale, scale)))
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"))
+}
+
 const escape = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
@@ -46,12 +60,17 @@ export function DiskQrDialog({ disk, onClose }: { disk: Disk | null; onClose: ()
   const svg = useMemo(() => (url ? renderSVG(url, { ecc: "M", border: 2 }) : ""), [url])
   const changed = normalizeBase(base) !== saved
 
-  const download = () => {
+  const saveFile = (blob: Blob, ext: string) => {
     const a = document.createElement("a")
-    a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }))
-    a.download = `bookrr-${disk!.label.replace(/[^\w.-]+/g, "_")}.svg`
+    a.href = URL.createObjectURL(blob)
+    a.download = `bookrr-${disk!.label.replace(/[^\w.-]+/g, "_")}.${ext}`
     a.click()
     URL.revokeObjectURL(a.href)
+  }
+  const downloadSVG = () => saveFile(new Blob([svg], { type: "image/svg+xml" }), "svg")
+  const downloadPNG = async () => {
+    const png = await renderPNG(url)
+    if (png) saveFile(png, "png")
   }
 
   const print = () => {
@@ -110,8 +129,11 @@ ${d.serial ? `<div class="meta">SN ${escape(d.serial)}</div>` : ""}
           </Alert>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={download}>
-            <Download /> Download SVG
+          <Button variant="outline" onClick={downloadSVG}>
+            <Download /> SVG
+          </Button>
+          <Button variant="outline" onClick={downloadPNG}>
+            <Download /> PNG
           </Button>
           <Button onClick={print}>
             <Printer /> Print label

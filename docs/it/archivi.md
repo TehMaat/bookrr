@@ -14,7 +14,7 @@ Ogni disco fisico ha la sua pagina con i torrent archiviati sopra, cercabili per
 |---|---|
 | ![Pagina del disco](../screenshots/disk-archives.png) | ![Sul telefono](../screenshots/mobile.png) |
 
-Nella finestra del QR code imposti l'**indirizzo di bookrr nella tua rete** (es. `http://192.168.1.10:8080`): quello con cui lo raggiungono gli altri dispositivi, utile se il container è in una rete Docker. Vale per tutti i dischi. Puoi scaricare il QR code in SVG o stampare un'etichetta di 50 mm.
+Nella finestra del QR code imposti l'**indirizzo di bookrr nella tua rete** (es. `http://192.168.1.10:8080`): quello con cui lo raggiungono gli altri dispositivi, utile se il container è in una rete Docker. Vale per tutti i dischi. Puoi scaricare il QR code in SVG o PNG o stampare un'etichetta di 50 mm.
 
 ## Dati SMART
 

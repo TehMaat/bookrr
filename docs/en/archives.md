@@ -14,7 +14,7 @@ Every physical disk has its own page with the torrents archived on it, searchabl
 |---|---|
 | ![Disk page](../screenshots/disk-archives.png) | ![On a phone](../screenshots/mobile.png) |
 
-In the QR code window you set the **address of bookrr on your network** (e.g. `http://192.168.1.10:8080`): the one other devices use, useful when the container is in a Docker network. It is saved for every disk. You can download the QR code as SVG or print a 50 mm label.
+In the QR code window you set the **address of bookrr on your network** (e.g. `http://192.168.1.10:8080`): the one other devices use, useful when the container is in a Docker network. It is saved for every disk. You can download the QR code as SVG or PNG, or print a 50 mm label.
 
 ## SMART data
 
