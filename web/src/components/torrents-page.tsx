@@ -866,7 +866,7 @@ export function TorrentsPage({
                     {picking && (
                       <TableCell>
                         {t && archivable && (
-                          <PickBox label={`Select ${t.name}`} checked={picker.isPicked(t.hash)} onChange={(on) => picker.toggle(t.hash, on)} />
+                          <PickBox label={`Select ${t.name}`} checked={picker.isPicked(t.hash)} onChange={(on, shift) => picker.toggle(t.hash, on, shift)} />
                         )}
                       </TableCell>
                     )}
