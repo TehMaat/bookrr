@@ -237,3 +237,82 @@ func TestDiskListingByContent(t *testing.T) {
 		t.Errorf("files of A read %d times", *n.(*int))
 	}
 }
+
+// A film Radarr imported by hand is found by the size of its file, any
+// film can be chosen by hand, and both link to Radarr's interface.
+func TestDiskListingRadarrBySizeAndByHand(t *testing.T) {
+	ctx := context.Background()
+	const mb = int64(1) << 20
+	var mu sync.Mutex
+	var deleted []string
+	radarr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v3/history":
+			fmt.Fprint(w, `{"records":[]}`)
+		case r.URL.Path == "/api/v3/history/movie":
+			// Imported by hand: no download.
+			fmt.Fprint(w, `[{"eventType":"movieFileImported","movieId":1,"data":{}}]`)
+		case r.URL.Path == "/api/v3/movie":
+			fmt.Fprintf(w, `[{"id":1,"title":"Barbie","year":2023,"titleSlug":"barbie-2023","hasFile":true,"movieFile":{"size":%d,"path":"/m/Barbie (2023)/Barbie (2023) - Remux-2160p.mkv","originalFilePath":"Barbie-SEG_MainFeature_t01.mkv"}},
+				{"id":2,"title":"Batman","year":1989,"titleSlug":"batman-1989","hasFile":true,"movieFile":{"size":5,"path":"/m/Batman (1989)/b.mkv"}}]`, 60000*mb+3)
+		case r.URL.Path == "/api/v3/movie/2" && r.Method == http.MethodGet:
+			fmt.Fprint(w, `{"id":2,"title":"Batman","year":1989,"titleSlug":"batman-1989","hasFile":true,"movieFile":{"size":5,"path":"/m/Batman (1989)/b.mkv"}}`)
+		case strings.HasPrefix(r.URL.Path, "/api/v3/movie/") && r.Method == http.MethodDelete:
+			mu.Lock()
+			deleted = append(deleted, r.URL.Path)
+			mu.Unlock()
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer radarr.Close()
+	st, err := store.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := config.Config{RadarrURL: radarr.URL, RadarrAPIKey: "K", RadarrLinkURL: "http://nas:7878"}
+	h := New(cfg, st, nil, nil, nil, nil, nil, nil, nil, "test").Handler()
+	for _, ti := range []store.TorrentInput{
+		{Hash: hashA, Name: "BARBIE.2023.REMUX.2160P", Size: 60000*mb + 3},
+		{Hash: hashB, Name: "Batman.1989.1080p", Size: 9000 * mb},
+	} {
+		if _, err := st.CreateManualTorrent(ctx, store.ManualInput{TorrentInput: ti}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var disk struct {
+		ID int64 `json:"id"`
+	}
+	call(t, h, "POST", "/api/disks", map[string]any{"label": "Archive 06", "kind": "HDD"}, &disk)
+	text := fmt.Sprintf("%d BARBIE.2023.REMUX.2160P/barbie.mkv\n%d Batman.1989.1080p/batman.mkv\n", 60000*mb+3, 9000*mb)
+
+	var p listingPreview
+	call(t, h, "POST", fmt.Sprintf("/api/disks/%d/listing", disk.ID), map[string]any{"listing": text}, &p)
+	if len(p.Items) != 2 || p.Items[0].Radarr == nil || p.Items[0].Radarr.ID != 1 || p.Items[0].Radarr.Via != "size" ||
+		p.Items[0].Radarr.URL != "http://nas:7878/movie/barbie-2023" || p.Items[1].Radarr != nil {
+		t.Fatalf("preview %+v %+v", p.Items, p.Items[0].Radarr)
+	}
+
+	var found struct {
+		Movies []struct {
+			ID  int64  `json:"id"`
+			URL string `json:"url"`
+		} `json:"movies"`
+	}
+	call(t, h, "GET", "/api/radarr/movies?q=batman", nil, &found)
+	if len(found.Movies) != 1 || found.Movies[0].ID != 2 || found.Movies[0].URL != "http://nas:7878/movie/batman-1989" {
+		t.Fatalf("search %+v", found)
+	}
+
+	var res struct {
+		Results []listingResult `json:"results"`
+	}
+	call(t, h, "POST", fmt.Sprintf("/api/disks/%d/listing/apply", disk.ID), map[string]any{"listing": text, "items": []map[string]any{
+		{"hash": hashA, "radarr": true},
+		{"hash": hashB, "radarr": true, "radarrId": 2},
+	}}, &res)
+	if fmt.Sprint(deleted) != "[/api/v3/movie/1 /api/v3/movie/2]" {
+		t.Fatalf("deleted %v %+v", deleted, res)
+	}
+}

@@ -137,6 +137,7 @@ Most options are set from **Settings** in the interface, and apply right away wi
 | `BOOKRR_PROWLARR_URL` / `BOOKRR_PROWLARR_API_KEY` | — | Address of [Prowlarr](https://prowlarr.com) (e.g. `http://prowlarr:9696`) and its API key (Settings → General): with the tracker, max resolution and plan searches. |
 | `BOOKRR_PROWLARR_RECHECK` | `7d` | How often to search each film again (minimum `1d`; hours work too, e.g. `36h`). |
 | `BOOKRR_RADARR_URL` / `BOOKRR_RADARR_API_KEY` | — | Address of [Radarr](https://radarr.video) (e.g. `http://radarr:7878`) and its API key: the films archived from a disk listing are deleted there. |
+| `BOOKRR_RADARR_LINK_URL` / `BOOKRR_SONARR_LINK_URL` | — | Their address in the browser, for the links to films and series, when the one above works only for bookrr (e.g. `http://192.168.1.10:7878`). |
 | `BOOKRR_SONARR_URL` / `BOOKRR_SONARR_API_KEY` | — | Address of [Sonarr](https://sonarr.tv) (e.g. `http://sonarr:8989`) and its API key: the episodes archived from a disk listing are deleted there. |
 | `BOOKRR_LOG_RETENTION` | `30d` | How many days to keep the log files (minimum `1d`, `0` = forever). |
 | `BOOKRR_LOG_MAX_SIZE` | `50MB` | Maximum size of a log file; past it the day goes on in a new file (minimum `1MB`, `0` = no limit). |

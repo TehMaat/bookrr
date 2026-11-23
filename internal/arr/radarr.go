@@ -17,11 +17,34 @@ func NewRadarr(base, key string) *Radarr {
 }
 
 type movie struct {
-	ID      int64      `json:"id"`
-	Title   string     `json:"title"`
-	Year    int        `json:"year"`
-	HasFile bool       `json:"hasFile"`
-	File    *movieFile `json:"movieFile"`
+	ID        int64      `json:"id"`
+	Title     string     `json:"title"`
+	Year      int        `json:"year"`
+	TitleSlug string     `json:"titleSlug"`
+	HasFile   bool       `json:"hasFile"`
+	File      *movieFile `json:"movieFile"`
+}
+
+func (m movie) toMovie(same bool, via string) *Movie {
+	out := &Movie{ID: m.ID, Title: m.Title, Year: m.Year, Slug: m.TitleSlug, HasFile: m.HasFile, SameFile: same, Via: via}
+	if m.File != nil {
+		out.FileSize = m.File.Size
+		out.FilePath = m.File.Path
+	}
+	return out
+}
+
+// hasSize reports whether the film's file has one of the sizes.
+func (m movie) hasSize(sizes []int64) bool {
+	if !m.HasFile || m.File == nil || m.File.Size <= 0 {
+		return false
+	}
+	for _, s := range sizes {
+		if s == m.File.Size {
+			return true
+		}
+	}
+	return false
 }
 
 type movieFile struct {
@@ -62,8 +85,15 @@ type Movie struct {
 	// when the film was upgraded since, and deleting it would throw away a
 	// file that is not on the disk.
 	SameFile bool `json:"sameFile"`
-	// "history" (the download of the torrent) or "name" (the name of the file).
+	// "history" (the download of the torrent), "name" (the name of the
+	// file), "size" (the size of the file) or "hand" (chosen by the user).
 	Via string `json:"via"`
+	// For the link to the film in Radarr's interface.
+	Slug string `json:"slug"`
+	URL  string `json:"url"`
+	// The file Radarr has now.
+	FileSize int64  `json:"fileSize"`
+	FilePath string `json:"filePath"`
 }
 
 // Deletable reports whether the film can be deleted with its files without
@@ -81,7 +111,10 @@ type RadarrLookup struct {
 func (r *Radarr) Lookup() *RadarrLookup { return &RadarrLookup{r: r} }
 
 // Find returns the film the torrent brought in, nil when Radarr has none.
-func (l *RadarrLookup) Find(ctx context.Context, hash, name string) (*Movie, error) {
+// sizes are those of the torrent's big files on the disk: a film imported
+// by hand (from a file named otherwise, so not in the history of the
+// downloads) is found by the size of its file.
+func (l *RadarrLookup) Find(ctx context.Context, hash, name string, sizes []int64) (*Movie, error) {
 	recs, err := l.r.history(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -104,8 +137,8 @@ func (l *RadarrLookup) Find(ctx context.Context, hash, name string) (*Movie, err
 		err := l.r.do(ctx, http.MethodGet, fmt.Sprintf("/api/v3/movie/%d", id), nil, nil, &m)
 		switch {
 		case err == nil:
-			same := m.HasFile && m.File != nil && (samePath(m.File.Path, imported) || m.File.fromTorrent(name))
-			return &Movie{ID: m.ID, Title: m.Title, Year: m.Year, HasFile: m.HasFile, SameFile: same, Via: "history"}, nil
+			same := m.HasFile && m.File != nil && (samePath(m.File.Path, imported) || m.File.fromTorrent(name) || m.hasSize(sizes))
+			return m.toMovie(same, "history"), nil
 		case !errors.Is(err, ErrNotFound):
 			return nil, err
 		}
@@ -116,10 +149,49 @@ func (l *RadarrLookup) Find(ctx context.Context, hash, name string) (*Movie, err
 	}
 	for _, m := range l.movies {
 		if m.HasFile && m.File.fromTorrent(name) {
-			return &Movie{ID: m.ID, Title: m.Title, Year: m.Year, HasFile: true, SameFile: true, Via: "name"}, nil
+			return m.toMovie(true, "name"), nil
+		}
+	}
+	for _, m := range l.movies {
+		if m.hasSize(sizes) {
+			return m.toMovie(true, "size"), nil
 		}
 	}
 	return nil, nil
+}
+
+// Search returns the films of the library whose title (or year) holds
+// every word of q, at most limit.
+func (l *RadarrLookup) Search(ctx context.Context, q string, limit int) ([]Movie, error) {
+	if err := l.load(ctx); err != nil {
+		return nil, err
+	}
+	words := strings.Fields(strings.ToLower(q))
+	out := []Movie{}
+	for _, m := range l.movies {
+		text := strings.ToLower(m.Title + " " + strconv.Itoa(m.Year))
+		ok := len(words) > 0
+		for _, w := range words {
+			ok = ok && strings.Contains(text, w)
+		}
+		if ok {
+			out = append(out, *m.toMovie(m.HasFile, "hand"))
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// Movie returns a film of Radarr by its id, chosen by the user: its file
+// is taken to be the torrent's.
+func (r *Radarr) Movie(ctx context.Context, id int64) (*Movie, error) {
+	var m movie
+	if err := r.do(ctx, http.MethodGet, fmt.Sprintf("/api/v3/movie/%d", id), nil, nil, &m); err != nil {
+		return nil, err
+	}
+	return m.toMovie(m.HasFile, "hand"), nil
 }
 
 // DeleteMovie deletes the film with its files, without adding it to the

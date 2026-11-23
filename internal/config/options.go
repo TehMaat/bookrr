@@ -64,10 +64,14 @@ var Options = []Option{
 		Help: "E.g. http://radarr:7878: when you archive films on a disk from its listing, bookrr deletes them from Radarr too."},
 	{Key: "BOOKRR_RADARR_API_KEY", Group: GroupArr, Label: "Radarr API key", Secret: true,
 		Help: "In Radarr: Settings → General → API Key."},
+	{Key: "BOOKRR_RADARR_LINK_URL", Group: GroupArr, Label: "Radarr address in the browser",
+		Help: "Optional: for the links to the films, when the address above works only for bookrr (e.g. http://radarr:7878 in Docker). E.g. http://192.168.1.10:7878."},
 	{Key: "BOOKRR_SONARR_URL", Group: GroupArr, Label: "Sonarr address",
 		Help: "E.g. http://sonarr:8989: when you archive seasons on a disk from its listing, bookrr deletes their episodes from Sonarr too."},
 	{Key: "BOOKRR_SONARR_API_KEY", Group: GroupArr, Label: "Sonarr API key", Secret: true,
 		Help: "In Sonarr: Settings → General → API Key."},
+	{Key: "BOOKRR_SONARR_LINK_URL", Group: GroupArr, Label: "Sonarr address in the browser",
+		Help: "Optional: for the links to the series, when the address above works only for bookrr. E.g. http://192.168.1.10:8989."},
 }
 
 // IsOption reports whether an environment variable can be set from the UI.

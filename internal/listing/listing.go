@@ -535,6 +535,9 @@ type Found struct {
 	Via string
 	// Found by content: main files of the torrent not on the disk.
 	Missing int
+	// Exact sizes of its files on the disk of MinContentSize and more: to
+	// find the film in Radarr when nothing else does.
+	Sizes []int64
 }
 
 // Content is what a torrent holds, to find it on the disk when its files
@@ -644,7 +647,7 @@ func Match(l Listing, names map[string][]string, contents []Content) ([]Found, [
 			n.taken = true
 			for _, h := range hs {
 				byName[h] = true
-				found = append(found, Found{Hash: h, Path: n.path, Files: n.files, Size: n.size, Sized: n.files > 0 && n.unsized == 0, Err: n.err, Via: "name"})
+				found = append(found, Found{Hash: h, Path: n.path, Files: n.files, Size: n.size, Sized: n.files > 0 && n.unsized == 0, Err: n.err, Via: "name", Sizes: bigSizes(n)})
 			}
 			return
 		}
@@ -690,6 +693,7 @@ func Match(l Listing, names map[string][]string, contents []Content) ([]Found, [
 		for _, g := range got {
 			g.claimed = true
 			f.Size += g.size
+			f.Sizes = append(f.Sizes, g.size)
 		}
 		var dir *node
 		f.Path, dir = contentPath(got, used)
@@ -770,6 +774,22 @@ func contentPath(got []*node, mine map[*node]bool) (string, *node) {
 		return dir.path, nil
 	}
 	return dir.path, dir
+}
+
+// bigSizes are the exact sizes of the files of MinContentSize and more
+// under n (n included).
+func bigSizes(n *node) []int64 {
+	if n.file {
+		if n.unsized == 0 && n.err == 0 && n.size >= MinContentSize {
+			return []int64{n.size}
+		}
+		return nil
+	}
+	var out []int64
+	for _, c := range n.sorted() {
+		out = append(out, bigSizes(c)...)
+	}
+	return out
 }
 
 func isAncestor(a, n *node) bool {

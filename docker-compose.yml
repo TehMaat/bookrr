@@ -53,6 +53,10 @@ services:
       # a disk are deleted there (Disks page, Read a listing)
       # BOOKRR_RADARR_URL: http://radarr:7878
       # BOOKRR_RADARR_API_KEY: your-radarr-api-key
+      # Radarr's address in the browser, for the links (when the one above is
+      # Docker-internal); the same for Sonarr
+      # BOOKRR_RADARR_LINK_URL: http://192.168.1.10:7878
+      # BOOKRR_SONARR_LINK_URL: http://192.168.1.10:8989
       # BOOKRR_SONARR_URL: http://sonarr:8989
       # BOOKRR_SONARR_API_KEY: your-sonarr-api-key
       # Time of the nightly missing seasons and films check (local time)
