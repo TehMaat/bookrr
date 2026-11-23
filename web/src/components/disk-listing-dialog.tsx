@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, CircleAlert, Clapperboard, FolderOpen, ListChecks, Server, TriangleAlert, Tv, Upload, X } from "lucide-react"
+import { Check, CircleAlert, Clapperboard, FolderOpen, ListChecks, Search, Server, TriangleAlert, Tv, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { PersonalBadge } from "@/components/torrent-badges"
@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   api,
+  type ArrMovie,
   type Disk,
   type ListingApplyItem,
   type ListingCheck,
@@ -57,6 +58,9 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
   const [sonarr, setSonarr] = useState(true)
   const [deleteFiles, setDeleteFiles] = useState<boolean | null>(null)
   const [results, setResults] = useState<ListingResult[] | null>(null)
+  // Films of Radarr chosen by hand (null: none), by hash.
+  const [linked, setLinked] = useState<Map<string, ArrMovie | null>>(new Map())
+  const [linking, setLinking] = useState<ListingItem | null>(null)
 
   useEffect(() => {
     if (!disk) return
@@ -79,6 +83,7 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
       setRadarr(p.radarr)
       setSonarr(p.sonarr)
       setDeleteFiles(null)
+      setLinked(new Map())
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
@@ -92,7 +97,10 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
     if (f) setText(await f.text())
   }
 
-  const items = useMemo(() => preview?.items ?? [], [preview])
+  const items = useMemo(
+    () => (preview?.items ?? []).map((it) => (linked.has(it.hash) ? { ...it, radarr: linked.get(it.hash) ?? null } : it)),
+    [preview, linked]
+  )
   const chosen = items.filter((it) => selected.has(it.hash))
   const toggle = (i: number, shift: boolean) => {
     const it = items[i]
@@ -132,7 +140,10 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
     if (!disk || !preview) return
     setBusy(true)
     try {
-      const req: ListingApplyItem[] = chosen.map((it) => ({ hash: it.hash, clients, radarr, sonarr }))
+      const req: ListingApplyItem[] = chosen.map((it) => {
+        const hand = linked.get(it.hash)
+        return { hash: it.hash, clients, radarr: radarr && (linked.has(it.hash) ? hand !== null : true), sonarr, radarrId: hand?.id }
+      })
       const r = await api.applyListing(disk.id, text, prefix, req, needChoice ? deleteFiles : null)
       setResults(r.results)
       const failed = r.results.filter((x) => x.steps.some((s) => !s.ok)).length
@@ -267,7 +278,13 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
                 </div>
                 <ul className="divide-y rounded-md border">
                   {items.map((it, i) => (
-                    <Row key={it.hash} item={it} checked={selected.has(it.hash)} onToggle={(shift) => toggle(i, shift)} />
+                    <Row
+                      key={it.hash}
+                      item={it}
+                      checked={selected.has(it.hash)}
+                      onToggle={(shift) => toggle(i, shift)}
+                      onLink={preview.radarr ? () => setLinking(it) : undefined}
+                    />
                   ))}
                 </ul>
               </div>
@@ -380,11 +397,126 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
           </div>
         )}
       </DialogContent>
+      <RadarrPicker
+        item={linking}
+        onClose={() => setLinking(null)}
+        onPick={(m) => {
+          if (linking) setLinked((prev) => new Map(prev).set(linking.hash, m))
+          setLinking(null)
+        }}
+      />
     </Dialog>
   )
 }
 
-function Row({ item: it, checked, onToggle }: { item: ListingItem; checked: boolean; onToggle: (shift: boolean) => void }) {
+/** The title to search in Radarr for a torrent: its name up to the year, e.g. "Barbie" for BARBIE.2023.REMUX…. */
+function guessTitle(name: string) {
+  const words = name.replace(/[._]+/g, " ").split(" ")
+  const year = words.findIndex((w, i) => i > 0 && /^(19|20)\d\d$/.test(w))
+  return (year > 0 ? words.slice(0, year) : words.slice(0, 3)).join(" ")
+}
+
+/** Chooses by hand the film of Radarr deleted for a torrent. */
+function RadarrPicker({
+  item,
+  onPick,
+  onClose,
+}: {
+  item: ListingItem | null
+  onPick: (m: ArrMovie | null) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState("")
+  const [movies, setMovies] = useState<ArrMovie[] | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const search = async (query: string) => {
+    if (!query.trim()) return
+    setBusy(true)
+    try {
+      setMovies((await api.searchRadarr(query)).movies)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!item) return
+    const guess = guessTitle(item.name)
+    setQ(guess)
+    setMovies(null)
+    search(guess)
+  }, [item])
+
+  return (
+    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Film of Radarr</DialogTitle>
+          <DialogDescription className="[overflow-wrap:anywhere]">
+            Which film of Radarr is "{item?.name}"? It is deleted from Radarr with its file when you archive.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            search(q)
+          }}
+        >
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Title or year" autoFocus />
+          <Button type="submit" variant="outline" disabled={busy || !q.trim()}>
+            <Search /> Search
+          </Button>
+        </form>
+        {movies !== null &&
+          (movies.length === 0 ? (
+            <p className="text-muted-foreground py-2 text-center text-sm">No film in Radarr with this title.</p>
+          ) : (
+            <ul className="divide-y rounded-md border">
+              {movies.map((m) => (
+                <li key={m.id}>
+                  <button type="button" className="hover:bg-muted/50 grid w-full gap-0.5 px-3 py-2 text-left" onClick={() => onPick(m)}>
+                    <span className="text-sm font-medium">
+                      {m.title} ({m.year})
+                    </span>
+                    <span className="text-muted-foreground text-xs break-all">
+                      {m.hasFile ? `${formatBytes(m.fileSize)} · ${m.filePath}` : "no file in Radarr"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ))}
+        <DialogFooter>
+          {item?.radarr && (
+            <Button type="button" variant="outline" onClick={() => onPick(null)}>
+              No film: don't touch Radarr
+            </Button>
+          )}
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function Row({
+  item: it,
+  checked,
+  onToggle,
+  onLink,
+}: {
+  item: ListingItem
+  checked: boolean
+  onToggle: (shift: boolean) => void
+  /** Choose the film of Radarr by hand; missing without Radarr. */
+  onLink?: () => void
+}) {
   const c = checks[it.check]
   const disabled = it.check === "incomplete"
   return (
@@ -448,19 +580,53 @@ function Row({ item: it, checked, onToggle }: { item: ListingItem; checked: bool
               ))
             )}
           </span>
-          {it.radarr && (
+          {it.radarr ? (
             <span className="min-w-0">
               <Clapperboard className="text-muted-foreground mr-1 inline size-3.5 align-[-2px]" />
-              Radarr: {it.radarr.title} ({it.radarr.year})
+              Radarr:{" "}
+              {it.radarr.url ? (
+                <a href={it.radarr.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+                  {it.radarr.title} ({it.radarr.year})
+                </a>
+              ) : (
+                `${it.radarr.title} (${it.radarr.year})`
+              )}
+              {it.radarr.via === "size" && <span className="text-muted-foreground"> · by the size of its file</span>}
+              {it.radarr.via === "hand" && <span className="text-muted-foreground"> · chosen by hand</span>}
               {it.radarr.hasFile && !it.radarr.sameFile && (
                 <span className="text-amber-700 dark:text-amber-300"> · has another file now: left as it is</span>
               )}
+              {onLink && (
+                <button type="button" className="text-muted-foreground hover:text-foreground ml-1.5 underline underline-offset-2" onClick={onLink}>
+                  change
+                </button>
+              )}
             </span>
+          ) : (
+            onLink &&
+            !it.sonarr && (
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 underline underline-offset-2"
+                onClick={onLink}
+              >
+                <Clapperboard className="size-3.5" /> Link to a film of Radarr…
+              </button>
+            )
           )}
           {it.sonarr && (
             <span className="min-w-0">
               <Tv className="text-muted-foreground mr-1 inline size-3.5 align-[-2px]" />
-              Sonarr: {it.sonarr.title} · {it.sonarr.seasons.map((n) => `S${String(n).padStart(2, "0")}`).join(", ")} ·{" "}
+              Sonarr:{" "}
+              {it.sonarr.url ? (
+                <a href={it.sonarr.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+                  {it.sonarr.title}
+                </a>
+              ) : (
+                it.sonarr.title
+              )}{" "}
+              · {it.sonarr.seasons.map((n) => `S${String(n).padStart(2, "0")}`).join(", ")} ·{" "}
+
               {plural(it.sonarr.files.length, "file")}
               {it.sonarr.upgraded > 0 && (
                 <span className="text-amber-700 dark:text-amber-300">

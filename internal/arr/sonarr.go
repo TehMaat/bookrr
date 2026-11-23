@@ -20,6 +20,7 @@ type series struct {
 	ID         int64  `json:"id"`
 	Title      string `json:"title"`
 	Year       int    `json:"year"`
+	TitleSlug  string `json:"titleSlug"`
 	Statistics struct {
 		EpisodeFileCount int `json:"episodeFileCount"`
 	} `json:"statistics"`
@@ -42,7 +43,10 @@ type Episodes struct {
 	SeriesID int64  `json:"seriesId"`
 	Title    string `json:"title"`
 	Year     int    `json:"year"`
-	Seasons  []int  `json:"seasons"`
+	// For the link to the series in Sonarr's interface.
+	Slug    string `json:"slug"`
+	URL     string `json:"url"`
+	Seasons []int  `json:"seasons"`
 	// Episodes imported from the torrent.
 	Episodes int `json:"episodes"`
 	// The episode files Sonarr has now from the torrent: deleted.
@@ -113,7 +117,7 @@ func (s *Sonarr) Find(ctx context.Context, hash string) (*Episodes, error) {
 	for _, f := range files {
 		paths[f.ID] = f.Path
 	}
-	out := &Episodes{SeriesID: se.ID, Title: se.Title, Year: se.Year, SeriesFiles: len(files)}
+	out := &Episodes{SeriesID: se.ID, Title: se.Title, Year: se.Year, Slug: se.TitleSlug, SeriesFiles: len(files)}
 	seasons, fileSet := map[int]bool{}, map[int64]bool{}
 	for _, e := range eps {
 		p, ok := imported[e.ID]

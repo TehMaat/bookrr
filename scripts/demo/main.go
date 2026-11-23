@@ -686,6 +686,11 @@ func serveWayfinderr(w http.ResponseWriter, r *http.Request) {
 func serveRadarr(w http.ResponseWriter, r *http.Request) {
 	orchard := releases[1].name
 	lanterns := releases[2].name
+	movies := []string{
+		`{"id":1,"title":"The Quiet Orchard","year":2016,"titleSlug":"the-quiet-orchard-2016","hasFile":true,"movieFile":{"size":1,"path":"/movies/The Quiet Orchard (2016)/orchard.mkv"}}`,
+		`{"id":2,"title":"Paper Lanterns","year":2021,"titleSlug":"paper-lanterns-2021","hasFile":true,"movieFile":{"size":2,"path":"/movies/Paper Lanterns (2021)/lanterns.2160p.mkv"}}`,
+		fmt.Sprintf(`{"id":3,"title":"Starfall Courier","year":2019,"titleSlug":"starfall-courier-2019","hasFile":true,"movieFile":{"size":%d,"path":"/movies/Starfall Courier (2019)/Starfall Courier (2019) Remux-2160p.mkv","originalFilePath":"STARFALL_t00.mkv"}}`, releases[0].size),
+	}
 	switch {
 	case r.URL.Path == "/api/v3/system/status":
 		w.Write([]byte(`{"version":"5.20.0"}`))
@@ -699,10 +704,15 @@ func serveRadarr(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`{"records":[]}`))
 		}
 	case r.URL.Path == "/api/v3/movie/1":
-		w.Write([]byte(`{"id":1,"title":"The Quiet Orchard","year":2016,"hasFile":true,"movieFile":{"path":"/movies/The Quiet Orchard (2016)/orchard.mkv"}}`))
+		w.Write([]byte(movies[0]))
 	case r.URL.Path == "/api/v3/movie/2":
-		w.Write([]byte(`{"id":2,"title":"Paper Lanterns","year":2021,"hasFile":true,"movieFile":{"path":"/movies/Paper Lanterns (2021)/lanterns.2160p.mkv"}}`))
+		w.Write([]byte(movies[1]))
+	case r.URL.Path == "/api/v3/movie/3":
+		w.Write([]byte(movies[2]))
 	case r.URL.Path == "/api/v3/movie":
+		w.Write([]byte("[" + strings.Join(movies, ",") + "]"))
+	case r.URL.Path == "/api/v3/history/movie":
+		// Starfall Courier was imported by hand: no download in the history.
 		w.Write([]byte(`[]`))
 	default:
 		http.NotFound(w, r)
@@ -726,7 +736,7 @@ func serveSonarr(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{"records": recs})
 	case r.URL.Path == "/api/v3/series/1":
-		w.Write([]byte(`{"id":1,"title":"Velvet Static","year":2024}`))
+		w.Write([]byte(`{"id":1,"title":"Velvet Static","year":2024,"titleSlug":"velvet-static"}`))
 	case r.URL.Path == "/api/v3/episode":
 		var eps []map[string]any
 		for e := 1; e <= 16; e++ {

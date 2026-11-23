@@ -760,7 +760,14 @@ export type ArrMovie = {
   hasFile: boolean
   /** The file Radarr has now is the one imported from the torrent (false when upgraded since). */
   sameFile: boolean
-  via: "history" | "name"
+  /** How it was found: the history of the downloads, the name or the size of the file, or chosen by hand. */
+  via: "history" | "name" | "size" | "hand"
+  slug: string
+  /** The film in Radarr's interface; "" when unknown. */
+  url: string
+  /** The file Radarr has now. */
+  fileSize: number
+  filePath: string
 }
 
 /** The episodes of a series of Sonarr a torrent brought in. */
@@ -768,6 +775,9 @@ export type ArrEpisodes = {
   seriesId: number
   title: string
   year: number
+  slug: string
+  /** The series in Sonarr's interface; "" when unknown. */
+  url: string
   seasons: number[]
   episodes: number
   /** Episode files of the torrent Sonarr has now: deleted. */
@@ -816,7 +826,14 @@ export type ListingPreview = {
   sonarrError: string
 }
 
-export type ListingApplyItem = { hash: string; clients: boolean; radarr: boolean; sonarr: boolean }
+export type ListingApplyItem = {
+  hash: string
+  clients: boolean
+  radarr: boolean
+  sonarr: boolean
+  /** The film of Radarr chosen by hand. */
+  radarrId?: number
+}
 
 export type ListingResult = {
   hash: string
@@ -1079,6 +1096,8 @@ export const api = {
   previewListing: (id: number, listing: string, prefix: string) =>
     request<ListingPreview>("POST", `/api/disks/${id}/listing`, { listing, prefix }),
   /** Archives the torrents chosen on the disk, then removes them from the clients, Radarr and Sonarr. */
+  /** Films of Radarr's library whose title (or year) holds every word of q. */
+  searchRadarr: (q: string) => request<{ movies: ArrMovie[] }>("GET", `/api/radarr/movies?q=${encodeURIComponent(q)}`),
   applyListing: (id: number, listing: string, prefix: string, items: ListingApplyItem[], deleteFiles: boolean | null) =>
     request<{ results: ListingResult[] }>("POST", `/api/disks/${id}/listing/apply`, { listing, prefix, items, deleteFiles }),
   bucketEntries: (id: number) => request<BucketEntry[]>("GET", `/api/disks/${id}/bucket-entries`),

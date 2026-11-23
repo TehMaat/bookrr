@@ -46,6 +46,9 @@ type Config struct {
 	RadarrAPIKey string
 	SonarrURL    string
 	SonarrAPIKey string
+	// Their addresses in the browser, for the links ("" = the ones above).
+	RadarrLinkURL string
+	SonarrLinkURL string
 	// The log files in the data folder: how many days to keep them (0 =
 	// forever), the size past which a day goes on in a new file (0 = no
 	// limit) and the minimum level written.
@@ -98,6 +101,8 @@ func Resolve(stored map[string]string) (Config, error) {
 		RadarrAPIKey:   strings.TrimSpace(get("BOOKRR_RADARR_API_KEY")),
 		SonarrURL:      strings.TrimRight(strings.TrimSpace(get("BOOKRR_SONARR_URL")), "/"),
 		SonarrAPIKey:   strings.TrimSpace(get("BOOKRR_SONARR_API_KEY")),
+		RadarrLinkURL:  strings.TrimRight(strings.TrimSpace(get("BOOKRR_RADARR_LINK_URL")), "/"),
+		SonarrLinkURL:  strings.TrimRight(strings.TrimSpace(get("BOOKRR_SONARR_LINK_URL")), "/"),
 	}
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)
@@ -165,6 +170,13 @@ func Resolve(stored map[string]string) (Config, error) {
 			return c, fmt.Errorf("BOOKRR_PROWLARR_URL %q invalid (e.g. http://prowlarr:9696)", c.ProwlarrURL)
 		}
 	}
+	for _, l := range []struct{ name, url string }{{"RADARR", c.RadarrLinkURL}, {"SONARR", c.SonarrLinkURL}} {
+		if l.url != "" {
+			if u, err := url.Parse(l.url); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return c, fmt.Errorf("BOOKRR_%s_LINK_URL %q invalid (e.g. http://192.168.1.10:7878)", l.name, l.url)
+			}
+		}
+	}
 	for _, s := range []struct{ name, url, key, example string }{
 		{"RADARR", c.RadarrURL, c.RadarrAPIKey, "http://radarr:7878"},
 		{"SONARR", c.SonarrURL, c.SonarrAPIKey, "http://sonarr:8989"},
@@ -179,6 +191,14 @@ func Resolve(stored map[string]string) (Config, error) {
 		}
 	}
 	return c, nil
+}
+
+// LinkURL is the address of a service in the browser: link, or else base.
+func LinkURL(link, base string) string {
+	if link != "" {
+		return link
+	}
+	return base
 }
 
 // bytesize reads a size in bytes, also with a unit ("50MB", "1GB", "512KB";

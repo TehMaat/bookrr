@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -58,6 +59,8 @@ type listingItem struct {
 	Locations []listingLocation `json:"locations"`
 	Radarr    *arr.Movie        `json:"radarr"`
 	Sonarr    *arr.Episodes     `json:"sonarr"`
+	// The sizes of its big files on the disk.
+	sizes []int64
 }
 
 type listingOther struct {
@@ -187,7 +190,7 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 		}
 		seen[f.Hash] = true
 		it := listingItem{Hash: t.Hash, Name: t.Name, PersonalRelease: t.PersonalRelease, Size: t.Size,
-			DiskSize: f.Size, Files: f.Files, Check: f.Compare(t.Size), Path: f.Path, Via: f.Via, Missing: f.Missing, Locations: []listingLocation{}}
+			DiskSize: f.Size, Files: f.Files, Check: f.Compare(t.Size), Path: f.Path, Via: f.Via, Missing: f.Missing, Locations: []listingLocation{}, sizes: f.Sizes}
 		if prefix != "" {
 			it.Path = prefix + "/" + f.Path
 		}
@@ -210,11 +213,12 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 	p.Radarr, p.Sonarr = radarr != nil, sonarr != nil
 	if look != nil && p.RadarrError == "" {
 		for i := range p.Items {
-			m, err := look.Find(ctx, p.Items[i].Hash, p.Items[i].Name)
+			m, err := look.Find(ctx, p.Items[i].Hash, p.Items[i].Name, p.Items[i].sizes)
 			if err != nil {
 				p.RadarrError = err.Error()
 				break
 			}
+			linkMovie(svc.Config, m)
 			p.Items[i].Radarr = m
 		}
 	}
@@ -224,6 +228,9 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 			if err != nil {
 				p.SonarrError = err.Error()
 				break
+			}
+			if e != nil && e.Slug != "" {
+				e.URL = config.LinkURL(svc.Config.SonarrLinkURL, svc.Config.SonarrURL) + "/series/" + url.PathEscape(e.Slug)
 			}
 			p.Items[i].Sonarr = e
 		}
@@ -294,7 +301,9 @@ func (s *Server) applyListing(w http.ResponseWriter, r *http.Request) {
 			Hash    string `json:"hash"`
 			Clients bool   `json:"clients"`
 			Radarr  bool   `json:"radarr"`
-			Sonarr  bool   `json:"sonarr"`
+			// The film of Radarr chosen by hand, 0 for the one found.
+			RadarrID int64 `json:"radarrId"`
+			Sonarr   bool  `json:"sonarr"`
 		} `json:"items"`
 		// Delete the files on the clients too: always chosen by the user.
 		DeleteFiles *bool `json:"deleteFiles"`
@@ -366,6 +375,16 @@ func (s *Server) applyListing(w http.ResponseWriter, r *http.Request) {
 				res.add("Radarr/Sonarr", errors.New("skipped: the torrent is still on a client"), "")
 			}
 			continue
+		}
+		if want.Radarr && want.RadarrID > 0 && radarr != nil {
+			m, err := radarr.Movie(ctx, want.RadarrID)
+			if err != nil {
+				res.add("Radarr", err, "")
+				want.Radarr = false
+			} else {
+				it.Radarr = m
+				p.RadarrError = ""
+			}
 		}
 		if want.Radarr {
 			switch m := it.Radarr; {
@@ -447,6 +466,35 @@ func removedMsg(deleteFiles bool) string {
 		return "removed with its files"
 	}
 	return "removed, files kept"
+}
+
+// linkMovie sets the address of the film in Radarr's interface.
+func linkMovie(cfg config.Config, m *arr.Movie) {
+	if m != nil && m.Slug != "" {
+		m.URL = config.LinkURL(cfg.RadarrLinkURL, cfg.RadarrURL) + "/movie/" + url.PathEscape(m.Slug)
+	}
+}
+
+// searchRadarr looks for films in Radarr's library by title, to link one
+// to a torrent by hand: GET /api/radarr/movies?q=barbie.
+func (s *Server) searchRadarr(w http.ResponseWriter, r *http.Request) {
+	cfg := s.current().Config
+	radarr, _ := arrs(cfg)
+	if radarr == nil {
+		writeError(w, http.StatusBadRequest, "Radarr is not configured")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+	defer cancel()
+	ms, err := radarr.Lookup().Search(ctx, r.URL.Query().Get("q"), 20)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	for i := range ms {
+		linkMovie(cfg, &ms[i])
+	}
+	writeJSON(w, 200, map[string]any{"movies": ms})
 }
 
 // clientContents returns the sizes of the files of the torrents on the

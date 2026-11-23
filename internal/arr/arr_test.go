@@ -70,6 +70,9 @@ func TestRadarrFind(t *testing.T) {
 		"GET /api/v3/movie": []any{
 			map[string]any{"id": 9, "title": "Third", "year": 2019, "hasFile": true, "movieFile": map[string]any{"path": "/movies/Third/Third.mkv", "sceneName": "Third.2019.1080p.BluRay-GRP"}},
 			map[string]any{"id": 10, "title": "Fourth", "year": 2018, "hasFile": true, "movieFile": map[string]any{"path": "/movies/Fourth/x.mkv", "originalFilePath": "Fourth.2018.720p-GRP/fourth.mkv"}},
+			// Imported by hand from a file named otherwise: found by its size.
+			map[string]any{"id": 11, "title": "Barbie", "year": 2023, "titleSlug": "barbie-2023", "hasFile": true,
+				"movieFile": map[string]any{"path": "/movies/Barbie (2023)/Barbie (2023) - Remux-2160p.mkv", "size": 67755744256, "originalFilePath": "Barbie-SEG_MainFeature_t01.mkv"}},
 		},
 	}}
 	srv := httptest.NewServer(f)
@@ -77,25 +80,36 @@ func TestRadarrFind(t *testing.T) {
 	l := NewRadarr(srv.URL+"/", "KEY").Lookup()
 	ctx := context.Background()
 
-	m, err := l.Find(ctx, "abc", "Movie.2020.1080p-GRP")
+	m, err := l.Find(ctx, "abc", "Movie.2020.1080p-GRP", nil)
 	if err != nil || m == nil || m.ID != 7 || !m.SameFile || !m.Deletable() || m.Via != "history" {
 		t.Fatalf("abc: %+v %v", m, err)
 	}
-	m, err = l.Find(ctx, "def", "Other.2021.1080p-GRP")
+	m, err = l.Find(ctx, "def", "Other.2021.1080p-GRP", nil)
 	if err != nil || m == nil || m.ID != 8 || m.SameFile || m.Deletable() {
 		t.Fatalf("def: %+v %v", m, err)
 	}
-	m, err = l.Find(ctx, "ghi", "Third.2019.1080p.BluRay-GRP")
+	m, err = l.Find(ctx, "ghi", "Third.2019.1080p.BluRay-GRP", nil)
 	if err != nil || m == nil || m.ID != 9 || m.Via != "name" {
 		t.Fatalf("ghi: %+v %v", m, err)
 	}
-	m, err = l.Find(ctx, "ghi", "Fourth.2018.720p-GRP")
+	m, err = l.Find(ctx, "ghi", "Fourth.2018.720p-GRP", nil)
 	if err != nil || m == nil || m.ID != 10 {
 		t.Fatalf("fourth: %+v %v", m, err)
 	}
-	m, err = l.Find(ctx, "ghi", "Nothing.2000")
+	m, err = l.Find(ctx, "ghi", "Nothing.2000", nil)
 	if err != nil || m != nil {
 		t.Fatalf("nothing: %+v %v", m, err)
+	}
+	m, err = l.Find(ctx, "ghi", "BARBIE.2023.REMUX.2160P", []int64{1 << 30, 67755744256})
+	if err != nil || m == nil || m.ID != 11 || m.Via != "size" || !m.Deletable() || m.Slug != "barbie-2023" || m.FileSize != 67755744256 {
+		t.Fatalf("barbie: %+v %v", m, err)
+	}
+	found, err := l.Search(ctx, "barbie 2023", 10)
+	if err != nil || len(found) != 1 || found[0].ID != 11 {
+		t.Fatalf("search: %+v %v", found, err)
+	}
+	if found, _ := l.Search(ctx, "  ", 10); len(found) != 0 {
+		t.Fatalf("empty search: %+v", found)
 	}
 	n := 0
 	for _, c := range f.calls {
