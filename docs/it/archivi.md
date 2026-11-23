@@ -90,13 +90,19 @@ Vanno bene anche gli elenchi senza dimensioni (`find`, `dir /s /b`, `ls -R`), ma
 
 ![Lettura di un listing](../screenshots/disk-listing.png)
 
-Non cambia nulla finché non confermi. Per ogni **cartella o file con lo stesso nome di un torrent** (come per i bucket S3) vedi:
+Non cambia nulla finché non confermi. Un torrent viene riconosciuto:
 
-- il **controllo della dimensione**: *Complete* (stessa dimensione del torrent), *Incomplete* (più piccola: mancano dati, non si può spuntare), *Larger* (altri file accanto?) o *Size unknown*. All'inizio sono spuntati solo i completi; lo shift-click spunta un intervallo;
+- dal **nome**: una cartella o un file con lo stesso nome del torrent (come per i bucket S3);
+- dai suoi **file**, quando sono stati rinominati, per esempio copiati dalla libreria di Radarr o Sonarr dopo un import con hardlink: un file sul disco con la dimensione esatta in byte di uno dei file del torrent è quel file. bookrr legge i file dei torrent ancora su un client (una volta sola: non cambiano mai); i file sotto i 50 MB (nfo, sample, sottotitoli) non contano. Serve un listing con le dimensioni;
+- **tramite Radarr**, per i film non più su un client: il file del film in Radarr con la stessa dimensione, e il suo torrent dalla cronologia di Radarr.
+
+Per ognuno vedi:
+
+- il **controllo della dimensione**: *Complete* (stessa dimensione del torrent; se riconosciuto dai file, ci sono tutti i file grandi del torrent), *Incomplete* (più piccola: mancano dati, non si può spuntare), *Larger* (altri file accanto?) o *Size unknown*. All'inizio sono spuntati solo i completi; lo shift-click spunta un intervallo;
 - i **client** su cui si trova, se è già archiviato su questo disco;
 - con Radarr, il **film** che ha portato; con Sonarr, gli **episodi**.
 
-Ciò che non ha il nome di nessun torrent è elencato in *Not recognized*. Premendo **Archive**, per ogni torrent spuntato, in quest'ordine:
+Ciò che non contiene nessun torrent è elencato in *Not recognized*. Premendo **Archive**, per ogni torrent spuntato, in quest'ordine:
 
 1. viene registrato come **archiviato sul disco**, con il suo percorso (una segnalazione aperta si chiude);
 2. viene **tolto da tutti i client** su cui si trova, tenendo o cancellando i file: scegli ogni volta, non c'è un default;

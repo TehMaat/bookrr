@@ -93,11 +93,12 @@ func (c *client) Version(ctx context.Context) (string, error) {
 
 // record is an event of the history of downloads.
 type record struct {
-	EventType string            `json:"eventType"`
-	MovieID   int64             `json:"movieId"`
-	SeriesID  int64             `json:"seriesId"`
-	EpisodeID int64             `json:"episodeId"`
-	Data      map[string]string `json:"data"`
+	EventType  string            `json:"eventType"`
+	MovieID    int64             `json:"movieId"`
+	SeriesID   int64             `json:"seriesId"`
+	EpisodeID  int64             `json:"episodeId"`
+	DownloadID string            `json:"downloadId"`
+	Data       map[string]string `json:"data"`
 }
 
 const (

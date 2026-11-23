@@ -90,13 +90,19 @@ Lists without sizes (`find`, `dir /s /b`, `ls -R`) work too, but then bookrr can
 
 ![Reading a listing](../screenshots/disk-listing.png)
 
-Nothing changes until you confirm. For every **folder or file named like a torrent** (as for the S3 buckets) you see:
+Nothing changes until you confirm. A torrent is recognized:
 
-- the **check of the size**: *Complete* (same size as the torrent), *Incomplete* (smaller: data is missing, it can't be ticked), *Larger* (other files beside it?) or *Size unknown*. Only the complete ones are ticked at first; shift-click ticks a range;
+- by its **name**: a folder or file named like the torrent (as for the S3 buckets);
+- by its **files**, when they were renamed, for example copied from the library of Radarr or Sonarr after an import with a hardlink: a file on the disk with the exact size in bytes of one of the torrent's files is that file. bookrr reads the files of the torrents still on a client (once: they never change); the files under 50 MB (nfo, samples, subtitles) don't count. It needs a listing with sizes;
+- **through Radarr**, for the films no longer on a client: the file of the film in Radarr with the same size, and its torrent from Radarr's history.
+
+For each one you see:
+
+- the **check of the size**: *Complete* (same size as the torrent; recognized by its files, every big file of the torrent is there), *Incomplete* (smaller: data is missing, it can't be ticked), *Larger* (other files beside it?) or *Size unknown*. Only the complete ones are ticked at first; shift-click ticks a range;
 - the **clients** it is on, whether it is already archived on this disk;
 - with Radarr, the **film** it brought in; with Sonarr, the **episodes**.
 
-What is not named after any torrent is listed under *Not recognized*. When you press **Archive**, for each torrent ticked, in this order:
+What holds no torrent is listed under *Not recognized*. When you press **Archive**, for each torrent ticked, in this order:
 
 1. it is recorded as **archived on the disk**, with its path (an open alert is closed);
 2. it is **removed from every client** it is on, keeping or deleting the files: you choose every time, there is no default;

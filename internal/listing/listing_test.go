@@ -1,6 +1,7 @@
 package listing
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -143,7 +144,7 @@ func TestParseWithoutSizes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			found, _ := Match(l, names)
+			found, _ := Match(l, names, nil)
 			if len(found) != 2 {
 				t.Fatalf("found %+v (entries %+v)", found, l.Entries)
 			}
@@ -168,7 +169,7 @@ func TestMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found, others := Match(l, names)
+	found, others := Match(l, names, nil)
 	byHash := map[string]Found{}
 	for _, f := range found {
 		byHash[f.Hash] = f
@@ -199,7 +200,7 @@ total 4
 	if err != nil {
 		t.Fatal(err)
 	}
-	found, _ := Match(l, names)
+	found, _ := Match(l, names, nil)
 	if len(found) != 1 {
 		t.Fatalf("found %+v", found)
 	}
@@ -212,5 +213,60 @@ total 4
 func TestEmpty(t *testing.T) {
 	if _, err := Parse("\n  \n"); err != ErrEmpty {
 		t.Fatalf("err %v", err)
+	}
+}
+
+// Files imported by Radarr or Sonarr with a hardlink have Radarr's names:
+// they are found by their sizes.
+func TestMatchByContent(t *testing.T) {
+	const mb = 1 << 20
+	l, err := Parse(fmt.Sprintf(`%d Films/Movie (2020)/Movie (2020) Bluray-1080p.mkv
+%d Films/Movie (2020)/Movie (2020) Bluray-1080p.it.srt
+%d Films/Other (2021)/Other (2021) WEBDL-2160p.mkv
+%d Films/Other (2021)/Third (2019).mkv
+%d Series/Show/Season 01/Show - S01E01.mkv
+%d Series/Show/Season 01/Show - S01E02.mkv
+%d Series/Gap/Season 01/Gap - S01E01.mkv
+%d Movie.2020.1080p.BluRay-GRP/Movie.2020.1080p.BluRay-GRP.mkv
+%d Unknown/thing.mkv
+`, 4000*mb+1, 50000, 9000*mb+7, 3000*mb+3, 700*mb+11, 710*mb+13, 650*mb+17, 4000*mb+1, 123*mb))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := []Content{
+		// Found by name first: not again by content.
+		{Hash: "aaa", Files: []int64{4000*mb + 1, 2000}, Via: "size"},
+		// The movie Radarr renamed, with an nfo and a sample left out.
+		{Hash: "rad", Files: []int64{9000*mb + 7, 1000, 40 * mb}, Via: "size"},
+		// Same size as the copy named like aaa: claimed only outside it.
+		{Hash: "dup", Files: []int64{4000*mb + 1}, Via: "size"},
+		{Hash: "sea", Files: []int64{700*mb + 11, 710*mb + 13, 3000}, Via: "size"},
+		// Two episodes, one on the disk.
+		{Hash: "gap", Files: []int64{650*mb + 17, 660 * mb}, Via: "size"},
+		{Hash: "rdr", Files: []int64{3000*mb + 3}, Via: "radarr"},
+		{Hash: "none", Files: []int64{1 * mb, 999 * mb}, Via: "size"},
+	}
+	found, others := Match(l, names, contents)
+	got := map[string]string{}
+	for _, f := range found {
+		got[f.Hash] = fmt.Sprintf("%s %s %d %s", f.Via, f.Path, f.Files, f.Compare(1))
+	}
+	want := map[string]string{
+		"aaa": "name Movie.2020.1080p.BluRay-GRP 1 larger",
+		"dup": "size Films/Movie (2020) 1 complete",
+		"rad": "size Films/Other (2021)/Other (2021) WEBDL-2160p.mkv 1 complete",
+		"sea": "size Series/Show/Season 01 2 complete",
+		"gap": "size Series/Gap/Season 01 1 incomplete",
+		"rdr": "radarr Films/Other (2021)/Third (2019).mkv 1 complete",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("found\n got %v\nwant %v", got, want)
+	}
+	var paths []string
+	for _, o := range others {
+		paths = append(paths, o.Path)
+	}
+	if !reflect.DeepEqual(paths, []string{"Unknown"}) {
+		t.Errorf("others %v", paths)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -24,6 +25,7 @@ type movie struct {
 }
 
 type movieFile struct {
+	Size             int64  `json:"size"`
 	Path             string `json:"path"`
 	RelativePath     string `json:"relativePath"`
 	SceneName        string `json:"sceneName"`
@@ -109,11 +111,8 @@ func (l *RadarrLookup) Find(ctx context.Context, hash, name string) (*Movie, err
 		}
 		// Deleted from Radarr since: look for it by name.
 	}
-	if !l.loaded {
-		if err := l.r.do(ctx, http.MethodGet, "/api/v3/movie", nil, nil, &l.movies); err != nil {
-			return nil, err
-		}
-		l.loaded = true
+	if err := l.load(ctx); err != nil {
+		return nil, err
 	}
 	for _, m := range l.movies {
 		if m.HasFile && m.File.fromTorrent(name) {
@@ -132,4 +131,59 @@ func (r *Radarr) DeleteMovie(ctx context.Context, id int64) error {
 		return nil
 	}
 	return err
+}
+
+func (l *RadarrLookup) load(ctx context.Context) error {
+	if l.loaded {
+		return nil
+	}
+	if err := l.r.do(ctx, http.MethodGet, "/api/v3/movie", nil, nil, &l.movies); err != nil {
+		return err
+	}
+	l.loaded = true
+	return nil
+}
+
+// Download is the torrent a file of Radarr's library was imported from.
+type Download struct {
+	Hash string // lowercase
+	Size int64  // of the file
+}
+
+// DownloadsBySize finds the torrents of the films whose file has one of the
+// sizes: for the copies of Radarr's files, named as Radarr names them.
+func (l *RadarrLookup) DownloadsBySize(ctx context.Context, sizes map[int64]bool) ([]Download, error) {
+	if err := l.load(ctx); err != nil {
+		return nil, err
+	}
+	var out []Download
+	for _, m := range l.movies {
+		if !m.HasFile || m.File == nil || !sizes[m.File.Size] {
+			continue
+		}
+		var recs []record
+		q := url.Values{"movieId": {strconv.FormatInt(m.ID, 10)}}
+		if err := l.r.do(ctx, http.MethodGet, "/api/v3/history/movie", q, nil, &recs); err != nil {
+			return nil, err
+		}
+		// The import of the file Radarr has now, or else the last import.
+		var hash string
+		for _, r := range recs {
+			id := strings.ToLower(strings.TrimSpace(r.DownloadID))
+			if r.EventType != eventImported || id == "" {
+				continue
+			}
+			if samePath(r.importedPath(), m.File.Path) {
+				hash = id
+				break
+			}
+			if hash == "" {
+				hash = id
+			}
+		}
+		if hash != "" {
+			out = append(out, Download{Hash: hash, Size: m.File.Size})
+		}
+	}
+	return out, nil
 }

@@ -146,6 +146,22 @@ func (c *Client) Torrents(ctx context.Context) ([]Torrent, error) {
 	return ts, nil
 }
 
+// File is a file of a torrent.
+type File struct {
+	Name     string `json:"name"` // path inside the torrent, with its folder
+	Size     int64  `json:"size"`
+	Priority int    `json:"priority"` // 0: not downloaded
+}
+
+// Files lists the files of a torrent.
+func (c *Client) Files(ctx context.Context, hash string) ([]File, error) {
+	var fs []File
+	if err := c.get(ctx, "/api/v2/torrents/files?hash="+url.QueryEscape(hash), &fs); err != nil {
+		return nil, err
+	}
+	return fs, nil
+}
+
 // post performs an authenticated form POST, logging in when needed.
 func (c *Client) post(ctx context.Context, path string, form url.Values) error {
 	_, err := c.postBody(ctx, path, func() (io.Reader, string, error) {
