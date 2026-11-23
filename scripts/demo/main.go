@@ -463,6 +463,17 @@ func (q *qbitFake) handler(client string) http.Handler {
 			q.mu.Lock()
 			defer q.mu.Unlock()
 			json.NewEncoder(w).Encode(q.torrents[client])
+		case "/api/v2/torrents/files":
+			// One file per torrent, as big as the torrent.
+			q.mu.Lock()
+			defer q.mu.Unlock()
+			files := []map[string]any{}
+			for _, t := range q.torrents[client] {
+				if t["hash"] == r.URL.Query().Get("hash") {
+					files = append(files, map[string]any{"name": t["name"].(string) + "/video.mkv", "size": t["size"], "priority": 1})
+				}
+			}
+			json.NewEncoder(w).Encode(files)
 		case "/api/v2/torrents/add":
 			// The .torrent files of the plan: the audio is quick, the video takes its time.
 			f, _, err := r.FormFile("torrents")

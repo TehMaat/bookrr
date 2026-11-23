@@ -62,6 +62,9 @@ type Server struct {
 	mu     sync.RWMutex
 	svc    Services
 	saveMu sync.Mutex // one change of the configuration at a time
+	// The sizes of the files of the torrents ([]int64 by hash), read from
+	// the clients for the disk listings: they never change.
+	torrentFiles sync.Map
 }
 
 func New(cfg config.Config, s *store.Store, sy *syncer.Syncer, buckets *bucket.Scanner, hashes *unit3d.Resolver, history *unit3d.History, missing *gaps.Checker, best *prowlarr.Finder, web fs.FS, version string) *Server {

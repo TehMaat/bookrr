@@ -790,6 +790,10 @@ export type ListingItem = {
   files: number
   check: ListingCheck
   path: string
+  /** How it was recognized: named like the torrent, by the sizes of its files (renamed by Radarr or Sonarr), or by its film's file in Radarr. */
+  via: "name" | "size" | "radarr"
+  /** Recognized by its files: big files of the torrent not on the disk. */
+  missing: number
   /** Already recorded as archived on this disk. */
   archived: boolean
   locations: { clientId: number; clientName: string; savePath: string; progress: number }[]

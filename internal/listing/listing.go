@@ -523,14 +523,33 @@ func clean(es []Entry) []Entry {
 // Found is a torrent found in the listing.
 type Found struct {
 	Hash string
-	// The folder or file named like the torrent, relative to the root.
+	// The folder or file named like the torrent, relative to the root; for
+	// a torrent found by its content, the folder of its files (or the file).
 	Path  string
 	Files int
 	Size  int64
 	// Every file has a size; Err is how far Size can be from the real one.
 	Sized bool
 	Err   int64
+	// How it was found: "name", or the Via of its Content.
+	Via string
+	// Found by content: main files of the torrent not on the disk.
+	Missing int
 }
+
+// Content is what a torrent holds, to find it on the disk when its files
+// were renamed (by Radarr or Sonarr, with a hardlink, or by hand): a file
+// of hundreds of MB has a size in bytes that is practically its own.
+type Content struct {
+	Hash string
+	// Sizes of the files; those under MinContentSize are left out.
+	Files []int64
+	Via   string // "size", "radarr"…
+}
+
+// MinContentSize is the smallest file used to recognize a torrent by its
+// content: nfo, subtitles and samples are often left out of a library.
+const MinContentSize = 50 << 20
 
 // Other is a file or folder of the listing that holds no torrent.
 type Other struct {
@@ -544,11 +563,15 @@ type Other struct {
 type node struct {
 	name     string
 	path     string
+	parent   *node
 	children map[string]*node
+	file     bool
 	files    int
 	size     int64
 	err      int64
 	unsized  int
+	taken    bool // named like a torrent
+	claimed  bool // a file of a torrent found by its content
 	contains *bool
 }
 
@@ -556,7 +579,7 @@ func (n *node) child(name string) *node {
 	if c, ok := n.children[name]; ok {
 		return c
 	}
-	c := &node{name: name, path: join(n.path, name), children: map[string]*node{}}
+	c := &node{name: name, path: join(n.path, name), parent: n, children: map[string]*node{}}
 	n.children[name] = c
 	return c
 }
@@ -570,13 +593,25 @@ func (n *node) sorted() []*node {
 	return out
 }
 
+// under reports whether n is inside a folder named like a torrent.
+func (n *node) under() bool {
+	for p := n; p != nil; p = p.parent {
+		if p.taken {
+			return true
+		}
+	}
+	return false
+}
+
 // Match finds the torrents in the listing: a folder or a file with the
 // torrent's name (as qBittorrent names its content), at any depth. names
 // maps every torrent name, trimmed and lowercased, to its hashes (see
-// store.TorrentNames). What holds no torrent is returned as Other, as high
-// up as possible.
-func Match(l Listing, names map[string][]string) ([]Found, []Other) {
+// store.TorrentNames). The torrents in contents not found by name are then
+// looked for by the sizes of their files. What holds no torrent is
+// returned as Other, as high up as possible.
+func Match(l Listing, names map[string][]string, contents []Content) ([]Found, []Other) {
 	root := &node{children: map[string]*node{}}
+	var files []*node
 	for _, e := range l.Entries {
 		n := root
 		parts := strings.Split(e.Path, "/")
@@ -591,16 +626,87 @@ func Match(l Listing, names map[string][]string) ([]Found, []Other) {
 				}
 			}
 		}
+		if !e.Dir {
+			n.file = true
+			files = append(files, n)
+		}
 	}
 	hashes := func(n *node) []string {
 		return names[strings.ToLower(strings.TrimSpace(n.name))]
 	}
+
+	// By name.
+	var found []Found
+	byName := map[string]bool{}
+	var walkNames func(n *node)
+	walkNames = func(n *node) {
+		if hs := hashes(n); len(hs) > 0 {
+			n.taken = true
+			for _, h := range hs {
+				byName[h] = true
+				found = append(found, Found{Hash: h, Path: n.path, Files: n.files, Size: n.size, Sized: n.files > 0 && n.unsized == 0, Err: n.err, Via: "name"})
+			}
+			return
+		}
+		for _, c := range n.sorted() {
+			walkNames(c)
+		}
+	}
+	walkNames(root)
+
+	// By content: the files outside the folders found by name, by exact size.
+	bySize := map[int64][]*node{}
+	for _, f := range files {
+		if f.unsized == 0 && f.err == 0 && f.size >= MinContentSize && !f.under() {
+			bySize[f.size] = append(bySize[f.size], f)
+		}
+	}
+	for _, c := range contents {
+		if byName[c.Hash] {
+			continue
+		}
+		var main []int64
+		for _, s := range c.Files {
+			if s >= MinContentSize {
+				main = append(main, s)
+			}
+		}
+		used := map[*node]bool{}
+		var got []*node
+		for _, s := range main {
+			for _, f := range bySize[s] {
+				if !used[f] {
+					used[f] = true
+					got = append(got, f)
+					break
+				}
+			}
+		}
+		if len(got) == 0 {
+			continue
+		}
+		byName[c.Hash] = true // found once
+		f := Found{Hash: c.Hash, Files: len(got), Sized: true, Via: c.Via, Missing: len(main) - len(got)}
+		for _, g := range got {
+			g.claimed = true
+			f.Size += g.size
+		}
+		var dir *node
+		f.Path, dir = contentPath(got, used)
+		if dir != nil {
+			// Its subtitles and the like go with it.
+			dir.claimed = true
+		}
+		found = append(found, f)
+	}
+
+	// What holds no torrent.
 	var contains func(n *node) bool
 	contains = func(n *node) bool {
 		if n.contains != nil {
 			return *n.contains
 		}
-		v := len(hashes(n)) > 0
+		v := n.taken || n.claimed
 		for _, c := range n.children {
 			if contains(c) {
 				v = true
@@ -609,14 +715,10 @@ func Match(l Listing, names map[string][]string) ([]Found, []Other) {
 		n.contains = &v
 		return v
 	}
-	var found []Found
 	var others []Other
 	var walk func(n *node)
 	walk = func(n *node) {
-		if hs := hashes(n); len(hs) > 0 {
-			for _, h := range hs {
-				found = append(found, Found{Hash: h, Path: n.path, Files: n.files, Size: n.size, Sized: n.files > 0 && n.unsized == 0, Err: n.err})
-			}
+		if n.taken || n.claimed {
 			return
 		}
 		if !contains(n) {
@@ -633,6 +735,52 @@ func Match(l Listing, names map[string][]string) ([]Found, []Other) {
 	return found, others
 }
 
+// contentPath is where a torrent found by its files is on the disk: the
+// folder that holds them, unless that folder holds other big files too
+// (a folder of many films), then the file itself when it is one.
+func contentPath(got []*node, mine map[*node]bool) (string, *node) {
+	dir := got[0].parent
+	for _, g := range got[1:] {
+		for !isAncestor(dir, g) {
+			dir = dir.parent
+		}
+	}
+	if dir == nil || dir.parent == nil {
+		if len(got) == 1 {
+			return got[0].path, nil
+		}
+		return "", nil
+	}
+	var others func(n *node) bool
+	others = func(n *node) bool {
+		if n.file {
+			return !mine[n] && n.size >= MinContentSize
+		}
+		for _, c := range n.children {
+			if others(c) {
+				return true
+			}
+		}
+		return false
+	}
+	if others(dir) {
+		if len(got) == 1 {
+			return got[0].path, nil
+		}
+		return dir.path, nil
+	}
+	return dir.path, dir
+}
+
+func isAncestor(a, n *node) bool {
+	for p := n; p != nil; p = p.parent {
+		if p == a {
+			return true
+		}
+	}
+	return false
+}
+
 // Check compares the size on the disk with the torrent's.
 const (
 	CheckComplete   = "complete"   // same size
@@ -643,6 +791,13 @@ const (
 
 // Compare tells how the copy found stands against a torrent of size bytes.
 func (f Found) Compare(size int64) string {
+	if f.Via != "name" && f.Via != "" {
+		// Found by its files: the extras (nfo, samples) are often left out.
+		if f.Missing > 0 {
+			return CheckIncomplete
+		}
+		return CheckComplete
+	}
 	if !f.Sized || size <= 0 {
 		return CheckUnknown
 	}

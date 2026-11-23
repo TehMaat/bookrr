@@ -276,7 +276,7 @@ export function DiskListingDialog({ disk, onClose }: { disk: Disk | null; onClos
             {preview.unmatched.length > 0 && (
               <details className="text-sm">
                 <summary className="text-muted-foreground cursor-pointer">
-                  Not recognized ({preview.unmatched.length}): not named after any torrent bookrr knows
+                  Not recognized ({preview.unmatched.length}): neither named like a torrent bookrr knows nor holding its files
                 </summary>
                 <ul className="mt-2 grid gap-1">
                   {preview.unmatched.map((o) => (
@@ -401,7 +401,16 @@ function Row({ item: it, checked, onToggle }: { item: ListingItem; checked: bool
       <div className="grid min-w-0 flex-1 gap-1">
         <div className="flex flex-wrap items-start gap-2">
           <span className="min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]">{it.name}</span>
-          <Badge variant={c.variant} title={c.hint}>
+          <Badge
+            variant={c.variant}
+            title={
+              it.via === "name"
+                ? c.hint
+                : it.check === "complete"
+                  ? "Every big file of the torrent is on the disk, with its exact size (nfo and samples don't count)."
+                  : "Some big files of the torrent are not on the disk. It can't be archived."
+            }
+          >
             {c.label}
           </Badge>
         </div>
@@ -410,8 +419,16 @@ function Row({ item: it, checked, onToggle }: { item: ListingItem; checked: bool
           <span className="flex min-w-0 items-center gap-1 font-mono break-all">
             <FolderOpen className="size-3.5 shrink-0" /> {it.path}
           </span>
+          {it.via !== "name" && (
+            <span className="text-foreground" title="The names on the disk are not the torrent's (renamed by Radarr or Sonarr): it was recognized by the exact sizes of its files.">
+              {it.via === "radarr" ? "recognized through Radarr" : "recognized by its files"}
+              {it.missing > 0 && <span className="text-destructive"> · {plural(it.missing, "file")} of the torrent not on the disk</span>}
+            </span>
+          )}
           <span className="tabular-nums">
-            {it.check === "unknown" || it.diskSize === it.size
+            {it.via !== "name"
+              ? formatBytes(it.diskSize)
+              : it.check === "unknown" || it.diskSize === it.size
               ? formatBytes(it.size || it.diskSize)
               : `${formatBytes(it.diskSize)} on the disk · ${formatBytes(it.size)} the torrent`}
           </span>

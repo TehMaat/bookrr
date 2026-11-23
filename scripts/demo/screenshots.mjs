@@ -77,7 +77,8 @@ await shoot("mobile", "disks/1", { width: 390, height: 844 })
 const gb = 2 ** 30
 const listing = [
   [61 * gb, "Films/Starfall.Courier.2019.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC.TrueHD.7.1.ITA.ENG-NOVA/Starfall.Courier.2019.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC.TrueHD.7.1.ITA.ENG-NOVA.mkv"],
-  [29 * gb, "Films/The.Quiet.Orchard.2016.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1.ITA.ENG-NOVA/The.Quiet.Orchard.2016.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1.ITA.ENG-NOVA.mkv"],
+  // Copied from Radarr's library: renamed, recognized by its size.
+  [29 * gb, "Films/The Quiet Orchard (2016)/The Quiet Orchard (2016) Remux-1080p.mkv"],
   [7 * gb, "Films/Paper.Lanterns.2021.1080p.AMZN.WEB-DL.DDP5.1.H.264.ITA.ENG-NOVA/Paper.Lanterns.2021.1080p.AMZN.WEB-DL.DDP5.1.H.264.ITA.ENG-NOVA.mkv"],
   [40 * gb, "Series/Harbor.Lights.S01.2160p.ATVP.WEB-DL.DDP5.1.Atmos.DV.H.265.ITA.ENG-NOVA/part1.mkv"],
   [21 * gb, "Series/Velvet.Static.S01.1080p.WEB-DL.DDP5.1.H.264.ITA.ENG-NOVA/season.mkv"],

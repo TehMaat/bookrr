@@ -47,6 +47,12 @@ type listingItem struct {
 	Check string `json:"check"`
 	// Where it is on the disk, as recorded in the archive.
 	Path string `json:"path"`
+	// How it was recognized: "name" (a folder or file named like it),
+	// "size" (its files, by size: renamed by Radarr or Sonarr) or "radarr"
+	// (the file of its film in Radarr, by size).
+	Via string `json:"via"`
+	// Recognized by its files: big files of the torrent not on the disk.
+	Missing int `json:"missing"`
 	// Already recorded as archived on this disk.
 	Archived  bool              `json:"archived"`
 	Locations []listingLocation `json:"locations"`
@@ -129,7 +135,6 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 	if err != nil {
 		return p, err
 	}
-	found, others := listing.Match(l, names)
 	ts, err := s.store.ListTorrents(ctx)
 	if err != nil {
 		return p, err
@@ -138,6 +143,41 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 	for _, t := range ts {
 		byHash[t.Hash] = t
 	}
+	svc := s.current()
+	radarr, sonarr := arrs(svc.Config)
+	var look *arr.RadarrLookup
+	if radarr != nil {
+		look = radarr.Lookup()
+	}
+	// The torrents not named on the disk are looked for by the sizes of
+	// their files: Radarr and Sonarr rename what they import.
+	byName, _ := listing.Match(l, names, nil)
+	named := map[string]bool{}
+	for _, f := range byName {
+		named[f.Hash] = true
+	}
+	sizes := map[int64]bool{}
+	for _, e := range l.Entries {
+		if !e.Dir && e.Sized && e.Err == 0 && e.Size >= listing.MinContentSize {
+			sizes[e.Size] = true
+		}
+	}
+	var contents []listing.Content
+	if len(sizes) > 0 {
+		contents = s.clientContents(ctx, svc, ts, named, sizes)
+		if look != nil {
+			ds, err := look.DownloadsBySize(ctx, sizes)
+			if err != nil {
+				p.RadarrError = err.Error()
+			}
+			for _, d := range ds {
+				if _, ok := byHash[d.Hash]; ok && !named[d.Hash] {
+					contents = append(contents, listing.Content{Hash: d.Hash, Files: []int64{d.Size}, Via: "radarr"})
+				}
+			}
+		}
+	}
+	found, others := listing.Match(l, names, contents)
 	prefix := strings.Trim(strings.ReplaceAll(strings.TrimSpace(in.Prefix), "\\", "/"), "/")
 	seen := map[string]bool{}
 	for _, f := range found {
@@ -147,7 +187,7 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 		}
 		seen[f.Hash] = true
 		it := listingItem{Hash: t.Hash, Name: t.Name, PersonalRelease: t.PersonalRelease, Size: t.Size,
-			DiskSize: f.Size, Files: f.Files, Check: f.Compare(t.Size), Path: f.Path, Locations: []listingLocation{}}
+			DiskSize: f.Size, Files: f.Files, Check: f.Compare(t.Size), Path: f.Path, Via: f.Via, Missing: f.Missing, Locations: []listingLocation{}}
 		if prefix != "" {
 			it.Path = prefix + "/" + f.Path
 		}
@@ -167,10 +207,8 @@ func (s *Server) analyzeListing(ctx context.Context, d store.Disk, in listingReq
 		p.Unmatched = append(p.Unmatched, listingOther{Path: o.Path, Name: o.Name, Files: o.Files, Size: o.Size, Sized: o.Sized})
 	}
 
-	radarr, sonarr := arrs(s.current().Config)
 	p.Radarr, p.Sonarr = radarr != nil, sonarr != nil
-	if radarr != nil {
-		look := radarr.Lookup()
+	if look != nil && p.RadarrError == "" {
 		for i := range p.Items {
 			m, err := look.Find(ctx, p.Items[i].Hash, p.Items[i].Name)
 			if err != nil {
@@ -409,6 +447,63 @@ func removedMsg(deleteFiles bool) string {
 		return "removed with its files"
 	}
 	return "removed, files kept"
+}
+
+// clientContents returns the sizes of the files of the torrents on the
+// clients that are not in named and could hold a file of one of the sizes.
+// The files of a torrent never change: they are read once.
+func (s *Server) clientContents(ctx context.Context, svc Services, ts []store.Torrent, named map[string]bool, sizes map[int64]bool) []listing.Content {
+	if svc.Syncer == nil {
+		return nil
+	}
+	smallest := int64(-1)
+	for n := range sizes {
+		if smallest < 0 || n < smallest {
+			smallest = n
+		}
+	}
+	clients := map[int64]*store.Client{}
+	var out []listing.Content
+	for _, t := range ts {
+		if named[t.Hash] || len(t.Locations) == 0 || (t.Size > 0 && t.Size < smallest) {
+			continue
+		}
+		files, ok := s.torrentFiles.Load(t.Hash)
+		if !ok {
+			for _, loc := range t.Locations {
+				c, seen := clients[loc.ClientID]
+				if !seen {
+					if cl, err := s.store.GetClient(ctx, loc.ClientID); err == nil {
+						c = &cl
+					}
+					clients[loc.ClientID] = c
+				}
+				if c == nil {
+					continue
+				}
+				fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				fs, err := svc.Syncer.Qbit(*c).Files(fctx, t.Hash)
+				cancel()
+				if err != nil {
+					slog.Debug("files of the torrent not read", "hash", t.Hash, "client", c.Name, "err", err)
+					continue
+				}
+				var sz []int64
+				for _, f := range fs {
+					if f.Priority > 0 {
+						sz = append(sz, f.Size)
+					}
+				}
+				s.torrentFiles.Store(t.Hash, sz)
+				files, ok = sz, true
+				break
+			}
+		}
+		if ok {
+			out = append(out, listing.Content{Hash: t.Hash, Files: files.([]int64), Via: "size"})
+		}
+	}
+	return out
 }
 
 // removeTorrent deletes the torrent from a client and forgets it is there.
