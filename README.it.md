@@ -18,7 +18,7 @@ L'inventario dei tuoi torrent: **dove sono** (su quale client qBittorrent, su qu
 - 📋 **Un solo elenco** di tutti i torrent di uno o più client qBittorrent, con ricerca e **filtri su ogni colonna**.
 - 🧬 **Duplicati**: lo stesso torrent su più client, dove è ancora in download, e la rimozione da un client (con o senza i file) da bookrr.
 - 🔔 **Release rimosse**: quando un torrent con il tag `Personal Release` sparisce da tutti i client, bookrr ti chiede **dove l'hai spostato** (disco, adottatore, eliminato, altro). Anche via webhook.
-- 💽 **Archivi offline**: dischi con numero di serie, modello, capacità e posizione, **dati SMART** incollati da `smartctl` o CrystalDiskInfo e un **QR code** da attaccare a ogni disco che apre l'elenco dei suoi torrent.
+- 💽 **Archivi offline**: dischi con numero di serie, modello, capacità e posizione, **dati SMART** incollati da `smartctl` o CrystalDiskInfo e un **QR code** da attaccare a ogni disco che apre l'elenco dei suoi torrent. Incolla il **listing di un disco** (`ls`, `find`, `dir`, `Get-ChildItem`): bookrr trova i torrent che ci sono, controlla le dimensioni e li toglie dal client giusto e da **Radarr** e **Sonarr**.
 - ☁️ **Archivi su cloud S3** (Scaleway e servizi compatibili), in **sola lettura**: bookrr riconosce da solo cosa hai spostato nel bucket.
 - 🤝 **Adottatori**: le persone che hanno adottato le tue release e continuano a condividerle.
 - 📥 **Import da CSV/Excel** dei torrent già archiviati.
@@ -39,6 +39,7 @@ flowchart LR
     QB[Client qBittorrent]
     S3[(Bucket S3)]
     PR[Prowlarr]
+    AR[Radarr e Sonarr]
   end
   subgraph web[Servizi online]
     U3[Tracker UNIT3D]
@@ -51,6 +52,7 @@ flowchart LR
   TM -- stagioni e saghe, ogni notte --> B
   MD -- collezioni, ogni notte --> B
   PR -- versioni migliori, ogni giorno --> B
+  B -- film ed episodi archiviati --> AR
   B[bookrr] --> DB[(SQLite in ./data)]
   B --> UI[Interfaccia web e API REST]
   WH[Script, qbit_manage, n8n…] -- webhook di rimozione --> B
@@ -136,6 +138,8 @@ Quasi tutte le opzioni si impostano da **Settings** nell'interfaccia e si applic
 | `BOOKRR_MISSING_CHECK_AT` | `04:00` | Ora del controllo notturno dei mancanti (ora locale, vedi `TZ`). |
 | `BOOKRR_PROWLARR_URL` / `BOOKRR_PROWLARR_API_KEY` | — | Indirizzo di [Prowlarr](https://prowlarr.com) (es. `http://prowlarr:9696`) e la sua API key (Settings → General): con il tracker, risoluzione massima e ricerche del piano. |
 | `BOOKRR_PROWLARR_RECHECK` | `7d` | Ogni quanto cercare di nuovo ogni film (minimo `1d`; anche in ore, es. `36h`). |
+| `BOOKRR_RADARR_URL` / `BOOKRR_RADARR_API_KEY` | — | Indirizzo di [Radarr](https://radarr.video) (es. `http://radarr:7878`) e la sua API key: i film archiviati dal listing di un disco vengono eliminati lì. |
+| `BOOKRR_SONARR_URL` / `BOOKRR_SONARR_API_KEY` | — | Indirizzo di [Sonarr](https://sonarr.tv) (es. `http://sonarr:8989`) e la sua API key: gli episodi archiviati dal listing di un disco vengono eliminati lì. |
 | `BOOKRR_LOG_RETENTION` | `30d` | Per quanti giorni tenere i file di log (minimo `1d`, `0` = per sempre). |
 | `BOOKRR_LOG_MAX_SIZE` | `50MB` | Dimensione massima di un file di log; oltre, il giorno prosegue in un file nuovo (minimo `1MB`, `0` = senza limite). |
 | `BOOKRR_LOG_LEVEL` | `info` | Livello minimo scritto: `debug`, `info`, `warn` o `error`. |
@@ -153,7 +157,7 @@ Quasi tutte le opzioni si impostano da **Settings** nell'interfaccia e si applic
 | Guida | |
 |---|---|
 | [Client, duplicati e segnalazioni](docs/it/client-e-segnalazioni.md) | sincronizzazione, release rimosse, spostamenti e adozioni, webhook di rimozione |
-| [Archivi](docs/it/archivi.md) | dischi e QR code, dati SMART, bucket S3, import CSV |
+| [Archivi](docs/it/archivi.md) | dischi e QR code, dati SMART, bucket S3, listing di un disco con Radarr e Sonarr, import CSV |
 | [Tracker](docs/it/tracker.md) | ricerca degli hash, storico release, release archiviabili |
 | [Risoluzione massima e piano release](docs/it/prowlarr-e-piano.md) | ricerche con Prowlarr |
 | [Stagioni e film mancanti](docs/it/mancanti.md) | serie, saghe, collezioni, qualità minima, gruppi bannati |

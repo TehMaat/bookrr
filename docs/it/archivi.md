@@ -76,6 +76,37 @@ Dopo il salvataggio, ogni ora (`BOOKRR_S3_SCAN_INTERVAL`) o con *Read the bucket
 
 Gli spostamenti trovati nel bucket si aggiornano da soli e non si cancellano a mano; se registri a mano lo stesso torrent sullo stesso archivio vale la tua registrazione. Cambiando bucket, endpoint o cartella, ciò che era stato trovato nel vecchio bucket viene dimenticato senza segnalazioni. Un bucket non raggiungibile non cambia nulla: l'errore compare sulla scheda dell'archivio.
 
+## Leggere il listing di un disco
+
+Quando sposti a mano dei torrent su un disco, bookrr li può trovare lì e toglierli dai client, da Radarr e da Sonarr senza errori. Nella pagina del disco (o con l'icona 🔍 sulla sua scheda) scegli **Read a listing** e incolla l'elenco dei file del disco stampato sul computer a cui è collegato:
+
+| Sistema | Comando |
+|---|---|
+| Linux | `find /mnt/disco -type f -printf '%s %P\n'` (il migliore), `ls -lR /mnt/disco` |
+| macOS | `ls -lR /Volumes/Disco` |
+| Windows | `dir /s D:\` oppure, in PowerShell, `Get-ChildItem -Recurse D:\` |
+
+Vanno bene anche gli elenchi senza dimensioni (`find`, `dir /s /b`, `ls -R`), ma allora bookrr non può dire se una copia è completa. Le dimensioni di `ls -lh` sono confrontate con l'arrotondamento che hanno. La *Folder on the disk* facoltativa viene messa davanti ai percorsi trovati, quando hai elencato una cartella del disco e non tutto il disco.
+
+![Lettura di un listing](../screenshots/disk-listing.png)
+
+Non cambia nulla finché non confermi. Per ogni **cartella o file con lo stesso nome di un torrent** (come per i bucket S3) vedi:
+
+- il **controllo della dimensione**: *Complete* (stessa dimensione del torrent), *Incomplete* (più piccola: mancano dati, non si può spuntare), *Larger* (altri file accanto?) o *Size unknown*. All'inizio sono spuntati solo i completi; lo shift-click spunta un intervallo;
+- i **client** su cui si trova, se è già archiviato su questo disco;
+- con Radarr, il **film** che ha portato; con Sonarr, gli **episodi**.
+
+Ciò che non ha il nome di nessun torrent è elencato in *Not recognized*. Premendo **Archive**, per ogni torrent spuntato, in quest'ordine:
+
+1. viene registrato come **archiviato sul disco**, con il suo percorso (una segnalazione aperta si chiude);
+2. viene **tolto da tutti i client** su cui si trova, tenendo o cancellando i file: scegli ogni volta, non c'è un default;
+3. **Radarr**: il film viene eliminato con i suoi file, senza aggiungerlo alle esclusioni di import. Se ora Radarr ha un altro file del film (aggiornato nel frattempo), il film resta com'è;
+4. **Sonarr**: i file degli episodi arrivati dal torrent vengono cancellati e quegli episodi non sono più monitorati, così Sonarr non li riscarica; quando della serie non resta nessun file, la serie viene eliminata. Gli episodi aggiornati nel frattempo restano come sono.
+
+Se la rimozione da un client fallisce, per quel torrent Radarr e Sonarr non vengono toccati. Alla fine un riepilogo mostra cosa è stato fatto per ogni torrent. Il listing viene riletto quando confermi, quindi un torrent con la copia incompleta non viene mai toccato.
+
+Il film o gli episodi si trovano con la **cronologia di Radarr e Sonarr**, dove il download di un torrent di qBittorrent ha il suo hash; Radarr guarda anche il nome del file del film (`sceneName`, percorso originale) quando la cronologia non lo ha più. Radarr e Sonarr si impostano in **Settings → Radarr / Sonarr** (indirizzo e API key, da *Settings → General* di ognuno) o con `BOOKRR_RADARR_URL`, `BOOKRR_RADARR_API_KEY`, `BOOKRR_SONARR_URL` e `BOOKRR_SONARR_API_KEY`.
+
 ## Import da CSV
 
 In **Torrents → Import** carichi (o incolli) un file CSV con molti torrent già spostati su disco. Separatore `;`, `,` o tabulazione, prima riga con le intestazioni (c'è un modello da scaricare):

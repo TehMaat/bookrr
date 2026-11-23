@@ -76,6 +76,37 @@ After saving, every hour (`BOOKRR_S3_SCAN_INTERVAL`) or with *Read the bucket*:
 
 The moves found in the bucket update by themselves and can't be deleted by hand; if you record the same torrent on the same archive by hand, your record wins. Changing bucket, endpoint or folder forgets what was found in the old bucket, without alerts. An unreachable bucket changes nothing: the error shows on the archive's card.
 
+## Reading a disk listing
+
+When you move torrents to a disk by hand, bookrr can find them on it for you and take them off the clients, Radarr and Sonarr, without mistakes. On the disk's page (or with the 🔍 icon on its card) choose **Read a listing**, then paste the list of the disk's files printed on the computer it is plugged into:
+
+| System | Command |
+|---|---|
+| Linux | `find /mnt/disk -type f -printf '%s %P\n'` (best), `ls -lR /mnt/disk` |
+| macOS | `ls -lR /Volumes/Disk` |
+| Windows | `dir /s D:\` or, in PowerShell, `Get-ChildItem -Recurse D:\` |
+
+Lists without sizes (`find`, `dir /s /b`, `ls -R`) work too, but then bookrr can't tell whether a copy is complete. `ls -lh` sizes are compared with the rounding they have. The optional *Folder on the disk* is put before the paths found, when you listed one folder of the disk rather than all of it.
+
+![Reading a listing](../screenshots/disk-listing.png)
+
+Nothing changes until you confirm. For every **folder or file named like a torrent** (as for the S3 buckets) you see:
+
+- the **check of the size**: *Complete* (same size as the torrent), *Incomplete* (smaller: data is missing, it can't be ticked), *Larger* (other files beside it?) or *Size unknown*. Only the complete ones are ticked at first; shift-click ticks a range;
+- the **clients** it is on, whether it is already archived on this disk;
+- with Radarr, the **film** it brought in; with Sonarr, the **episodes**.
+
+What is not named after any torrent is listed under *Not recognized*. When you press **Archive**, for each torrent ticked, in this order:
+
+1. it is recorded as **archived on the disk**, with its path (an open alert is closed);
+2. it is **removed from every client** it is on, keeping or deleting the files: you choose every time, there is no default;
+3. **Radarr**: the film is deleted with its files, without adding it to the import exclusions. If Radarr has another file of the film now (upgraded since), the film is left as it is;
+4. **Sonarr**: the episode files that came from the torrent are deleted and those episodes are no longer monitored, so Sonarr doesn't download them again; when no file of the series is left, the series is deleted. Episodes upgraded since are left as they are.
+
+If the removal from a client fails, Radarr and Sonarr are not touched for that torrent. At the end a summary shows what was done for each torrent. The listing is read again when you confirm, so a torrent whose copy is incomplete is never touched.
+
+The film or the episodes are found through the **history of Radarr and Sonarr**, where the download of a qBittorrent torrent has its hash; Radarr also looks at the name of the film's file (`sceneName`, original path) when the history no longer has it. Radarr and Sonarr are set in **Settings → Radarr / Sonarr** (address and API key, from *Settings → General* of each), or with `BOOKRR_RADARR_URL`, `BOOKRR_RADARR_API_KEY`, `BOOKRR_SONARR_URL` and `BOOKRR_SONARR_API_KEY`.
+
 ## CSV import
 
 In **Torrents → Import** you load (or paste) a CSV file with many torrents already moved to disk. Separator `;`, `,` or tab, first row with the headers (there is a template to download):

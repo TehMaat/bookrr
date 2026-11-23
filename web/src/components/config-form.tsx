@@ -18,6 +18,10 @@ const tests: Record<ConfigGroup, { service: ConfigService; label: string }[]> = 
     { service: "mdblist", label: "Test MDBList" },
   ],
   prowlarr: [{ service: "prowlarr", label: "Test Prowlarr" }],
+  arr: [
+    { service: "radarr", label: "Test Radarr" },
+    { service: "sonarr", label: "Test Sonarr" },
+  ],
 }
 
 /** What the form holds for an option: the value typed and, for a secret, whether it is to be removed. */

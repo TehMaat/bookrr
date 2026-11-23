@@ -12,7 +12,7 @@ Installazione e configurazione sono nel [README](../../README.it.md#installazion
 | Guida | |
 |---|---|
 | [Client, duplicati e segnalazioni](client-e-segnalazioni.md) | sincronizzazione, duplicati, release rimosse, spostamenti e adozioni, adottatori, webhook di rimozione |
-| [Archivi](archivi.md) | dischi e QR code, dati SMART, archivi su cloud S3, import da CSV |
+| [Archivi](archivi.md) | dischi e QR code, dati SMART, archivi su cloud S3, lettura del listing di un disco (con Radarr e Sonarr), import da CSV |
 | [Tracker](tracker.md) | ricerca degli hash su UNIT3D, storico release, release archiviabili |
 | [Risoluzione massima e piano release](prowlarr-e-piano.md) | la versione migliore che esiste dei tuoi film, con Prowlarr, e i film da rilasciare |
 | [Stagioni e film mancanti](mancanti.md) | serie, saghe, collezioni, viste, qualità minima, scelte, gruppi bannati |

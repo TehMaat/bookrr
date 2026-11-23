@@ -22,6 +22,7 @@ const (
 	GroupUnit3D   = "unit3d"
 	GroupMissing  = "missing"
 	GroupProwlarr = "prowlarr"
+	GroupArr      = "arr"
 )
 
 var Options = []Option{
@@ -58,6 +59,15 @@ var Options = []Option{
 		Help: "In Prowlarr: Settings → General → API Key."},
 	{Key: "BOOKRR_PROWLARR_RECHECK", Group: GroupProwlarr, Label: "New search of each film", Default: "7d",
 		Help: "How often to search each film again (minimum 1d; hours work too, e.g. 36h)."},
+
+	{Key: "BOOKRR_RADARR_URL", Group: GroupArr, Label: "Radarr address",
+		Help: "E.g. http://radarr:7878: when you archive films on a disk from its listing, bookrr deletes them from Radarr too."},
+	{Key: "BOOKRR_RADARR_API_KEY", Group: GroupArr, Label: "Radarr API key", Secret: true,
+		Help: "In Radarr: Settings → General → API Key."},
+	{Key: "BOOKRR_SONARR_URL", Group: GroupArr, Label: "Sonarr address",
+		Help: "E.g. http://sonarr:8989: when you archive seasons on a disk from its listing, bookrr deletes their episodes from Sonarr too."},
+	{Key: "BOOKRR_SONARR_API_KEY", Group: GroupArr, Label: "Sonarr API key", Secret: true,
+		Help: "In Sonarr: Settings → General → API Key."},
 }
 
 // IsOption reports whether an environment variable can be set from the UI.

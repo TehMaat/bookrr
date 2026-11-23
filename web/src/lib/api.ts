@@ -717,7 +717,7 @@ export type Settings = {
 }
 
 /** Group of the options of the configuration, as shown in the settings. */
-export type ConfigGroup = "general" | "unit3d" | "missing" | "prowlarr"
+export type ConfigGroup = "general" | "unit3d" | "missing" | "prowlarr" | "arr"
 
 /** An option of the configuration that can be set from the web UI, unless its environment variable is set. */
 export type ConfigOption = {
@@ -740,13 +740,84 @@ export type ConfigOption = {
 export type ConfigValues = Record<string, string | null>
 
 /** Services whose connection can be tried from the settings. */
-export type ConfigService = "unit3d" | "tmdb" | "mdblist" | "prowlarr"
+export type ConfigService = "unit3d" | "tmdb" | "mdblist" | "prowlarr" | "radarr" | "sonarr"
 
 export type SyncState = {
   running: boolean
   lastRunAt: string | null
   lastResult: string
   nextRunAt: string | null
+}
+
+/** How the copy on the disk stands against the torrent: same size, smaller, larger, or no size to compare. */
+export type ListingCheck = "complete" | "incomplete" | "larger" | "unknown"
+
+/** The film of Radarr a torrent brought in. */
+export type ArrMovie = {
+  id: number
+  title: string
+  year: number
+  hasFile: boolean
+  /** The file Radarr has now is the one imported from the torrent (false when upgraded since). */
+  sameFile: boolean
+  via: "history" | "name"
+}
+
+/** The episodes of a series of Sonarr a torrent brought in. */
+export type ArrEpisodes = {
+  seriesId: number
+  title: string
+  year: number
+  seasons: number[]
+  episodes: number
+  /** Episode files of the torrent Sonarr has now: deleted. */
+  files: number[]
+  /** Episodes no longer monitored. */
+  unmonitor: number[]
+  /** Episodes with another file now: left as they are. */
+  upgraded: number
+  /** Episode files of the whole series. */
+  seriesFiles: number
+}
+
+/** A torrent found in the listing of a disk. */
+export type ListingItem = {
+  hash: string
+  name: string
+  personalRelease: boolean
+  size: number
+  diskSize: number
+  files: number
+  check: ListingCheck
+  path: string
+  /** Already recorded as archived on this disk. */
+  archived: boolean
+  locations: { clientId: number; clientName: string; savePath: string; progress: number }[]
+  radarr: ArrMovie | null
+  sonarr: ArrEpisodes | null
+}
+
+export type ListingPreview = {
+  format: string
+  root: string
+  files: number
+  size: number
+  /** Every file has a size in the listing. */
+  sized: boolean
+  items: ListingItem[]
+  unmatched: { path: string; name: string; files: number; size: number; sized: boolean }[]
+  radarr: boolean
+  sonarr: boolean
+  radarrError: string
+  sonarrError: string
+}
+
+export type ListingApplyItem = { hash: string; clients: boolean; radarr: boolean; sonarr: boolean }
+
+export type ListingResult = {
+  hash: string
+  name: string
+  steps: { what: string; ok: boolean; message: string }[]
 }
 
 export type ArchiveInput = { diskId: number | null; path: string; notes: string }
@@ -1000,6 +1071,12 @@ export const api = {
   testS3: (b: S3Input & { id?: number }) =>
     request<{ ok: boolean; error?: string; objects?: number; more?: boolean }>("POST", "/api/disks/test-s3", b),
   scanDisk: (id: number) => request<ScanResult>("POST", `/api/disks/${id}/scan`),
+  /** Finds the torrents in the listing of a disk (ls, find, dir, Get-ChildItem): nothing is changed. */
+  previewListing: (id: number, listing: string, prefix: string) =>
+    request<ListingPreview>("POST", `/api/disks/${id}/listing`, { listing, prefix }),
+  /** Archives the torrents chosen on the disk, then removes them from the clients, Radarr and Sonarr. */
+  applyListing: (id: number, listing: string, prefix: string, items: ListingApplyItem[], deleteFiles: boolean | null) =>
+    request<{ results: ListingResult[] }>("POST", `/api/disks/${id}/listing/apply`, { listing, prefix, items, deleteFiles }),
   bucketEntries: (id: number) => request<BucketEntry[]>("GET", `/api/disks/${id}/bucket-entries`),
   importSmart: (report: string, t: SmartTarget = {}) => {
     const q = new URLSearchParams()

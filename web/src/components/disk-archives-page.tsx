@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react"
-import { ArrowLeft, Cloud, FileQuestion, FolderOpen, HardDrive, MapPin, Plus, QrCode, RefreshCw, Search } from "lucide-react"
+import { ArrowLeft, Cloud, FileQuestion, FolderOpen, HardDrive, ListTree, MapPin, Plus, QrCode, RefreshCw, Search } from "lucide-react"
 import { toast } from "sonner"
 
 import { BucketStatus } from "@/components/bucket-status"
 import { isPhysicalDisk } from "@/components/disk-form-dialog"
+import { DiskListingDialog } from "@/components/disk-listing-dialog"
 import { DiskQrDialog } from "@/components/disk-qr-dialog"
 import { PersonalBadge } from "@/components/torrent-badges"
 import { TorrentSheet } from "@/components/torrent-sheet"
@@ -31,6 +32,7 @@ export function DiskArchivesPage({
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<string | null>(null)
   const [qr, setQr] = useState<Disk | null>(null)
+  const [listing, setListing] = useState<Disk | null>(null)
 
   const disk = disks.data?.find((d) => d.id === diskId)
   const scan = useScanDisk()
@@ -81,13 +83,16 @@ export function DiskArchivesPage({
               </Button>
             </CardAction>
           ) : (
-            isPhysicalDisk(disk.kind) && (
-              <CardAction>
+            <CardAction className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setListing(disk)}>
+                <ListTree /> Read a listing
+              </Button>
+              {isPhysicalDisk(disk.kind) && (
                 <Button variant="outline" size="sm" onClick={() => setQr(disk)}>
                   <QrCode /> QR code
                 </Button>
-              </CardAction>
-            )
+              )}
+            </CardAction>
           )}
         </CardHeader>
         <CardContent className="grid gap-1.5 text-sm">
@@ -151,6 +156,7 @@ export function DiskArchivesPage({
       {disk.s3 && <Unmatched disk={disk} query={query} onAdded={setSelected} />}
 
       <DiskQrDialog disk={qr} onClose={() => setQr(null)} />
+      <DiskListingDialog disk={listing} onClose={() => setListing(null)} />
       <TorrentSheet torrent={selectedTorrent} onClose={() => setSelected(null)} onResolve={onResolve} onHashChange={setSelected} />
     </div>
   )

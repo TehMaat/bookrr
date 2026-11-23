@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { Activity, Clock, Cloud, HardDrive, ListTree, MapPin, Pencil, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react"
+import { Activity, Clock, Cloud, FileSearch, HardDrive, ListTree, MapPin, Pencil, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react"
 
 import { BucketStatus } from "@/components/bucket-status"
 import { DiskArchivesPage } from "@/components/disk-archives-page"
 import { DiskFormDialog, isPhysicalDisk } from "@/components/disk-form-dialog"
+import { DiskListingDialog } from "@/components/disk-listing-dialog"
 import { DiskQrDialog } from "@/components/disk-qr-dialog"
 import { SmartImportDialog } from "@/components/smart-import-dialog"
 import {
@@ -46,6 +47,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
   const [smartOpen, setSmartOpen] = useState(false)
   const [smartDisk, setSmartDisk] = useState<Disk | null>(null)
   const [qr, setQr] = useState<Disk | null>(null)
+  const [listing, setListing] = useState<Disk | null>(null)
   const openSmart = (d: Disk | null) => {
     setSmartDisk(d)
     setSmartOpen(true)
@@ -122,9 +124,20 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
                       <RefreshCw className={scan.isPending && scan.variables === d.id ? "animate-spin" : undefined} />
                     </Button>
                   ) : (
-                    <Button variant="ghost" size="icon-sm" aria-label="Update from SMART" title="Update from SMART" onClick={() => openSmart(d)}>
-                      <Activity />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Read a listing of the disk"
+                        title="Read a listing of the disk"
+                        onClick={() => setListing(d)}
+                      >
+                        <FileSearch />
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" aria-label="Update from SMART" title="Update from SMART" onClick={() => openSmart(d)}>
+                        <Activity />
+                      </Button>
+                    </>
                   )}
                   <Button
                     variant="ghost"
@@ -188,6 +201,7 @@ function DiskList({ onOpenDisk }: { onOpenDisk: (id: number) => void }) {
       <DiskFormDialog open={open} disk={editing} onOpenChange={setOpen} />
       <SmartImportDialog open={smartOpen} disk={smartDisk} onOpenChange={setSmartOpen} />
       <DiskQrDialog disk={qr} onClose={() => setQr(null)} />
+      <DiskListingDialog disk={listing} onClose={() => setListing(null)} />
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
