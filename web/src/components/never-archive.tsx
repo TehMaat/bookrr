@@ -12,23 +12,36 @@ export type Pickable = { hash: string; archivable: Archivability | null }
 /** Ticks on the uploads still on a client (the only ones with archivability) among rows. */
 export function usePicker(rows: Pickable[]) {
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  const last = useRef<string | null>(null)
   const selectable = rows.filter((r) => r.archivable)
   const chosen = selectable.filter((r) => picked.has(r.hash))
   const all = selectable.length > 0 && chosen.length === selectable.length
   return {
     chosen,
     isPicked: (hash: string) => picked.has(hash),
-    toggle: (hash: string, on: boolean) =>
+    /** With shift, the same state goes to every row between this one and the last ticked or unticked. */
+    toggle: (hash: string, on: boolean, shift = false) => {
+      const from = selectable.findIndex((r) => r.hash === last.current)
+      const to = selectable.findIndex((r) => r.hash === hash)
+      const range =
+        shift && from !== -1 && to !== -1 ? selectable.slice(Math.min(from, to), Math.max(from, to) + 1).map((r) => r.hash) : [hash]
+      last.current = hash
       setPicked((p) => {
         const n = new Set(p)
-        if (on) n.add(hash)
-        else n.delete(hash)
+        for (const h of range) {
+          if (on) n.add(h)
+          else n.delete(h)
+        }
         return n
-      }),
+      })
+    },
     all,
     some: chosen.length > 0 && !all,
     toggleAll: (on: boolean) => setPicked(on ? new Set(selectable.map((r) => r.hash)) : new Set()),
-    clear: () => setPicked(new Set()),
+    clear: () => {
+      last.current = null
+      setPicked(new Set())
+    },
   }
 }
 
@@ -41,7 +54,7 @@ export function PickBox({
 }: {
   checked: boolean
   indeterminate?: boolean
-  onChange: (on: boolean) => void
+  onChange: (on: boolean, shift: boolean) => void
   label: string
 }) {
   const ref = useRef<HTMLInputElement>(null)
@@ -55,8 +68,13 @@ export function PickBox({
       aria-label={label}
       className="accent-primary size-4 shrink-0 cursor-pointer align-middle"
       checked={checked}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => onChange(e.target.checked)}
+      // Shift-clicking would otherwise also select the text between the two clicks.
+      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+      onClick={(e) => {
+        e.stopPropagation()
+        onChange(e.currentTarget.checked, e.shiftKey)
+      }}
+      onChange={() => {}}
     />
   )
 }
