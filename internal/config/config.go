@@ -40,6 +40,12 @@ type Config struct {
 	ProwlarrURL     string
 	ProwlarrAPIKey  string
 	ProwlarrRecheck time.Duration
+	// Radarr and Sonarr, where the films and series archived from a disk
+	// listing are deleted.
+	RadarrURL    string
+	RadarrAPIKey string
+	SonarrURL    string
+	SonarrAPIKey string
 	// The log files in the data folder: how many days to keep them (0 =
 	// forever), the size past which a day goes on in a new file (0 = no
 	// limit) and the minimum level written.
@@ -88,6 +94,10 @@ func Resolve(stored map[string]string) (Config, error) {
 		MDBListAPIKey:  strings.TrimSpace(get("BOOKRR_MDBLIST_API_KEY")),
 		ProwlarrURL:    strings.TrimRight(strings.TrimSpace(get("BOOKRR_PROWLARR_URL")), "/"),
 		ProwlarrAPIKey: strings.TrimSpace(get("BOOKRR_PROWLARR_API_KEY")),
+		RadarrURL:      strings.TrimRight(strings.TrimSpace(get("BOOKRR_RADARR_URL")), "/"),
+		RadarrAPIKey:   strings.TrimSpace(get("BOOKRR_RADARR_API_KEY")),
+		SonarrURL:      strings.TrimRight(strings.TrimSpace(get("BOOKRR_SONARR_URL")), "/"),
+		SonarrAPIKey:   strings.TrimSpace(get("BOOKRR_SONARR_API_KEY")),
 	}
 	interval := env("BOOKRR_SYNC_INTERVAL", "5m")
 	d, err := time.ParseDuration(interval)
@@ -153,6 +163,19 @@ func Resolve(stored map[string]string) (Config, error) {
 	if c.ProwlarrURL != "" {
 		if u, err := url.Parse(c.ProwlarrURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return c, fmt.Errorf("BOOKRR_PROWLARR_URL %q invalid (e.g. http://prowlarr:9696)", c.ProwlarrURL)
+		}
+	}
+	for _, s := range []struct{ name, url, key, example string }{
+		{"RADARR", c.RadarrURL, c.RadarrAPIKey, "http://radarr:7878"},
+		{"SONARR", c.SonarrURL, c.SonarrAPIKey, "http://sonarr:8989"},
+	} {
+		if (s.url == "") != (s.key == "") {
+			return c, fmt.Errorf("BOOKRR_%s_URL e BOOKRR_%s_API_KEY must be set together", s.name, s.name)
+		}
+		if s.url != "" {
+			if u, err := url.Parse(s.url); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return c, fmt.Errorf("BOOKRR_%s_URL %q invalid (e.g. %s)", s.name, s.url, s.example)
+			}
 		}
 	}
 	return c, nil

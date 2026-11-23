@@ -49,5 +49,11 @@ services:
       # BOOKRR_PROWLARR_API_KEY: your-prowlarr-api-key
       # How often to search each film again (min 1d)
       # BOOKRR_PROWLARR_RECHECK: 7d
+      # Radarr and Sonarr: the films and episodes archived from the listing of
+      # a disk are deleted there (Disks page, Read a listing)
+      # BOOKRR_RADARR_URL: http://radarr:7878
+      # BOOKRR_RADARR_API_KEY: your-radarr-api-key
+      # BOOKRR_SONARR_URL: http://sonarr:8989
+      # BOOKRR_SONARR_API_KEY: your-sonarr-api-key
       # Time of the nightly missing seasons and films check (local time)
       # BOOKRR_MISSING_CHECK_AT: "04:00"

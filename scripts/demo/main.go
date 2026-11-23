@@ -187,6 +187,8 @@ func main() {
 		"prowlarr":   httptest.NewServer(http.HandlerFunc(serveProwlarr)),
 		"s3":         httptest.NewServer(http.HandlerFunc(serveS3)),
 		"wayfinderr": httptest.NewServer(http.HandlerFunc(serveWayfinderr)),
+		"radarr":     httptest.NewServer(http.HandlerFunc(serveRadarr)),
+		"sonarr":     httptest.NewServer(http.HandlerFunc(serveSonarr)),
 	}
 	tmdb.DefaultBaseURL = fakes["tmdb"].URL
 	mdblist.DefaultBaseURL = fakes["mdblist"].URL
@@ -196,6 +198,8 @@ func main() {
 		"BOOKRR_UNIT3D_URL": fakes["tracker"].URL, "BOOKRR_UNIT3D_API_KEY": "demo",
 		"BOOKRR_TMDB_API_KEY": "demo", "BOOKRR_MDBLIST_API_KEY": "demo",
 		"BOOKRR_PROWLARR_URL": fakes["prowlarr"].URL, "BOOKRR_PROWLARR_API_KEY": "demo",
+		"BOOKRR_RADARR_URL": fakes["radarr"].URL, "BOOKRR_RADARR_API_KEY": "demo",
+		"BOOKRR_SONARR_URL": fakes["sonarr"].URL, "BOOKRR_SONARR_API_KEY": "demo",
 	} {
 		os.Setenv(k, v)
 	}
@@ -663,5 +667,68 @@ func serveWayfinderr(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"id":"plan-lantern","status":"WAITING","pairId":null,"message":null}`))
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+// Radarr: The Quiet Orchard was imported from its torrent; Paper Lanterns
+// too, but upgraded since.
+func serveRadarr(w http.ResponseWriter, r *http.Request) {
+	orchard := releases[1].name
+	lanterns := releases[2].name
+	switch {
+	case r.URL.Path == "/api/v3/system/status":
+		w.Write([]byte(`{"version":"5.20.0"}`))
+	case r.URL.Path == "/api/v3/history":
+		switch strings.ToLower(r.URL.Query().Get("downloadId")) {
+		case hashOf(orchard):
+			w.Write([]byte(`{"records":[{"eventType":"downloadFolderImported","movieId":1,"data":{"importedPath":"/movies/The Quiet Orchard (2016)/orchard.mkv"}}]}`))
+		case hashOf(lanterns):
+			w.Write([]byte(`{"records":[{"eventType":"downloadFolderImported","movieId":2,"data":{"importedPath":"/movies/Paper Lanterns (2021)/lanterns.mkv"}}]}`))
+		default:
+			w.Write([]byte(`{"records":[]}`))
+		}
+	case r.URL.Path == "/api/v3/movie/1":
+		w.Write([]byte(`{"id":1,"title":"The Quiet Orchard","year":2016,"hasFile":true,"movieFile":{"path":"/movies/The Quiet Orchard (2016)/orchard.mkv"}}`))
+	case r.URL.Path == "/api/v3/movie/2":
+		w.Write([]byte(`{"id":2,"title":"Paper Lanterns","year":2021,"hasFile":true,"movieFile":{"path":"/movies/Paper Lanterns (2021)/lanterns.2160p.mkv"}}`))
+	case r.URL.Path == "/api/v3/movie":
+		w.Write([]byte(`[]`))
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// Sonarr: the first season of Velvet Static came from its torrent; the
+// series has a second season too.
+func serveSonarr(w http.ResponseWriter, r *http.Request) {
+	velvet := releases[8].name
+	switch {
+	case r.URL.Path == "/api/v3/system/status":
+		w.Write([]byte(`{"version":"4.0.15"}`))
+	case r.URL.Path == "/api/v3/history":
+		var recs []map[string]any
+		if strings.ToLower(r.URL.Query().Get("downloadId")) == hashOf(velvet) {
+			for e := 1; e <= 8; e++ {
+				recs = append(recs, map[string]any{"eventType": "downloadFolderImported", "seriesId": 1, "episodeId": e,
+					"data": map[string]string{"importedPath": fmt.Sprintf("/tv/Velvet Static/Season 1/e%02d.mkv", e)}})
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"records": recs})
+	case r.URL.Path == "/api/v3/series/1":
+		w.Write([]byte(`{"id":1,"title":"Velvet Static","year":2024}`))
+	case r.URL.Path == "/api/v3/episode":
+		var eps []map[string]any
+		for e := 1; e <= 16; e++ {
+			eps = append(eps, map[string]any{"id": e, "seasonNumber": (e-1)/8 + 1, "hasFile": true, "episodeFileId": 100 + e})
+		}
+		json.NewEncoder(w).Encode(eps)
+	case r.URL.Path == "/api/v3/episodefile":
+		var files []map[string]any
+		for e := 1; e <= 16; e++ {
+			files = append(files, map[string]any{"id": 100 + e, "path": fmt.Sprintf("/tv/Velvet Static/Season %d/e%02d.mkv", (e-1)/8+1, (e-1)%8+1)})
+		}
+		json.NewEncoder(w).Encode(files)
+	default:
+		w.WriteHeader(http.StatusOK)
 	}
 }

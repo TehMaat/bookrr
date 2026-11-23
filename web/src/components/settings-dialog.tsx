@@ -27,6 +27,11 @@ const groups: { group: ConfigGroup; label: string; intro: string }[] = [
   { group: "unit3d", label: "Tracker", intro: "The UNIT3D tracker: hashes of torrents added without one, release history, archivable." },
   { group: "missing", label: "Missing", intro: "TMDB and MDBList, for missing seasons, sagas and collections." },
   { group: "prowlarr", label: "Prowlarr", intro: "The best existing version of your uploaded films." },
+  {
+    group: "arr",
+    label: "Radarr / Sonarr",
+    intro: "When you archive torrents on a disk from its listing, the films are deleted from Radarr and the episodes from Sonarr.",
+  },
 ]
 
 const toForm = (s: ArchiveFields) => ({

@@ -155,6 +155,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/disks/{id}", s.updateDisk)
 	mux.HandleFunc("DELETE /api/disks/{id}", s.deleteDisk)
 	mux.HandleFunc("POST /api/disks/{id}/scan", s.scanDisk)
+	mux.HandleFunc("POST /api/disks/{id}/listing", s.previewListing)
+	mux.HandleFunc("POST /api/disks/{id}/listing/apply", s.applyListing)
 	mux.HandleFunc("GET /api/disks/{id}/bucket-entries", s.bucketEntries)
 
 	mux.HandleFunc("GET /api/adopters", s.listAdopters)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tehmaat/bookrr/internal/arr"
 	"github.com/tehmaat/bookrr/internal/config"
 	"github.com/tehmaat/bookrr/internal/mdblist"
 	"github.com/tehmaat/bookrr/internal/prowlarr"
@@ -190,6 +191,22 @@ func (s *Server) testConfig(w http.ResponseWriter, r *http.Request) {
 		var v string
 		if v, err = prowlarr.New(url, key).Version(ctx); err == nil {
 			msg = strings.TrimSpace("Connected to Prowlarr " + v)
+		}
+	case "radarr", "sonarr":
+		name := strings.ToUpper(in.Service)
+		url, key := strings.TrimRight(get("BOOKRR_"+name+"_URL"), "/"), get("BOOKRR_"+name+"_API_KEY")
+		if url == "" || key == "" {
+			err = errors.New("address and API key are needed")
+			break
+		}
+		var v string
+		if in.Service == "radarr" {
+			v, err = arr.NewRadarr(url, key).Version(ctx)
+		} else {
+			v, err = arr.NewSonarr(url, key).Version(ctx)
+		}
+		if err == nil {
+			msg = strings.TrimSpace("Connected to " + map[string]string{"radarr": "Radarr", "sonarr": "Sonarr"}[in.Service] + " " + v)
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "unknown service")

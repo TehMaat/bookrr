@@ -16,7 +16,7 @@ The inventory of your torrents: **where they are** (on which qBittorrent client,
 - 📋 **One list** of all the torrents of one or more qBittorrent clients, with search and a **filter on every column**.
 - 🧬 **Duplicates**: the same torrent on several clients, where it is still downloading, and removal from one client (with or without the files) from bookrr.
 - 🔔 **Removed releases**: when a torrent tagged `Personal Release` disappears from every client, bookrr asks **where you moved it** (disk, adopter, deleted, other). Also through a webhook.
-- 💽 **Offline archives**: disks with serial number, model, capacity and location, **SMART data** pasted from `smartctl` or CrystalDiskInfo, and a **QR code** to stick on each disk that opens its list of torrents.
+- 💽 **Offline archives**: disks with serial number, model, capacity and location, **SMART data** pasted from `smartctl` or CrystalDiskInfo, and a **QR code** to stick on each disk that opens its list of torrents. Paste the **listing of a disk** (`ls`, `find`, `dir`, `Get-ChildItem`): bookrr finds the torrents on it, checks the sizes, and removes them from the right client and from **Radarr** and **Sonarr**.
 - ☁️ **Cloud archives on S3** (Scaleway and compatible services), **read-only**: bookrr recognizes by itself what you moved to the bucket.
 - 🤝 **Adopters**: the people who adopted your releases and keep seeding them.
 - 📥 **CSV/Excel import** of the torrents already archived.
@@ -37,6 +37,7 @@ flowchart LR
     QB[qBittorrent clients]
     S3[(S3 bucket)]
     PR[Prowlarr]
+    AR[Radarr and Sonarr]
   end
   subgraph web[Online services]
     U3[UNIT3D tracker]
@@ -49,6 +50,7 @@ flowchart LR
   TM -- seasons and sagas, every night --> B
   MD -- collections, every night --> B
   PR -- best versions, every day --> B
+  B -- films and episodes archived --> AR
   B[bookrr] --> DB[(SQLite in ./data)]
   B --> UI[Web interface and REST API]
   WH[Scripts, qbit_manage, n8n…] -- removal webhook --> B
@@ -134,6 +136,8 @@ Most options are set from **Settings** in the interface, and apply right away wi
 | `BOOKRR_MISSING_CHECK_AT` | `04:00` | Time of the nightly missing check (local time, see `TZ`). |
 | `BOOKRR_PROWLARR_URL` / `BOOKRR_PROWLARR_API_KEY` | — | Address of [Prowlarr](https://prowlarr.com) (e.g. `http://prowlarr:9696`) and its API key (Settings → General): with the tracker, max resolution and plan searches. |
 | `BOOKRR_PROWLARR_RECHECK` | `7d` | How often to search each film again (minimum `1d`; hours work too, e.g. `36h`). |
+| `BOOKRR_RADARR_URL` / `BOOKRR_RADARR_API_KEY` | — | Address of [Radarr](https://radarr.video) (e.g. `http://radarr:7878`) and its API key: the films archived from a disk listing are deleted there. |
+| `BOOKRR_SONARR_URL` / `BOOKRR_SONARR_API_KEY` | — | Address of [Sonarr](https://sonarr.tv) (e.g. `http://sonarr:8989`) and its API key: the episodes archived from a disk listing are deleted there. |
 | `BOOKRR_LOG_RETENTION` | `30d` | How many days to keep the log files (minimum `1d`, `0` = forever). |
 | `BOOKRR_LOG_MAX_SIZE` | `50MB` | Maximum size of a log file; past it the day goes on in a new file (minimum `1MB`, `0` = no limit). |
 | `BOOKRR_LOG_LEVEL` | `info` | Minimum level written: `debug`, `info`, `warn` or `error`. |
@@ -151,7 +155,7 @@ Most options are set from **Settings** in the interface, and apply right away wi
 | Guide | |
 |---|---|
 | [Clients, duplicates and alerts](docs/en/clients-and-alerts.md) | sync, removed releases, moves and adoptions, removal webhook |
-| [Archives](docs/en/archives.md) | disks and QR codes, SMART data, S3 buckets, CSV import |
+| [Archives](docs/en/archives.md) | disks and QR codes, SMART data, S3 buckets, disk listing with Radarr and Sonarr, CSV import |
 | [Tracker](docs/en/tracker.md) | hash lookup, release history, archivable releases |
 | [Max resolution and release plan](docs/en/prowlarr-and-plan.md) | Prowlarr searches |
 | [Missing seasons and films](docs/en/missing.md) | series, sagas, collections, minimum quality, banned groups |
