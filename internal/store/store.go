@@ -37,7 +37,17 @@ func Open(path string) (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+// Close closes the database and waits, up to a few seconds, for the
+// connection still held by a query whose context was cancelled: database/sql
+// releases it in the background, and SQLite removes its -wal and -shm files
+// only when the connection closes.
+func (s *Store) Close() error {
+	err := s.db.Close()
+	for deadline := time.Now().Add(5 * time.Second); s.db.Stats().OpenConnections > 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	return err
+}
 
 var migrations = []string{
 	`
