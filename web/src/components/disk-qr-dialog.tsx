@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Download, Printer, TriangleAlert } from "lucide-react"
+import { Download, Tag, TriangleAlert } from "lucide-react"
 import { encode, renderSVG } from "uqr"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api, type Disk } from "@/lib/api"
+import { drawDiskLabel, renderDiskLabel } from "@/lib/disk-label"
 import { useAction, useSettings } from "@/lib/queries"
 
 /** "192.168.1.10:8080/" → "http://192.168.1.10:8080", as the server saves it. */
@@ -44,9 +45,6 @@ function renderPNG(url: string): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"))
 }
 
-const escape = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
-
 export function DiskQrDialog({ disk, onClose }: { disk: Disk | null; onClose: () => void }) {
   const settings = useSettings()
   const saved = settings.data?.publicUrl ?? ""
@@ -59,37 +57,29 @@ export function DiskQrDialog({ disk, onClose }: { disk: Disk | null; onClose: ()
   const url = disk ? diskUrl(base, disk.id) : ""
   const svg = useMemo(() => (url ? renderSVG(url, { ecc: "M", border: 2 }) : ""), [url])
   const changed = normalizeBase(base) !== saved
+  // The label drawn off screen: the dialog's content mounts after this effect runs.
+  const preview = useMemo(() => {
+    if (!disk) return ""
+    const canvas = document.createElement("canvas")
+    drawDiskLabel(canvas, disk, url)
+    return canvas.toDataURL("image/png")
+  }, [disk, url])
 
-  const saveFile = (blob: Blob, ext: string) => {
+  const saveFile = (blob: Blob, name: string) => {
     const a = document.createElement("a")
     a.href = URL.createObjectURL(blob)
-    a.download = `bookrr-${disk!.label.replace(/[^\w.-]+/g, "_")}.${ext}`
+    a.download = `bookrr-${disk!.label.replace(/[^\w.-]+/g, "_")}${name}`
     a.click()
     URL.revokeObjectURL(a.href)
   }
-  const downloadSVG = () => saveFile(new Blob([svg], { type: "image/svg+xml" }), "svg")
+  const downloadSVG = () => saveFile(new Blob([svg], { type: "image/svg+xml" }), ".svg")
   const downloadPNG = async () => {
     const png = await renderPNG(url)
-    if (png) saveFile(png, "png")
+    if (png) saveFile(png, ".png")
   }
-
-  const print = () => {
-    const w = window.open("", "_blank", "width=420,height=560")
-    if (!w) return
-    const d = disk!
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escape(d.label)}</title>
-<style>
-  @page { margin: 8mm; }
-  body { font-family: system-ui, sans-serif; margin: 0; }
-  .label { width: 50mm; text-align: center; }
-  .label svg { width: 50mm; height: 50mm; display: block; }
-  .name { font-size: 14pt; font-weight: 600; margin-top: 2mm; word-break: break-word; }
-  .meta { font-size: 8pt; font-family: ui-monospace, monospace; word-break: break-all; }
-</style></head><body><div class="label">${svg}
-<div class="name">${escape(d.label)}</div>
-${d.serial ? `<div class="meta">SN ${escape(d.serial)}</div>` : ""}
-</div><script>window.onafterprint = () => window.close(); window.onload = () => window.print()</script></body></html>`)
-    w.document.close()
+  const downloadLabel = async () => {
+    const png = await renderDiskLabel(disk!, url)
+    if (png) saveFile(png, "-label.png")
   }
 
   return (
@@ -98,10 +88,13 @@ ${d.serial ? `<div class="meta">SN ${escape(d.serial)}</div>` : ""}
         <DialogHeader>
           <DialogTitle>QR code of "{disk?.label}"</DialogTitle>
           <DialogDescription>
-            Print it and stick it on the disk: scan it with your phone to open the list of torrents archived on this disk.
+            Print the 80×50 mm label and stick it on the disk: scan it with your phone to open the list of torrents
+            archived on this disk.
           </DialogDescription>
         </DialogHeader>
-        <div className="mx-auto size-56 rounded-md bg-white p-1 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: svg }} />
+        {preview && (
+          <img src={preview} alt={`Label of ${disk?.label}`} className="mx-auto aspect-[8/5] w-full max-w-sm rounded-md shadow-sm" />
+        )}
         <p className="text-muted-foreground text-center font-mono text-xs break-all">{url}</p>
         <div className="grid gap-2">
           <Label htmlFor="public-url">bookrr address on your network</Label>
@@ -129,14 +122,14 @@ ${d.serial ? `<div class="meta">SN ${escape(d.serial)}</div>` : ""}
           </Alert>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={downloadSVG}>
-            <Download /> SVG
+          <Button variant="outline" onClick={downloadSVG} title="Only the QR code, as SVG">
+            <Download /> QR SVG
           </Button>
-          <Button variant="outline" onClick={downloadPNG}>
-            <Download /> PNG
+          <Button variant="outline" onClick={downloadPNG} title="Only the QR code, as PNG">
+            <Download /> QR PNG
           </Button>
-          <Button onClick={print}>
-            <Printer /> Print label
+          <Button onClick={downloadLabel}>
+            <Tag /> Label PNG
           </Button>
         </DialogFooter>
       </DialogContent>
