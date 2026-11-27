@@ -111,6 +111,48 @@ func TestWayfinderrHandover(t *testing.T) {
 		t.Fatalf("sent %q with %v", fake.files["aaa"], fake.query)
 	}
 	run(0, 0) // once only
+	if _, ok := fake.query["version"]; ok {
+		t.Fatalf("version sent before one is chosen: %v", fake.query)
+	}
+
+	// A version chosen on the film: the torrent already sent goes again with it.
+	var v store.OptionalVersion
+	if err := v.UnmarshalJSON([]byte(`" Extended "`)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.UpdatePlanEntry(ctx, e.ID, store.PlanUpdate{Version: v}); err != nil || got.Version == nil || *got.Version != "Extended" {
+		t.Fatalf("version: %+v %v", got, err)
+	}
+	run(1, 0)
+	if fake.query["version"] != "Extended" || fake.query["label"] != "video" {
+		t.Fatalf("sent again with %v", fake.query)
+	}
+	// The same version (another spelling of it) or none chosen: nothing sent again.
+	_ = v.UnmarshalJSON([]byte(`"extended"`))
+	if _, err := st.UpdatePlanEntry(ctx, e.ID, store.PlanUpdate{Version: v}); err != nil {
+		t.Fatal(err)
+	}
+	run(0, 0)
+	_ = v.UnmarshalJSON([]byte(`null`))
+	if got, err := st.UpdatePlanEntry(ctx, e.ID, store.PlanUpdate{Version: v}); err != nil || got.Version != nil {
+		t.Fatalf("not chosen: %+v %v", got, err)
+	}
+	run(0, 0)
+	// None on purpose is a choice: sent as an empty version.
+	_ = v.UnmarshalJSON([]byte(`""`))
+	if _, err := st.UpdatePlanEntry(ctx, e.ID, store.PlanUpdate{Version: v}); err != nil {
+		t.Fatal(err)
+	}
+	run(1, 0)
+	if got, ok := fake.query["version"]; !ok || got != "" {
+		t.Fatalf("none sent as %q %v", got, ok)
+	}
+	// An update without the version keeps it.
+	note := "a note"
+	if got, err := st.UpdatePlanEntry(ctx, e.ID, store.PlanUpdate{Note: &note}); err != nil || got.Version == nil || *got.Version != "" {
+		t.Fatalf("kept: %+v %v", got, err)
+	}
+	run(0, 0)
 
 	// Wayfinderr down: the error is kept and the next sync tries again.
 	fake.down = true

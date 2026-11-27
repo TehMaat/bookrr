@@ -24,7 +24,7 @@ func Wayfinderr(ctx context.Context, st *store.Store) (sent, dropped int, err er
 	for _, w := range sends {
 		wctx, cancel := context.WithTimeout(ctx, time.Minute)
 		sendErr := wayfinderr.New(w.Client.WayfinderrURL, w.Client.WayfinderrAPIKey).AddSourceTorrent(wctx, wayfinderr.SourceTorrent{
-			FileName: FileName(w.Name, w.Hash), Data: w.Data, TmdbID: w.TmdbID, Label: w.Label,
+			FileName: FileName(w.Name, w.Hash), Data: w.Data, TmdbID: w.TmdbID, Label: w.Label, Version: w.Version,
 		})
 		cancel()
 		if ctx.Err() != nil {

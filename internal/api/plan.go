@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tehmaat/bookrr/internal/edition"
 	"github.com/tehmaat/bookrr/internal/gaps"
 	"github.com/tehmaat/bookrr/internal/prowlarr"
 	"github.com/tehmaat/bookrr/internal/store"
@@ -70,6 +71,27 @@ type planItem struct {
 	Torrents []store.PlanTorrent `json:"torrents"`
 	// The pair of the two torrents of a merge on Wayfinderr, nil if none.
 	Merge *store.PlanMerge `json:"merge"`
+	// The version its loaded .torrent files or its best release say
+	// ("Extended"...), "" none: only offered, never chosen by itself.
+	SuggestedVersion string `json:"suggestedVersion"`
+}
+
+// suggestedVersion is the first version the names of the film's torrents,
+// then of its best release, say after its title.
+func suggestedVersion(e store.PlanEntry, ts []store.PlanTorrent, best *store.BestResolution) string {
+	names := make([]string, 0, len(ts)+1)
+	for _, t := range ts {
+		names = append(names, t.Name)
+	}
+	if best != nil {
+		names = append(names, best.Name)
+	}
+	for _, n := range names {
+		if v := edition.Of(n, e.Title, e.OriginalTitle); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // listPlan returns the films of the release plan, with the best release
@@ -122,6 +144,7 @@ func (s *Server) listPlan(w http.ResponseWriter, r *http.Request) {
 		if m, ok := merges[e.ID]; ok && m.Hashes == store.MergeHashes(it.Torrents) {
 			it.Merge = &m
 		}
+		it.SuggestedVersion = suggestedVersion(e, it.Torrents, it.Best)
 		if svc.Best != nil {
 			it.Searching = svc.Best.Searching(e)
 		}
@@ -410,7 +433,12 @@ func (s *Server) updatePlan(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in store.PlanUpdate
+	var in struct {
+		Status *string `json:"status"`
+		Note   *string `json:"note"`
+		// A string ("" none), null (not chosen), or left out to keep it.
+		Version json.RawMessage `json:"version"`
+	}
 	if !decode(w, r, &in) {
 		return
 	}
@@ -418,7 +446,14 @@ func (s *Server) updatePlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid status")
 		return
 	}
-	e, err := s.store.UpdatePlanEntry(r.Context(), id, in)
+	up := store.PlanUpdate{Status: in.Status, Note: in.Note}
+	if in.Version != nil {
+		if err := up.Version.UnmarshalJSON(in.Version); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	e, err := s.store.UpdatePlanEntry(r.Context(), id, up)
 	if err != nil {
 		s.fail(w, err)
 		return

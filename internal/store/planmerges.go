@@ -38,6 +38,8 @@ type PlanMerge struct {
 	PlannedAt *string `json:"plannedAt"`
 	CheckedAt *string `json:"checkedAt"`
 	UpdatedAt string  `json:"updatedAt"`
+	// The film's version the pair was last planned with, nil if none was sent.
+	Version *string `json:"version"`
 }
 
 // Planned reports whether the pair is on Wayfinderr and still open there
@@ -58,14 +60,14 @@ func MergeHashes(ts []PlanTorrent) string {
 }
 
 const mergeColumns = `pm.plan_id, pm.hashes, pm.client_id, COALESCE(c.name, ''), pm.remote_id, pm.status, pm.pair_id, pm.message,
-	pm.error, pm.planned_at, pm.checked_at, pm.updated_at`
+	pm.error, pm.planned_at, pm.checked_at, pm.updated_at, pm.version`
 
 func scanMerge(row interface{ Scan(...any) error }) (PlanMerge, error) {
 	var m PlanMerge
-	var planned, checked sql.NullString
+	var planned, checked, version sql.NullString
 	err := row.Scan(&m.PlanID, &m.Hashes, &m.ClientID, &m.ClientName, &m.RemoteID, &m.Status, &m.PairID, &m.Message,
-		&m.Error, &planned, &checked, &m.UpdatedAt)
-	m.PlannedAt, m.CheckedAt = nullStr(planned), nullStr(checked)
+		&m.Error, &planned, &checked, &m.UpdatedAt, &version)
+	m.PlannedAt, m.CheckedAt, m.Version = nullStr(planned), nullStr(checked), nullStr(version)
 	return m, err
 }
 
@@ -101,9 +103,9 @@ FROM plan_merges pm LEFT JOIN clients c ON c.id = pm.client_id WHERE pm.plan_id 
 func (s *Store) SavePlanMerge(ctx context.Context, m PlanMerge) (PlanMerge, error) {
 	_, err := s.db.ExecContext(ctx, `
 INSERT OR REPLACE INTO plan_merges (plan_id, hashes, client_id, remote_id, status, pair_id, message, error, planned_at,
-	checked_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.PlanID, m.Hashes, m.ClientID, m.RemoteID, m.Status, m.PairID, m.Message, m.Error,
-		m.PlannedAt, m.CheckedAt, now())
+	checked_at, updated_at, version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.PlanID, m.Hashes, m.ClientID, m.RemoteID, m.Status, m.PairID, m.Message, m.Error,
+		m.PlannedAt, m.CheckedAt, now(), m.Version)
 	if err != nil {
 		return PlanMerge{}, err
 	}

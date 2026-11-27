@@ -349,6 +349,8 @@ export type PlanEntry = {
   doneAt: string | null
   /** When its .torrent files were complete on a client; null if never, or not since they were last sent. */
   downloadedAt: string | null
+  /** The film's version for its release name on Wayfinderr (Extended, Director's Cut…): null not chosen, "" none. */
+  version: string | null
 }
 
 /** A .torrent of a film of the plan on a client, as its last read found it. */
@@ -422,6 +424,8 @@ export type PlanMerge = {
   plannedAt: string | null
   checkedAt: string | null
   updatedAt: string
+  /** The film's version the pair was last planned with, null if none was sent. */
+  version: string | null
 }
 
 /** An upload of the user of a film of the plan, still on the tracker. */
@@ -443,6 +447,8 @@ export type PlanItem = PlanEntry & {
   torrents: PlanTorrent[]
   /** The pair of the two torrents of a merge on Wayfinderr, null if none. */
   merge: PlanMerge | null
+  /** The version its .torrent files or its best release say, "" none: only offered. */
+  suggestedVersion: string
 }
 
 export type Plan = {
@@ -1011,7 +1017,8 @@ export const api = {
   addPlan: (tmdb: string, note = "", from?: PlanSource) => request<PlanEntry>("POST", "/api/plan", { tmdb, note, ...from }),
   addPlanBulk: (tmdbIds: number[], from: PlanSource) =>
     request<PlanBulkResult>("POST", "/api/plan/bulk", { tmdbIds, ...from }),
-  updatePlan: (id: number, p: { status?: PlanStatus; note?: string }) => request<PlanEntry>("PATCH", `/api/plan/${id}`, p),
+  updatePlan: (id: number, p: { status?: PlanStatus; note?: string; version?: string | null }) =>
+    request<PlanEntry>("PATCH", `/api/plan/${id}`, p),
   deletePlan: (id: number) => request<void>("DELETE", `/api/plan/${id}`),
   /** Searches the best version of the film on Prowlarr now, in the background. */
   searchPlan: (id: number) => request<{ searching: boolean }>("POST", `/api/plan/${id}/search`),

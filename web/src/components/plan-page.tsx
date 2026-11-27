@@ -2,6 +2,8 @@ import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   CircleArrowUp,
+  Clapperboard,
+  Lightbulb,
   CircleCheck,
   CircleDashed,
   CalendarClock,
@@ -65,6 +67,7 @@ import { api, type Alert, type PlanItem, type PlanLookup, type PlanStatus } from
 import { formatDate, formatRelative } from "@/lib/format"
 import { keys, useAction, usePlan } from "@/lib/queries"
 import { cn } from "@/lib/utils"
+import { MAX_VERSION, VERSIONS, versionLabel } from "@/lib/versions"
 
 export const planStatuses: {
   value: PlanStatus
@@ -145,6 +148,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<PlanItem | null>(null)
+  const [versionOf, setVersionOf] = useState<PlanItem | null>(null)
   const [removing, setRemoving] = useState<PlanItem | null>(null)
   const [torrentAction, setTorrentAction] = useState<TorrentAction | null>(null)
   // The film whose full discs are shown, by id: its torrents stay current.
@@ -344,6 +348,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                             {it.note}
                           </div>
                         )}
+                        <PlanVersion it={it} onEdit={() => setVersionOf(it)} />
                         <TrackerHint it={it} />
                       </div>
                     </div>
@@ -403,6 +408,13 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
                       <IconAction label={it.note ? "Edit the note" : "Add a note"} active={!!it.note} onClick={() => setEditing(it)}>
                         <StickyNote />
                       </IconAction>
+                      <IconAction
+                        label={it.version !== null ? `Version: ${versionLabel(it.version)}` : "Choose the version"}
+                        active={it.version !== null}
+                        onClick={() => setVersionOf(it)}
+                      >
+                        <Clapperboard />
+                      </IconAction>
                       {/* "" without a tracker, for every film. */}
                       {it.trackerUrl && (
                         <IconAction label="The film on the tracker" href={it.trackerUrl}>
@@ -437,6 +449,7 @@ export function PlanPage({ onResolve }: { onResolve: (a: Alert) => void }) {
 
       <AddPlanDialog open={adding} onOpenChange={setAdding} />
       <NoteDialog item={editing} onClose={() => setEditing(null)} />
+      <VersionDialog item={versionOf} onClose={() => setVersionOf(null)} />
       <PlanDiscsDialog item={all.find((it) => it.id === discsOf) ?? null} onClose={() => setDiscsOf(null)} />
       <LoadTorrentDialog
         action={torrentAction?.kind === "load" ? torrentAction : null}
@@ -740,6 +753,123 @@ function AddPlanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
             }
           >
             <Plus /> Add to the plan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * The film's version (Extended, Director's Cut…) under its title, sent to Wayfinderr
+ * with its .torrent files and its merge plan; or what its torrents say, only offered.
+ */
+function PlanVersion({ it, onEdit }: { it: PlanItem; onEdit: () => void }) {
+  if (it.version !== null) {
+    return (
+      <button type="button" onClick={onEdit} className="mt-0.5 flex" title="The version Wayfinderr writes in the release name">
+        <Badge variant="secondary" className="gap-1">
+          <Clapperboard /> {versionLabel(it.version)}
+        </Badge>
+      </button>
+    )
+  }
+  if (!it.suggestedVersion) return null
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="text-muted-foreground hover:text-foreground mt-0.5 flex items-center gap-1 text-xs"
+      title="Only a suggestion: choose it to send it to Wayfinderr"
+    >
+      <Lightbulb className="size-3" /> {it.suggestedVersion}?
+    </button>
+  )
+}
+
+const UNSET = "__unset"
+const NONE = "__none"
+const OTHER = "__other"
+
+/** The select's value for a version: one of the list, none, other (free text) or not chosen. */
+const choiceOf = (v: string | null) => (v === null ? UNSET : v === "" ? NONE : VERSIONS.includes(v) ? v : OTHER)
+
+function VersionDialog({ item, onClose }: { item: PlanItem | null; onClose: () => void }) {
+  const [choice, setChoice] = useState(UNSET)
+  const [custom, setCustom] = useState("")
+  const [prev, setPrev] = useState<PlanItem | null>(null)
+  if (item !== prev) {
+    setPrev(item)
+    setChoice(choiceOf(item?.version ?? null))
+    setCustom(item?.version && choiceOf(item.version) === OTHER ? item.version : "")
+  }
+  const save = useAction(
+    (args: { id: number; version: string | null }) => api.updatePlan(args.id, { version: args.version }),
+    "Version saved",
+  )
+  const version = choice === UNSET ? null : choice === NONE ? "" : choice === OTHER ? custom.trim() : choice
+  const suggestion = item?.suggestedVersion && choice === UNSET ? item.suggestedVersion : ""
+  return (
+    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Version · {item?.title}</DialogTitle>
+          <DialogDescription>
+            Written by Wayfinderr in the release name (Film.2010.EXTENDED…): sent with the .torrent files of the film
+            and with its merge pair, and sent again when you change it.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="plan-version">Version</Label>
+          <Select value={choice} onValueChange={setChoice}>
+            <SelectTrigger id="plan-version" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNSET}>Not chosen</SelectItem>
+              <SelectItem value={NONE}>None (standard version)</SelectItem>
+              {VERSIONS.map((v) => (
+                <SelectItem key={v} value={v}>
+                  {v}
+                </SelectItem>
+              ))}
+              <SelectItem value={OTHER}>Other…</SelectItem>
+            </SelectContent>
+          </Select>
+          {choice === OTHER && (
+            <Input
+              value={custom}
+              onChange={(e) => setCustom(e.target.value.slice(0, MAX_VERSION))}
+              placeholder="Version"
+              autoFocus
+            />
+          )}
+          {suggestion && (
+            <button
+              type="button"
+              onClick={() => setChoice(choiceOf(suggestion))}
+              className="text-muted-foreground hover:bg-accent flex w-full items-center gap-2 rounded-md border border-dashed px-3 py-2 text-left text-sm"
+            >
+              <Lightbulb className="size-4 shrink-0" />
+              <span>
+                Its torrents say <span className="text-foreground font-medium">{suggestion}</span>: use it
+              </span>
+            </button>
+          )}
+          <p className="text-muted-foreground text-xs">
+            If Wayfinderr has another version for the same file (chosen on the rip), it asks you to choose before the
+            rename. Theatrical: Wayfinderr asks each time whether to write it in the name.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={save.isPending || (choice === OTHER && !custom.trim())}
+            onClick={() => item && save.mutate({ id: item.id, version }, { onSuccess: onClose })}
+          >
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

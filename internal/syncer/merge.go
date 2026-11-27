@@ -128,7 +128,7 @@ func planOn(ctx context.Context, st *store.Store, e store.PlanEntry, ts []store.
 		m = old
 		m.ClientID = c.ID
 	}
-	plan := wayfinderr.MergePlan{TmdbID: e.TmdbID}
+	plan := wayfinderr.MergePlan{TmdbID: e.TmdbID, Version: e.Version}
 	for i, t := range ts {
 		plan.Files[i] = wayfinderr.MergeSide{InfoHash: t.Hash, Name: t.Name, Label: t.Label}
 	}
@@ -145,6 +145,7 @@ func planOn(ctx context.Context, st *store.Store, e store.PlanEntry, ts []store.
 	}
 	m.RemoteID, m.Error = p.ID, ""
 	m.PlannedAt, m.CheckedAt = stamp(), stamp()
+	m.Version = e.Version
 	setRemote(&m, p)
 	slog.Info("merge pair planned on Wayfinderr", "plan", e.ID, "wayfinderrPlan", p.ID, "status", p.Status,
 		"client", c.Name, "new", created)
@@ -213,6 +214,16 @@ func syncMerge(ctx context.Context, st *store.Store, e store.PlanEntry, ts []sto
 	}
 	if has && m.RemoteID != "" {
 		if m.Planned() {
+			// Another version chosen on the film: the same pair planned again
+			// takes it on Wayfinderr (once paired, its files have it from
+			// their source .torrent files).
+			if e.Version != nil && !store.SameVersion(e.Version, m.Version) {
+				if c, ok := clients[m.ClientID]; ok && c.Enabled && c.HasWayfinderr() {
+					// A failure is kept on the film and tried again at the next sync.
+					_, _ = planOn(ctx, st, e, ts, c, m)
+					return false, nil
+				}
+			}
 			_, err := refreshMerge(ctx, st, m, clients)
 			return false, err
 		}
