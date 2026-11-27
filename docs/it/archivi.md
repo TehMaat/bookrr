@@ -14,7 +14,7 @@ Ogni disco fisico ha la sua pagina con i torrent archiviati sopra, cercabili per
 |---|---|
 | ![Pagina del disco](../screenshots/disk-archives.png) | ![Sul telefono](../screenshots/mobile.png) |
 
-Nella finestra del QR code imposti l'**indirizzo di bookrr nella tua rete** (es. `http://192.168.1.10:8080`): quello con cui lo raggiungono gli altri dispositivi, utile se il container è in una rete Docker. Vale per tutti i dischi. Puoi scaricare il QR code in SVG o PNG o stampare un'etichetta di 50 mm.
+Nella finestra del QR code imposti l'**indirizzo di bookrr nella tua rete** (es. `http://192.168.1.10:8080`): quello con cui lo raggiungono gli altri dispositivi, utile se il container è in una rete Docker. Vale per tutti i dischi. **Label PNG** scarica l'etichetta da 80×50 mm per le etichettatrici: bianco e nero, con nome, tipo, capacità e modello, numero di serie e QR code, a 300 dpi (945×591 px, risoluzione scritta nel file, così le app che la leggono la stampano già della misura giusta). La finestra ne mostra l'anteprima. *QR SVG* e *QR PNG* scaricano solo il QR code.
 
 ## Dati SMART
 
