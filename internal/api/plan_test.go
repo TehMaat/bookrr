@@ -152,6 +152,22 @@ func TestPlan(t *testing.T) {
 		e.Status != store.PlanDoing || e.Note != note {
 		t.Fatalf("patch %d %+v", code, e)
 	}
+	// The film's version: a string ("" none), null (not chosen), kept when left out.
+	if code := call(t, h, "PATCH", "/api/plan/"+itoa(e.ID), map[string]any{"version": " Director's  Cut "}, &e); code != http.StatusOK ||
+		e.Version == nil || *e.Version != "Director's Cut" || e.Status != store.PlanDoing {
+		t.Fatalf("version %d %+v", code, e)
+	}
+	if code := call(t, h, "PATCH", "/api/plan/"+itoa(e.ID), map[string]any{"note": "x"}, &e); code != http.StatusOK ||
+		e.Version == nil || *e.Version != "Director's Cut" {
+		t.Fatalf("version kept %d %+v", code, e)
+	}
+	if code := call(t, h, "PATCH", "/api/plan/"+itoa(e.ID), map[string]any{"version": 3}, nil); code != http.StatusBadRequest {
+		t.Fatalf("bad version: %d", code)
+	}
+	if code := call(t, h, "PATCH", "/api/plan/"+itoa(e.ID), map[string]any{"version": nil, "note": note}, &e); code != http.StatusOK ||
+		e.Version != nil {
+		t.Fatalf("version not chosen %d %+v", code, e)
+	}
 	bad := "fatto"
 	if code := call(t, h, "PATCH", "/api/plan/"+itoa(e.ID), store.PlanUpdate{Status: &bad}, nil); code != http.StatusBadRequest {
 		t.Fatalf("bad status: %d", code)
@@ -170,3 +186,18 @@ func TestPlan(t *testing.T) {
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 const ups0 = "The.Matrix.1999.1080p.BluRay.x264-ME"
+
+func TestSuggestedVersion(t *testing.T) {
+	e := store.PlanEntry{Title: "Orbita Silenziosa", OriginalTitle: "Silent Orbit"}
+	ts := []store.PlanTorrent{{Name: "Silent.Orbit.2010.1080p.BluRay"}, {Name: "Silent.Orbit.2010.Extended.Cut.2160p"}}
+	if got := suggestedVersion(e, ts, nil); got != "Extended" {
+		t.Errorf("from the torrents: %q", got)
+	}
+	best := &store.BestResolution{Name: "Silent.Orbit.2010.IMAX.2160p.WEB-DL"}
+	if got := suggestedVersion(e, nil, best); got != "IMAX" {
+		t.Errorf("from the best release: %q", got)
+	}
+	if got := suggestedVersion(store.PlanEntry{Title: "The Final Cut"}, []store.PlanTorrent{{Name: "The.Final.Cut.2004.1080p"}}, nil); got != "" {
+		t.Errorf("the title's words: %q", got)
+	}
+}

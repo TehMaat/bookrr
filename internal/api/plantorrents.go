@@ -267,7 +267,7 @@ func (s *Server) sendPlanTorrentToWayfinderr(w http.ResponseWriter, r *http.Requ
 	}
 	wctx, cancel := context.WithTimeout(ctx, time.Minute)
 	sendErr := wayfinderr.New(c.WayfinderrURL, c.WayfinderrAPIKey).AddSourceTorrent(wctx, wayfinderr.SourceTorrent{
-		FileName: torrentFilename(t), Data: data, TmdbID: e.TmdbID, Label: t.Label,
+		FileName: torrentFilename(t), Data: data, TmdbID: e.TmdbID, Label: t.Label, Version: e.Version,
 	})
 	cancel()
 	if err := s.store.SetPlanTorrentWayfinderr(ctx, id, pos, c.ID, sendErr); err != nil {

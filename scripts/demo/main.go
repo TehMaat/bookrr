@@ -367,9 +367,11 @@ ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_
 	// whose Wayfinderr holds the two files for the pair as they arrive.
 	if id, ok := lantern["id"].(float64); ok {
 		plan := "/api/plan/" + strconv.FormatInt(int64(id), 10)
-		upload(ctx, base+plan+"/torrents", "Lantern.Bay.2019.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-ARCADE", 25*gb, "video")
+		upload(ctx, base+plan+"/torrents", "Lantern.Bay.2019.Extended.Cut.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-ARCADE", 25*gb, "video")
 		upload(ctx, base+plan+"/torrents", "Lantern.Bay.2019.DVD9.ITA-OLDIES", 7*gb, "audio ITA")
 		call("POST", plan+"/torrents/send", map[string]any{"clientId": seedbox})
+		// The version Wayfinderr writes in the release name of the merged file.
+		call("PATCH", plan, map[string]any{"version": "Extended"})
 	}
 	call("POST", "/api/sync", nil)
 	call("POST", "/api/disks/"+strconv.FormatInt(cloud, 10)+"/scan", nil)

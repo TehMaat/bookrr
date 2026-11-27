@@ -142,6 +142,10 @@ type SourceTorrent struct {
 	TmdbID   int64
 	// What it is for ("video", "audio ITA"), "" if nothing.
 	Label string
+	// The film's version for the release name (Extended...), "" none, nil
+	// not chosen (not sent: Wayfinderr keeps the one it has). Wayfinderr
+	// 0.43.0 or later; an older one ignores it.
+	Version *string
 }
 
 // AddSourceTorrent sends a source .torrent: Wayfinderr keeps it and copies it
@@ -157,6 +161,9 @@ func (c *Client) AddSourceTorrent(ctx context.Context, t SourceTorrent) error {
 	}
 	if t.Label != "" {
 		q.Set("label", t.Label)
+	}
+	if t.Version != nil {
+		q.Set("version", *t.Version)
 	}
 	resp, err := c.do(ctx, http.MethodPost, "/api/source-torrents", q, t.Data, "application/x-bittorrent")
 	if err != nil {
@@ -226,6 +233,8 @@ type MergeSide struct {
 type MergePlan struct {
 	Files  [2]MergeSide
 	TmdbID int64
+	// The film's version for the release name of the merged file, nil not sent.
+	Version *string
 }
 
 // Statuses of a planned pair on Wayfinderr.
@@ -267,6 +276,9 @@ func (c *Client) PlanMerge(ctx context.Context, p MergePlan) (plan PlannedPair, 
 	body := map[string]any{"files": p.Files, "origin": Origin}
 	if p.TmdbID > 0 {
 		body["tmdbId"] = p.TmdbID
+	}
+	if p.Version != nil {
+		body["version"] = *p.Version
 	}
 	data, err := json.Marshal(body)
 	if err != nil {

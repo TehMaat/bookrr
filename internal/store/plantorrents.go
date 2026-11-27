@@ -359,8 +359,10 @@ type WayfinderrSend struct {
 	Name     string
 	Label    string
 	TmdbID   int64
-	Data     []byte
-	Client   Client
+	// The film's version, nil if not chosen.
+	Version *string
+	Data    []byte
+	Client  Client
 }
 
 // PlanTorrentsForWayfinderr returns the .torrent files of the open films of
@@ -371,7 +373,7 @@ func (s *Store) PlanTorrentsForWayfinderr(ctx context.Context) ([]WayfinderrSend
 	// One row per client with a Wayfinderr it is complete on, the client it
 	// was sent to first.
 	rows, err := s.db.QueryContext(ctx, `
-SELECT pt.plan_id, pt.position, pt.hash, pt.name, pt.label, rp.tmdb_id, c.id
+SELECT pt.plan_id, pt.position, pt.hash, pt.name, pt.label, rp.tmdb_id, rp.version, c.id
 FROM plan_torrents pt JOIN release_plan rp ON rp.id = pt.plan_id
 	JOIN locations l ON l.hash = pt.hash AND l.progress >= 1
 	JOIN clients c ON c.id = l.client_id AND c.enabled = 1 AND c.wayfinderr_url != '' AND c.wayfinderr_api_key != ''
@@ -383,10 +385,12 @@ ORDER BY pt.plan_id, pt.position, c.id = pt.sent_client_id DESC, c.name COLLATE 
 	var out []WayfinderrSend
 	for rows.Next() {
 		var w WayfinderrSend
-		if err := rows.Scan(&w.PlanID, &w.Position, &w.Hash, &w.Name, &w.Label, &w.TmdbID, &w.Client.ID); err != nil {
+		var version sql.NullString
+		if err := rows.Scan(&w.PlanID, &w.Position, &w.Hash, &w.Name, &w.Label, &w.TmdbID, &version, &w.Client.ID); err != nil {
 			rows.Close()
 			return nil, err
 		}
+		w.Version = nullStr(version)
 		if n := len(out); n > 0 && out[n-1].PlanID == w.PlanID && out[n-1].Position == w.Position {
 			continue
 		}

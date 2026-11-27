@@ -418,6 +418,14 @@ CREATE TABLE plan_merges (
 	updated_at TEXT NOT NULL
 );
 `,
+	`
+-- The film's version (Extended, Director's Cut...) for its release name on
+-- Wayfinderr: NULL not chosen, '' none on purpose. Sent with its .torrent
+-- files and its merge plan; plan_merges.version is the one the pair was
+-- last planned with (NULL none sent), planned again when it changes.
+ALTER TABLE release_plan ADD COLUMN version TEXT;
+ALTER TABLE plan_merges ADD COLUMN version TEXT;
+`,
 }
 
 // compact gives back to the disk the space a migration freed (the files

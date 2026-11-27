@@ -24,6 +24,8 @@ type fakePlan struct {
 	Files   []wayfinderr.MergeSide `json:"-"`
 	TmdbID  int64                  `json:"-"`
 	Origin  string                 `json:"-"`
+	Version *string                `json:"-"`
+	Posts   int                    `json:"-"`
 }
 
 // fakeMerges is the planned pairs of a Wayfinderr.
@@ -50,19 +52,26 @@ func (f *fakeMerges) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/api/merge/plans":
 		var body struct {
-			Files  []wayfinderr.MergeSide `json:"files"`
-			TmdbID int64                  `json:"tmdbId"`
-			Origin string                 `json:"origin"`
+			Files   []wayfinderr.MergeSide `json:"files"`
+			TmdbID  int64                  `json:"tmdbId"`
+			Origin  string                 `json:"origin"`
+			Version *string                `json:"version"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
 		for _, p := range f.plans {
 			if p.Status != "PAIRED" && p.Files[0].InfoHash == body.Files[0].InfoHash && p.Files[1].InfoHash == body.Files[1].InfoHash {
+				// Planned again: takes the version given
+				if body.Version != nil {
+					p.Version = body.Version
+				}
+				p.Posts++
 				json.NewEncoder(w).Encode(p)
 				return
 			}
 		}
 		f.next++
-		p := &fakePlan{ID: fmt.Sprintf("p%d", f.next), Status: "WAITING", Files: body.Files, TmdbID: body.TmdbID, Origin: body.Origin}
+		p := &fakePlan{ID: fmt.Sprintf("p%d", f.next), Status: "WAITING", Files: body.Files, TmdbID: body.TmdbID, Origin: body.Origin,
+			Version: body.Version, Posts: 1}
 		f.plans[p.ID] = p
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(p)
@@ -178,8 +187,26 @@ func TestMergePlans(t *testing.T) {
 		t.Fatalf("on Wayfinderr: %+v", p)
 	}
 	run(0) // read again, not planned again
-	if len(fake.plans) != 1 {
-		t.Fatalf("plans: %v", fake.plans)
+	if len(fake.plans) != 1 || p.Version != nil || p.Posts != 1 {
+		t.Fatalf("plans: %v %+v", fake.plans, p)
+	}
+
+	// A version chosen on the film: the same pair planned again, with it, once.
+	var v store.OptionalVersion
+	_ = v.UnmarshalJSON([]byte(`"Director's Cut"`))
+	if _, err := st.UpdatePlanEntry(ctx, e.ID, store.PlanUpdate{Version: v}); err != nil {
+		t.Fatal(err)
+	}
+	run(0)
+	if len(fake.plans) != 1 || p.Version == nil || *p.Version != "Director's Cut" || p.Posts != 2 {
+		t.Fatalf("version sent: %+v", p)
+	}
+	if m := merge(); m.Version == nil || *m.Version != "Director's Cut" || m.RemoteID != "p1" {
+		t.Fatalf("version kept: %+v", m)
+	}
+	run(0)
+	if p.Posts != 2 {
+		t.Fatalf("planned again for the same version: %+v", p)
 	}
 
 	// A torrent replaced: the old plan goes from Wayfinderr at once, the new one once it is sent.

@@ -3,8 +3,11 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/tehmaat/bookrr/internal/edition"
 )
 
 // Statuses of a film of the release plan.
@@ -49,6 +52,9 @@ type PlanEntry struct {
 	// When its .torrent files were complete on a client, nil if never
 	// (or not since they were last sent).
 	DownloadedAt *string `json:"downloadedAt"`
+	// The film's version for its release name on Wayfinderr (Extended,
+	// Director's Cut...): nil not chosen, "" none on purpose.
+	Version *string `json:"version"`
 }
 
 // Open reports whether the film is still to be released (todo, doing or downloaded).
@@ -72,14 +78,14 @@ func (e PlanEntry) Year() string {
 }
 
 const planColumns = `id, tmdb_id, imdb_id, title, original_title, release_date, poster_path, status, source, source_title,
-	note, release_id, created_at, done_at, downloaded_at`
+	note, release_id, created_at, done_at, downloaded_at, version`
 
 func scanPlan(row interface{ Scan(...any) error }) (PlanEntry, error) {
 	var e PlanEntry
-	var done, downloaded sql.NullString
+	var done, downloaded, version sql.NullString
 	err := row.Scan(&e.ID, &e.TmdbID, &e.ImdbID, &e.Title, &e.OriginalTitle, &e.ReleaseDate, &e.PosterPath, &e.Status,
-		&e.Source, &e.SourceTitle, &e.Note, &e.ReleaseID, &e.CreatedAt, &done, &downloaded)
-	e.DoneAt, e.DownloadedAt = nullStr(done), nullStr(downloaded)
+		&e.Source, &e.SourceTitle, &e.Note, &e.ReleaseID, &e.CreatedAt, &done, &downloaded, &version)
+	e.DoneAt, e.DownloadedAt, e.Version = nullStr(done), nullStr(downloaded), nullStr(version)
 	return e, err
 }
 
@@ -144,8 +150,41 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
 // PlanUpdate changes a film of the plan: the fields that are not nil.
 type PlanUpdate struct {
-	Status *string `json:"status"`
-	Note   *string `json:"note"`
+	Status  *string         `json:"status"`
+	Note    *string         `json:"note"`
+	// Read from the request by the API (see OptionalVersion.UnmarshalJSON).
+	Version OptionalVersion `json:"-"`
+}
+
+// OptionalVersion is a version in an update: Set when the field was given,
+// Value nil for null (not chosen), "" for none.
+type OptionalVersion struct {
+	Set   bool
+	Value *string
+}
+
+// UnmarshalJSON takes a string or null.
+func (v *OptionalVersion) UnmarshalJSON(b []byte) error {
+	v.Set = true
+	if string(b) == "null" {
+		v.Value = nil
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return errors.New("version must be a string or null")
+	}
+	s = edition.Normalize(s)
+	v.Value = &s
+	return nil
+}
+
+// SameVersion reports whether two versions are the same choice (nil, or the same name).
+func SameVersion(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return edition.Same(*a, *b) && (*a == "") == (*b == "")
 }
 
 // UpdatePlanEntry changes status and note of a film of the plan. Done by
@@ -175,9 +214,29 @@ func (s *Store) UpdatePlanEntry(ctx context.Context, id int64, u PlanUpdate) (Pl
 			e.DownloadedAt = &ts
 		}
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE release_plan SET status = ?, note = ?, done_at = ?, release_id = ?, downloaded_at = ? WHERE id = ?`,
-		e.Status, e.Note, e.DoneAt, e.ReleaseID, e.DownloadedAt, id)
+	changed := u.Version.Set && !SameVersion(u.Version.Value, e.Version)
+	if u.Version.Set {
+		e.Version = u.Version.Value
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		return e, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `UPDATE release_plan SET status = ?, note = ?, done_at = ?, release_id = ?, downloaded_at = ?, version = ?
+WHERE id = ?`, e.Status, e.Note, e.DoneAt, e.ReleaseID, e.DownloadedAt, e.Version, id)
+	if err != nil {
+		return e, err
+	}
+	if changed && e.Version != nil {
+		// Another version: its .torrent files already on Wayfinderr are sent
+		// again with it at the next sync (the ones dropped stay as they are).
+		if _, err := tx.ExecContext(ctx, `UPDATE plan_torrents SET wayfinderr_at = NULL
+WHERE plan_id = ? AND wayfinderr_at IS NOT NULL AND dropped_at IS NULL`, id); err != nil {
+			return e, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		return e, err
 	}
 	return s.PlanEntry(ctx, id)
